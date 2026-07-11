@@ -94,14 +94,14 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "is_sensitive": False,
         "is_required": False,
         "is_editable": True,
-        "default_value": "600519,300750,002594",
+        "default_value": "VNM.VN",
         "options": [],
         "validation": {"min_items": 1},
         "display_order": 10,
         "help_key": "settings.base.STOCK_LIST",
         "examples": [
-            "STOCK_LIST=600519,300750,002594",
-            "STOCK_LIST=600519,hk00700,AAPL",
+            "STOCK_LIST=VNM.VN",
+            "STOCK_LIST=VNM.VN,FPT.VN,HPG.VN",
         ],
         "docs": [
             {
@@ -111,6 +111,29 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
             {
                 "label": "Tushare 股票列表指南",
                 "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/TUSHARE_STOCK_LIST_GUIDE.md",
+            },
+        ],
+        "warning_codes": [],
+    },
+    "ENABLED_MARKETS": {
+        "title": "Enabled Markets",
+        "description": "Market allowlist used to activate built-in data providers. Default: vn. Use all to restore every supported market.",
+        "category": "data_source",
+        "data_type": "string",
+        "ui_control": "text",
+        "is_sensitive": False,
+        "is_required": False,
+        "is_editable": True,
+        "default_value": "vn",
+        "options": ["vn", "cn", "hk", "us", "jp", "kr", "tw", "all"],
+        "validation": {"allowed_values": ["vn", "cn", "hk", "us", "jp", "kr", "tw", "all"], "delimiter": ","},
+        "display_order": 11,
+        "help_key": "settings.data_source.ENABLED_MARKETS",
+        "examples": ["ENABLED_MARKETS=vn", "ENABLED_MARKETS=vn,us", "ENABLED_MARKETS=all"],
+        "docs": [
+            {
+                "label": "Vietnam market support and provider configuration",
+                "href": "https://github.com/nghtrungg/daily_stock_analysis/blob/main/docs/market-support.md",
             },
         ],
         "warning_codes": [],
@@ -2527,24 +2550,25 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     },
     "REPORT_LANGUAGE": {
         "title": "Report Language",
-        "description": "Default output language for reports and notification templates. Supported values: zh, en.",
+        "description": "Default output language for reports and notification templates. Supported values: vi, zh, en, ko.",
         "category": "notification",
         "data_type": "string",
         "ui_control": "select",
         "is_sensitive": False,
         "is_required": False,
         "is_editable": True,
-        "default_value": "zh",
+        "default_value": "vi",
         "options": [
             {"label": "Chinese", "value": "zh"},
             {"label": "English", "value": "en"},
             {"label": "Korean", "value": "ko"},
+            {"label": "Vietnamese", "value": "vi"},
         ],
-        "validation": {"enum": ["zh", "en", "ko"]},
+        "validation": {"enum": ["zh", "en", "ko", "vi"]},
         "display_order": 56,
         "help_key": "settings.notification.report_output",
         "examples": [
-            "REPORT_LANGUAGE=zh",
+            "REPORT_LANGUAGE=vi",
             "REPORT_LANGUAGE=en",
         ],
         "docs": [
@@ -3379,8 +3403,8 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "display_order": 46,
         "help_key": "settings.system.market_review",
         "examples": [
+            "MARKET_REVIEW_ENABLED=false",
             "MARKET_REVIEW_ENABLED=true",
-            "MARKET_REVIEW_REGION=cn",
         ],
         "docs": [
             {
@@ -3399,7 +3423,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "is_sensitive": False,
         "is_required": False,
         "is_editable": True,
-        "default_value": "true",
+        "default_value": "false",
         "options": [],
         "validation": {},
         "display_order": 47,

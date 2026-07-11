@@ -17,6 +17,7 @@ from typing import List, Optional
 from src.agent.agents.base_agent import BaseAgent
 from src.agent.protocols import AgentContext, AgentOpinion, normalize_decision_signal
 from src.report_language import normalize_report_language
+from src.services.market_symbol_utils import is_vn_market_symbol
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ class DecisionAgent(BaseAgent):
 
     def system_prompt(self, ctx: AgentContext) -> str:
         report_language = normalize_report_language(ctx.meta.get("report_language", "zh"))
+        force_vietnamese = is_vn_market_symbol(ctx.stock_code)
         if self._is_chat_mode(ctx):
             prompt = """\
 You are a **Decision Synthesis Agent** replying directly to the user's latest
@@ -49,6 +51,8 @@ Requirements:
 - Highlight the main signal, key reasoning, and major risks
 - Do NOT output JSON or code fences unless the user explicitly asks for them
 """
+            if force_vietnamese:
+                return prompt + "\nAlways answer in Vietnamese. Do not mix English or Chinese except for tickers, source names, and unavoidable financial abbreviations.\n"
             if report_language == "en":
                 return prompt + "\nAlways answer in English.\n"
             if report_language == "ko":
@@ -131,6 +135,16 @@ should sum to 100; all-zero means no effective signal and must not be faked.
 ``market_conditions`` explains the impact of overall market environment on the recommendation.
 ``strongest_bullish_signal`` is the name of the strongest bullish signal (e.g., MACD golden cross, earnings surprise, low valuation).
 ``strongest_bearish_signal`` is the name of the strongest bearish signal (e.g., MA death cross, earnings warning, high valuation).
+"""
+        if force_vietnamese:
+            return prompt + """
+
+## Output Language
+- Keep every JSON key unchanged.
+- `decision_type` must remain `buy|hold|sell`.
+- The stock code contains the `.VN` market marker, so write 100% of all human-readable JSON values in Vietnamese.
+- This strict Vietnamese requirement applies to the final decision dashboard, technical analysis text, risk evaluations, positive catalysts, checklist items, and every summary field.
+- Do not mix English or Chinese into user-facing values except for stock tickers, company legal names, source names, and unavoidable financial abbreviations.
 """
         if report_language == "en":
             return prompt + """

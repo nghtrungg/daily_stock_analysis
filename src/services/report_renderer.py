@@ -28,6 +28,7 @@ from src.report_language import (
     localize_trend_prediction,
     normalize_report_language,
 )
+from src.services.market_symbol_utils import is_vn_market_symbol
 from src.utils.data_processing import (
     normalize_model_used,
     signal_attribution_has_content,
@@ -62,6 +63,17 @@ def _clean_sniper_value(val: Any) -> str:
         if s.startswith(prefix):
             return s[len(prefix):]
     return s
+
+
+def _localize_system_text(value: Any, language: str) -> Any:
+    """Translate stable system tokens that can appear inside LLM list fields."""
+    if language != "vi" or not isinstance(value, str):
+        return value
+    return {
+        "technical: partial": "Kỹ thuật: một phần",
+        "technical: fallback": "Kỹ thuật: dự phòng",
+        "N/A": "Không có dữ liệu",
+    }.get(value.strip(), value)
 
 
 def _resolve_templates_dir() -> Path:
@@ -112,13 +124,17 @@ def render(
         logger.debug("Report template not found: %s", template_path)
         return None
 
-    report_language = normalize_report_language(
-        (extra_context or {}).get("report_language")
-        or next(
-            (getattr(result, "report_language", None) for result in results if getattr(result, "report_language", None)),
-            None,
+    report_language = (
+        "vi"
+        if any(is_vn_market_symbol(getattr(result, "code", "")) for result in results)
+        else normalize_report_language(
+            (extra_context or {}).get("report_language")
+            or next(
+                (getattr(result, "report_language", None) for result in results if getattr(result, "report_language", None)),
+                None,
+            )
+            or getattr(get_config(), "report_language", "zh")
         )
-        or getattr(get_config(), "report_language", "zh")
     )
     labels = get_report_labels(report_language)
 
@@ -204,6 +220,7 @@ def render(
         "localize_operation_advice": localize_operation_advice,
         "localize_trend_prediction": localize_trend_prediction,
         "localize_chip_health": localize_chip_health,
+        "localize_system_text": lambda value: _localize_system_text(value, report_language),
         "signal_attribution_has_content": signal_attribution_has_content,
         "signal_attribution_weight_items": signal_attribution_weight_items,
     }

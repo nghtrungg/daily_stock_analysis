@@ -95,6 +95,16 @@ def test_format_decision_signal_excerpt_formats_english_and_redacts_text() -> No
     assert "- Risk: token=[REDACTED]" in excerpt
 
 
+def test_format_decision_signal_excerpt_localizes_vietnamese_action_from_wire_value() -> None:
+    excerpt = format_decision_signal_excerpt({
+        "action": "sell",
+        "action_label": "卖出",
+        "horizon": "1d",
+    }, report_language="vi")
+
+    assert "Hành động: Bán | Kỳ hạn: 1d" in excerpt
+
+
 def test_format_decision_signal_excerpt_returns_empty_for_invalid_input() -> None:
     assert format_decision_signal_excerpt(None) == ""
     assert format_decision_signal_excerpt({}) == ""

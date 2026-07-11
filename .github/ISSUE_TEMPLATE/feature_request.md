@@ -1,38 +1,33 @@
 ---
-name: 功能建议 / Feature Request
-about: 提出新功能或改进建议 / Suggest a new feature or improvement
-title: '[Feature] '
+name: Feature request
+about: Suggest an improvement for Daily Stock Analysis
+title: "feat: "
 labels: enhancement
-assignees: ''
+assignees: ""
 ---
 
-<!--
-中文用户请直接填写下方表单。
-English users: fill in the English fields below.
--->
+## Problem
 
-## 功能描述 / Feature Description
+What user problem or workflow gap should this solve?
 
-简明扼要地描述你希望增加的功能。  
-Briefly describe the feature you would like added.
+## Proposed Behavior
 
-## 使用场景 / Use Case
+Describe the desired behavior and user-facing result.
 
-描述在什么情况下需要这个功能。  
-Describe the situation where this feature would be useful.
+## Scope
 
-## 期望实现 / Proposed Solution
+- Affected markets or data sources:
+- Affected surfaces: CLI / API / Web / Desktop / Bot / notification / report
+- Required configuration changes:
 
-描述你期望这个功能如何工作。  
-Describe how you would expect this feature to work.
+## Alternatives Considered
 
-## 备选方案 / Alternatives Considered
+Describe any existing workaround or alternative design.
 
-描述你考虑过的其他替代方案。  
-Describe any alternative solutions you have considered.
+## Validation Expectations
 
-## 相关信息 / Additional Context
+How should this be tested or accepted?
 
-- 是否愿意贡献代码实现 / Willing to implement: [Yes / No]
-- 参考链接 / Reference links:
-- 其他说明 / Other notes:
+## Additional Context
+
+Add links, examples, screenshots, or related issues if useful.

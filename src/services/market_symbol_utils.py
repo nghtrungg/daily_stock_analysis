@@ -27,6 +27,9 @@ _SUFFIX_MARKET_SPECS: tuple[SuffixMarketSpec, ...] = (
     # Taiwan support mirrors the same suffix-only pattern; keep it here so the
     # shared helpers stay complete for all yfinance-only offshore markets.
     SuffixMarketSpec("tw", ("TW", "TWO"), (4, 5, 6)),
+    # Vietnam uses alphabetic tickers with a .VN market marker in this repo.
+    # It does not fit the numeric-only Yahoo suffix rules above, so expose a
+    # dedicated helper below instead of routing it through get_suffix_market.
 )
 
 _MARKET_TO_SPEC = {spec.market: spec for spec in _SUFFIX_MARKET_SPECS}
@@ -85,6 +88,26 @@ def is_tw_suffix_symbol(stock_code: str) -> bool:
     return is_suffix_market_symbol(stock_code, "tw")
 
 
+def is_vn_market_symbol(stock_code: str) -> bool:
+    """Return True for symbols explicitly marked as Vietnamese via ``.VN``."""
+
+    parts = split_suffix_symbol(stock_code)
+    if parts is None:
+        return False
+    base, suffix = parts
+    return suffix == "VN" and bool(base)
+
+
+def vn_market_base_symbol(stock_code: str) -> str:
+    """Return the local Vietnamese ticker without the ``.VN`` marker."""
+
+    parts = split_suffix_symbol(stock_code)
+    if parts is None:
+        return (stock_code or "").strip().upper()
+    base, suffix = parts
+    return base if suffix == "VN" else f"{base}.{suffix}"
+
+
 def normalize_suffix_market_symbol(stock_code: str) -> Optional[str]:
     """Normalize supported suffix-only symbols to upper-case Yahoo form."""
 
@@ -92,6 +115,8 @@ def normalize_suffix_market_symbol(stock_code: str) -> Optional[str]:
     if parts is None:
         return None
     base, suffix = parts
+    if suffix == "VN" and base:
+        return f"{base}.{suffix}"
     if get_suffix_market(f"{base}.{suffix}") is None:
         return None
     return f"{base}.{suffix}"

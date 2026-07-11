@@ -32,6 +32,7 @@ from src.report_language import normalize_report_language
 from src.market_context import get_market_role, get_market_guidelines
 from src.market_phase_prompt import format_market_phase_prompt_section
 from src.services.daily_market_context import format_daily_market_context_prompt_section
+from src.services.market_symbol_utils import is_vn_market_symbol
 
 logger = logging.getLogger(__name__)
 
@@ -449,8 +450,30 @@ CHAT_SYSTEM_PROMPT = """你是一位{market_role}投资分析 Agent，拥有数�
 """
 
 
-def _build_language_section(report_language: str, *, chat_mode: bool = False) -> str:
+def _build_language_section(
+    report_language: str,
+    *,
+    chat_mode: bool = False,
+    stock_code: str = "",
+) -> str:
     """Build output-language guidance for the agent prompt."""
+    if is_vn_market_symbol(stock_code):
+        if chat_mode:
+            return """
+## Output Language
+
+- The stock code contains the `.VN` market marker, so reply in Vietnamese.
+- Do not mix English or Chinese except for stock tickers, source names, and unavoidable financial abbreviations.
+- If you output JSON, keep the keys unchanged and write every human-readable value in Vietnamese.
+"""
+        return """
+## Output Language
+
+- Keep every JSON key unchanged.
+- `decision_type` must remain `buy|hold|sell`.
+- The stock code contains the `.VN` market marker, so all human-readable JSON values must be written 100% in Vietnamese.
+- This includes the final decision dashboard, technical analysis text, risk evaluations, catalysts, checklist items, and summaries.
+"""
     normalized = normalize_report_language(report_language)
     if chat_mode:
         if normalized == "en":
@@ -548,7 +571,7 @@ class AgentExecutor:
             market_guidelines=market_guidelines,
             default_skill_policy_section=default_skill_policy_section,
             skills_section=skills_section,
-            language_section=_build_language_section(report_language),
+            language_section=_build_language_section(report_language, stock_code=stock_code),
         )
 
         # Build tool declarations in OpenAI format (litellm handles all providers)
@@ -600,7 +623,7 @@ class AgentExecutor:
             market_guidelines=market_guidelines,
             default_skill_policy_section=default_skill_policy_section,
             skills_section=skills_section,
-            language_section=_build_language_section(report_language, chat_mode=True),
+            language_section=_build_language_section(report_language, chat_mode=True, stock_code=stock_code),
         )
 
         # Build tool declarations in OpenAI format (litellm handles all providers)

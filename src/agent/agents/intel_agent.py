@@ -17,6 +17,7 @@ from typing import Optional
 from src.agent.agents.base_agent import BaseAgent
 from src.agent.protocols import AgentContext, AgentOpinion
 from src.agent.runner import try_parse_json
+from src.services.market_symbol_utils import is_vn_market_symbol
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,12 @@ class IntelAgent(BaseAgent):
     ]
 
     def system_prompt(self, ctx: AgentContext) -> str:
+        language_rule = ""
+        if is_vn_market_symbol(ctx.stock_code):
+            language_rule = """
+## Output Language
+The stock code contains the `.VN` market marker. Keep JSON keys and enum values unchanged, but write every human-readable news summary, risk alert, and positive catalyst in Vietnamese only.
+"""
         return """\
 You are an **Intelligence & Sentiment Agent** specialising in A-shares, \
 HK, and US equities.
@@ -76,7 +83,7 @@ Return **only** a JSON object:
     {"title": "...", "impact": "positive|negative|neutral"}
   ]
 }
-"""
+""" + language_rule
 
     def build_user_message(self, ctx: AgentContext) -> str:
         parts = [f"Gather intelligence and assess sentiment for stock **{ctx.stock_code}**"]

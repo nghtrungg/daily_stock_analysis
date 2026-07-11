@@ -31,6 +31,7 @@ from data_provider.realtime_types import ChipDistribution
 from src.analyzer import (
     GeminiAnalyzer,
     AnalysisResult,
+    fill_money_flow_indicators_if_needed,
     fill_price_position_if_needed,
     normalize_chip_structure_availability,
     populate_decision_action_fields,
@@ -59,6 +60,7 @@ from src.services.daily_market_context import (
 )
 from src.services.social_sentiment_service import SocialSentimentService
 from src.services.intelligence_service import IntelligenceService
+from src.services.market_symbol_utils import is_vn_market_symbol
 from src.services.analysis_context_builder import (
     AnalysisContextBuilder,
     PipelineAnalysisArtifacts,
@@ -90,6 +92,12 @@ from bot.models import BotMessage
 
 
 logger = logging.getLogger(__name__)
+
+
+def _effective_report_language_for_stock(report_language: Any, stock_code: str = "") -> str:
+    if is_vn_market_symbol(stock_code):
+        return "vi"
+    return normalize_report_language(report_language)
 
 # 防御性 guard：当实例绕过 __init__（如测试中 __new__）构造时，
 # double-check 初始化 _single_stock_notify_lock 仍然线程安全。
@@ -398,7 +406,10 @@ class StockAnalysisPipeline:
             )
             market_phase_context_dict = market_phase_context.to_dict()
             market_phase_summary = render_market_phase_summary(market_phase_context_dict)
-            report_language = normalize_report_language(getattr(self.config, "report_language", "zh"))
+            report_language = _effective_report_language_for_stock(
+                getattr(self.config, "report_language", "zh"),
+                code,
+            )
             daily_market_target_date = self._coerce_daily_market_context_date(
                 getattr(market_phase_context, "effective_daily_bar_date", None)
                 or market_phase_context_dict.get("effective_daily_bar_date")
@@ -495,6 +506,27 @@ class StockAnalysisPipeline:
                 code,
                 fundamental_context,
             )
+            if is_vn_market_symbol(code):
+                try:
+                    ownership = self.fetcher_manager.get_ownership_structure(code)
+                except Exception as exc:
+                    logger.warning("%s(%s) ownership fetch failed: %s", stock_name, code, exc)
+                    ownership = {}
+                if ownership:
+                    fundamental_context = dict(fundamental_context or {})
+                    fundamental_context["ownership"] = {
+                        "status": "ok",
+                        "data": ownership,
+                        "source_chain": [{
+                            "provider": ownership.get("source", "vnstock"),
+                            "result": "ok",
+                            "duration_ms": 0,
+                        }],
+                        "errors": [],
+                    }
+                    coverage = dict(fundamental_context.get("coverage") or {})
+                    coverage["ownership"] = "ok"
+                    fundamental_context["coverage"] = coverage
 
             # P0: write-only snapshot, fail-open, no read dependency on this table.
             try:
@@ -745,6 +777,7 @@ class StockAnalysisPipeline:
             # Step 7.7: price_position fallback
             if result:
                 fill_price_position_if_needed(result, trend_result, realtime_quote)
+                fill_money_flow_indicators_if_needed(result, trend_result)
                 action_source_advice = getattr(result, "operation_advice", None)
                 stabilize_decision_with_structure(result, trend_result, fundamental_context)
                 adjustments = apply_phase_decision_guardrails(
@@ -864,7 +897,10 @@ class StockAnalysisPipeline:
             增强后的上下文
         """
         enhanced = context.copy()
-        enhanced["report_language"] = normalize_report_language(getattr(self.config, "report_language", "zh"))
+        enhanced["report_language"] = _effective_report_language_for_stock(
+            getattr(self.config, "report_language", "zh"),
+            enhanced.get("code", ""),
+        )
         
         # 添加股票名称
         if stock_name:
@@ -1213,7 +1249,10 @@ class StockAnalysisPipeline:
         """
         try:
             from src.agent.factory import build_agent_executor
-            report_language = normalize_report_language(getattr(self.config, "report_language", "zh"))
+            report_language = _effective_report_language_for_stock(
+                getattr(self.config, "report_language", "zh"),
+                code,
+            )
 
             requested_skills = (
                 self.analysis_skills
@@ -1378,6 +1417,7 @@ class StockAnalysisPipeline:
             # price_position fallback (same as non-agent path Step 7.7)
             if result:
                 fill_price_position_if_needed(result, trend_result, realtime_quote)
+                fill_money_flow_indicators_if_needed(result, trend_result)
                 realtime_data = initial_context.get("realtime_quote", {})
                 if isinstance(realtime_data, dict):
                     result.current_price = realtime_data.get("price")
@@ -1532,23 +1572,23 @@ class StockAnalysisPipeline:
         }
 
     def _get_analysis_context_with_market_fallback(self, code: str) -> Optional[Dict[str, Any]]:
-        """Load analysis context, fetching JP/KR/TW daily bars when DB has no context."""
+        """Load analysis context, fetching offshore daily bars when DB has no context."""
         context = self.db.get_analysis_context(code)
         if isinstance(context, dict) and context:
             return context
 
         market = get_market_for_stock(normalize_stock_code(code))
-        if market not in {"jp", "kr", "tw"}:
+        if market not in {"jp", "kr", "tw", "vn"}:
             return context
 
         try:
             df, source_name = self.fetcher_manager.get_daily_data(code, days=60)
         except Exception as exc:
-            logger.warning("[%s] JP/KR daily fallback fetch failed: %s", code, exc)
+            logger.warning("[%s] offshore daily fallback fetch failed: %s", code, exc)
             return context
 
         if df is None or df.empty:
-            logger.warning("[%s] JP/KR daily fallback returned empty data", code)
+            logger.warning("[%s] offshore daily fallback returned empty data", code)
             return context
 
         try:
@@ -1557,7 +1597,7 @@ class StockAnalysisPipeline:
             if isinstance(refreshed, dict) and refreshed:
                 return refreshed
         except Exception as exc:
-            logger.warning("[%s] JP/KR daily fallback persistence failed: %s", code, exc)
+            logger.warning("[%s] offshore daily fallback persistence failed: %s", code, exc)
 
         return self._build_analysis_context_from_daily_df(code, df)
 
@@ -1706,7 +1746,10 @@ class StockAnalysisPipeline:
         """
         将 AgentResult 转换为 AnalysisResult。
         """
-        report_language = normalize_report_language(getattr(self.config, "report_language", "zh"))
+        report_language = _effective_report_language_for_stock(
+            getattr(self.config, "report_language", "zh"),
+            code,
+        )
         dash = None
         result = AnalysisResult(
             code=code,

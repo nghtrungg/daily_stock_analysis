@@ -15,6 +15,29 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
         Config.reset_instance()
 
     @patch("src.config.setup_env")
+    @patch.object(Config, "_get_env_file_value", return_value=None)
+    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
+    @patch.object(Config, "_parse_stock_email_groups", return_value=[])
+    def test_vietnam_focused_defaults_apply_without_environment_overrides(
+        self,
+        _mock_parse_stock_email_groups,
+        _mock_parse_litellm_yaml,
+        _mock_env_file_value,
+        _mock_setup_env,
+    ):
+        with patch.dict(os.environ, {}, clear=True):
+            config = Config._load_from_env()
+
+        self.assertEqual(config.stock_list, ["VNM.VN"])
+        self.assertEqual(config.report_language, "vi")
+        self.assertEqual(config.enabled_markets, ["vn"])
+        self.assertFalse(config.market_review_enabled)
+        self.assertFalse(config.daily_market_context_enabled)
+
+    def test_enabled_markets_accepts_a_comma_separated_override(self) -> None:
+        self.assertEqual(Config._parse_enabled_markets("vn,us"), ["us", "vn"])
+
+    @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
     @patch.object(Config, "_parse_stock_email_groups", return_value=[])
     def test_stock_list_accepts_common_copy_paste_separators(
@@ -640,18 +663,18 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
 
     @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
-    def test_daily_market_context_enabled_defaults_on_and_can_disable(
+    def test_daily_market_context_defaults_off_and_can_enable(
         self,
         _mock_parse_yaml,
         _mock_setup_env,
     ) -> None:
         with patch.dict(os.environ, {}, clear=True):
             config = Config._load_from_env()
-        self.assertTrue(config.daily_market_context_enabled)
-
-        with patch.dict(os.environ, {"DAILY_MARKET_CONTEXT_ENABLED": "false"}, clear=True):
-            config = Config._load_from_env()
         self.assertFalse(config.daily_market_context_enabled)
+
+        with patch.dict(os.environ, {"DAILY_MARKET_CONTEXT_ENABLED": "true"}, clear=True):
+            config = Config._load_from_env()
+        self.assertTrue(config.daily_market_context_enabled)
 
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
     def test_runtime_mutable_keys_reload_from_updated_env_file_after_runtime_refresh(

@@ -17,6 +17,7 @@ A股自选股智能分析系统 - 通知层
 from __future__ import annotations
 
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -49,6 +50,7 @@ from src.report_language import (
     localize_trend_prediction,
     normalize_report_language,
 )
+from src.services.market_symbol_utils import is_vn_market_symbol
 from bot.models import BotMessage
 from src.utils.sanitize import sanitize_diagnostic_text
 from src.utils.data_processing import (
@@ -77,6 +79,13 @@ from src.notification_sender import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _enforce_vietnamese_report_text(content: str) -> str:
+    """Prevent a model-language leak from breaking a Vietnamese report."""
+    content = content.replace("Golden Cross", "giao cắt vàng")
+    content = re.sub(r"(\d+)\s*成", r"\1%", content)
+    return re.sub(r"[\u4e00-\u9fff]+", "nội dung chưa được dịch", content)
 
 
 def _safe_float(value: Any) -> Optional[float]:
@@ -272,10 +281,15 @@ class NotificationService(
         """Resolve report language from result payload or global config."""
         if isinstance(payload, list):
             for item in payload:
+                if is_vn_market_symbol(getattr(item, "code", "")):
+                    return "vi"
+            for item in payload:
                 language = getattr(item, "report_language", None)
                 if language:
                     return normalize_report_language(language)
         elif payload is not None:
+            if is_vn_market_symbol(getattr(payload, "code", "")):
+                return "vi"
             language = getattr(payload, "report_language", None)
             if language:
                 return normalize_report_language(language)
@@ -1004,7 +1018,8 @@ class NotificationService(
             f"*{labels['generated_at_label']}：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*",
         ])
 
-        return "\n".join(report_lines)
+        content = "\n".join(report_lines)
+        return _enforce_vietnamese_report_text(content) if report_language == "vi" else content
 
     @staticmethod
     def _escape_md(name: str) -> str:
@@ -1056,6 +1071,7 @@ class NotificationService(
         report_lines: List[str],
         dashboard: Dict[str, Any],
         labels: Dict[str, str],
+        report_language: str = "zh",
     ) -> None:
         phase_decision = dashboard.get("phase_decision") if dashboard else None
         if not isinstance(phase_decision, dict):
@@ -1093,6 +1109,8 @@ class NotificationService(
         if data_limitations:
             report_lines.append(f"**{labels['data_limitations_label']}**:")
             for limitation in data_limitations:
+                if report_language == "vi" and limitation == "technical: partial":
+                    limitation = "Kỹ thuật: một phần"
                 report_lines.append(f"- {limitation}")
             report_lines.append("")
 
@@ -1125,19 +1143,21 @@ class NotificationService(
         report_language = self._get_report_language(results)
         labels = get_report_labels(report_language)
 
-        def _nlabel(en: str, zh: str, ko: str) -> str:
+        def _nlabel(en: str, zh: str, ko: str, vi: str) -> str:
             if report_language == "en":
                 return en
             if report_language == "ko":
                 return ko
+            if report_language == "vi":
+                return vi
             return zh
 
-        reason_label = _nlabel("Rationale", "操作理由", "판단 근거")
-        risk_warning_label = _nlabel("Risk Warning", "风险提示", "리스크 경고")
-        technical_heading = _nlabel("Technicals", "技术面", "기술적 분석")
-        ma_label = _nlabel("Moving Averages", "均线", "이동평균")
-        volume_analysis_label = _nlabel("Volume", "量能", "거래량")
-        news_heading = _nlabel("News Flow", "消息面", "뉴스 흐름")
+        reason_label = _nlabel("Rationale", "操作理由", "판단 근거", "Luận điểm")
+        risk_warning_label = _nlabel("Risk Warning", "风险提示", "리스크 경고", "Cảnh báo rủi ro")
+        technical_heading = _nlabel("Technicals", "技术面", "기술적 분석", "Kỹ thuật")
+        ma_label = _nlabel("Moving Averages", "均线", "이동평균", "Đường MA")
+        volume_analysis_label = _nlabel("Volume", "量能", "거래량", "Khối lượng")
+        news_heading = _nlabel("News Flow", "消息面", "뉴스 흐름", "Dòng tin tức")
         if getattr(config, 'report_renderer_enabled', False) and results:
             from src.services.report_renderer import render
             out = render(
@@ -1278,6 +1298,7 @@ class NotificationService(
                     price_data = data_persp.get('price_position', {})
                     vol_data = data_persp.get('volume_analysis', {})
                     chip_data = data_persp.get('chip_structure', {})
+                    money_flow_data = data_persp.get('money_flow_indicators', {})
 
                     report_lines.extend([
                         f"### 📊 {labels['data_perspective_heading']}",
@@ -1319,6 +1340,12 @@ class NotificationService(
                             f"💡 *{vol_data.get('volume_meaning', '')}*",
                             "",
                         ])
+                    if money_flow_data:
+                        report_lines.extend([
+                            f"**MFI(14) / CMF(20)**: {money_flow_data.get('mfi_14', 'N/A')} / {money_flow_data.get('cmf_20', 'N/A')}",
+                            f"💡 *{money_flow_data.get('note', '')}*",
+                            "",
+                        ])
                     # 筹码结构
                     if chip_data:
                         if is_chip_structure_unavailable(chip_data):
@@ -1341,7 +1368,7 @@ class NotificationService(
                                 "",
                             ])
 
-                self._append_phase_decision_block(report_lines, dashboard, labels)
+                self._append_phase_decision_block(report_lines, dashboard, labels, report_language)
 
                 # ========== 作战计划 ==========
                 battle = dashboard.get('battle_plan', {}) if dashboard else {}
@@ -2057,6 +2084,8 @@ class NotificationService(
                 "concept_bottom": [],
                 "institution": {},
                 "institution_status": None,
+                "ownership": {},
+                "ownership_status": None,
             }
 
         earnings_block = ctx.get("earnings") if isinstance(ctx.get("earnings"), dict) else {}
@@ -2088,6 +2117,8 @@ class NotificationService(
         # and an empty data dict, so this block only renders for a Taiwan stock with data.
         institution_block = ctx.get("institution") if isinstance(ctx.get("institution"), dict) else {}
         institution_data = institution_block.get("data") if isinstance(institution_block.get("data"), dict) else {}
+        ownership_block = ctx.get("ownership") if isinstance(ctx.get("ownership"), dict) else {}
+        ownership_data = ownership_block.get("data") if isinstance(ownership_block.get("data"), dict) else {}
 
         return {
             "financial_report": financial_report,
@@ -2100,6 +2131,8 @@ class NotificationService(
             "concept_bottom": concept_bottom,
             "institution": institution_data,
             "institution_status": institution_block.get("status"),
+            "ownership": ownership_data,
+            "ownership_status": ownership_block.get("status"),
         }
 
     def _append_fundamental_blocks(self, lines: List[str], result: AnalysisResult) -> None:
@@ -2116,7 +2149,47 @@ class NotificationService(
         self._append_financial_summary(lines, blocks, labels)
         self._append_shareholder_return(lines, blocks, labels)
         self._append_institutional_flow(lines, blocks, labels)
+        self._append_ownership_structure(lines, blocks, report_language)
         self._append_related_boards(lines, blocks, labels)
+
+    def _append_ownership_structure(
+        self,
+        lines: List[str],
+        blocks: Dict[str, Any],
+        report_language: str,
+    ) -> None:
+        """Render disclosed ownership without misrepresenting it as order flow."""
+        if blocks.get("ownership_status") != "ok":
+            return
+        ownership = blocks.get("ownership") or {}
+        records = ownership.get("records") if isinstance(ownership, dict) else None
+        if not isinstance(records, list) or not records:
+            return
+        headings = {
+            "vi": "Cơ cấu sở hữu công bố",
+            "zh": "已披露持股结构",
+            "ko": "공시된 지분 구조",
+            "en": "Disclosed ownership structure",
+        }
+        notes = {
+            "vi": "Đây là cơ cấu sở hữu công bố, không phải dữ liệu mua/bán ròng trong ngày.",
+            "zh": "这是已披露的持股结构，不是当日净买卖数据。",
+            "ko": "이는 공시 지분 구조이며 당일 순매수·순매도 데이터가 아닙니다.",
+            "en": "This is disclosed ownership structure, not same-day net order flow.",
+        }
+        lines.extend([
+            f"### 🧩 {headings.get(report_language, headings['en'])}",
+            f"> {notes.get(report_language, notes['en'])}",
+        ])
+        for record in records[:10]:
+            if not isinstance(record, dict):
+                continue
+            name = next((value for key, value in record.items() if "name" in key or "holder" in key or "owner" in key), None)
+            ratio = next((value for key, value in record.items() if "percent" in key or "ratio" in key or "ownership" in key), None)
+            category = next((value for key, value in record.items() if "type" in key or "category" in key), None)
+            detail = " · ".join(str(value) for value in (category, ratio) if value not in (None, ""))
+            lines.append(f"- {name if name not in (None, '') else record} {f'({detail})' if detail else ''}".rstrip())
+        lines.append("")
 
     def _append_financial_summary(
         self,
@@ -2785,8 +2858,12 @@ class NotificationBuilder:
 
         适用于快速通知
         """
-        report_language = normalize_report_language(
-            next((getattr(result, "report_language", None) for result in results if getattr(result, "report_language", None)), None)
+        report_language = (
+            "vi"
+            if any(is_vn_market_symbol(getattr(result, "code", "")) for result in results)
+            else normalize_report_language(
+                next((getattr(result, "report_language", None) for result in results if getattr(result, "report_language", None)), None)
+            )
         )
         labels = get_report_labels(report_language)
         lines = [f"📊 **{labels['summary_heading']}**", ""]

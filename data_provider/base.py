@@ -26,7 +26,7 @@ import pandas as pd
 import numpy as np
 from src.data.stock_index_loader import get_index_stock_name
 from src.data.stock_mapping import STOCK_NAME_MAP, is_meaningful_stock_name
-from src.services.market_symbol_utils import is_suffix_market_symbol
+from src.services.market_symbol_utils import is_suffix_market_symbol, is_vn_market_symbol
 from src.services.run_diagnostics import record_provider_run, record_provider_run_started
 from .fundamental_adapter import AkshareFundamentalAdapter
 from .yfinance_fundamental_adapter import YfinanceFundamentalAdapter
@@ -133,6 +133,8 @@ def normalize_stock_code(stock_code: str) -> str:
     # while preserving explicit Yahoo suffix forms for JP/KR/TW.
     if '.' in code:
         base, suffix = code.rsplit('.', 1)
+        if suffix.upper() == 'VN' and base.strip():
+            return f"{base.strip().upper()}.VN"
         if suffix.upper() == 'T' and base.isdigit() and len(base) in (4, 5):
             return f"{base}.{suffix.upper()}"
         if suffix.upper() in ('KS', 'KQ') and base.isdigit() and len(base) == 6:
@@ -197,6 +199,10 @@ def _is_tw_market(code: str) -> bool:
     return is_suffix_market_symbol(code, "tw")
 
 
+def _is_vn_market(code: str) -> bool:
+    return is_vn_market_symbol(code)
+
+
 def _is_etf_code(code: str) -> bool:
     """判定 A 股 ETF 基金代码（保守规则）。"""
     normalized = normalize_stock_code(code)
@@ -238,6 +244,8 @@ def _is_meaningful_chip_distribution(chip: Any) -> bool:
 
 def _market_tag(code: str) -> str:
     """返回市场标签: cn/us/hk/jp/kr/tw."""
+    if _is_vn_market(code):
+        return "vn"
     if _is_us_market(code):
         return "us"
     if _is_hk_market(code):
@@ -621,6 +629,7 @@ class DataFetcherManager:
         "PytdxFetcher": {"cn"},
         "BaostockFetcher": {"cn"},
         "YfinanceFetcher": {"cn", "hk", "us", "jp", "kr", "tw"},
+        "VnFetcher": {"vn"},
         "LongbridgeFetcher": {"hk", "us"},
         "FinnhubFetcher": {"us"},
         "AlphaVantageFetcher": {"us"},
@@ -766,6 +775,38 @@ class DataFetcherManager:
                 "[数据源路由] %s 日线跳过不支持的数据源: %s",
                 market,
                 ", ".join(skipped),
+            )
+        return kept
+
+    @classmethod
+    def _filter_fetchers_for_enabled_markets(
+        cls,
+        fetchers: List[BaseFetcher],
+        enabled_markets: set[str],
+    ) -> List[BaseFetcher]:
+        """Keep built-in providers only when they serve an enabled market.
+
+        Unknown/custom fetchers are preserved so explicit integrations retain
+        their existing contract.  This is applied only to the manager's
+        default provider set; callers supplying fetchers directly stay in full
+        control for tests and embedded deployments.
+        """
+        enabled = {str(market).strip().lower() for market in enabled_markets if str(market).strip()}
+        if not enabled:
+            return list(fetchers)
+        kept: List[BaseFetcher] = []
+        disabled: List[str] = []
+        for fetcher in fetchers:
+            supported = cls._DAILY_MARKET_FETCHER_SUPPORT.get(fetcher.name)
+            if supported is None or supported.intersection(enabled):
+                kept.append(fetcher)
+            else:
+                disabled.append(fetcher.name)
+        if disabled:
+            logger.info(
+                "[provider config] disabled for ENABLED_MARKETS=%s: %s",
+                ",".join(sorted(enabled)),
+                ", ".join(disabled),
             )
         return kept
 
@@ -1160,6 +1201,7 @@ class DataFetcherManager:
         from .pytdx_fetcher import PytdxFetcher
         from .baostock_fetcher import BaostockFetcher
         from .yfinance_fetcher import YfinanceFetcher
+        from .vn_fetcher import VnFetcher
         from .longbridge_fetcher import LongbridgeFetcher
         config = get_config()
         # 创建所有数据源实例（优先级在各 Fetcher 的 __init__ 中确定）
@@ -1169,6 +1211,12 @@ class DataFetcherManager:
         pytdx = PytdxFetcher()      # 通达信数据源（可配 PYTDX_HOST/PYTDX_PORT）
         baostock = BaostockFetcher()
         yfinance = YfinanceFetcher()
+        enabled_markets = {
+            str(market).strip().lower()
+            for market in (getattr(config, "enabled_markets", []) or [])
+            if str(market).strip()
+        }
+        vn = VnFetcher() if "vn" in enabled_markets else None
         optional_fetchers: List[BaseFetcher] = []
 
         tushare_token = (getattr(config, "tushare_token", None) or "").strip()
@@ -1213,15 +1261,20 @@ class DataFetcherManager:
         # 初始化数据源列表
         self._ensure_concurrency_guards()
         with self._fetchers_lock:
-            self._fetchers = [
+            default_fetchers = [
                 efinance,
                 tencent,
                 akshare,
                 pytdx,
                 baostock,
                 yfinance,
+                *([vn] if vn is not None else []),
                 *optional_fetchers,
             ]
+            self._fetchers = self._filter_fetchers_for_enabled_markets(
+                default_fetchers,
+                enabled_markets,
+            )
 
             # 按优先级排序（Tushare 如果配置了 Token 且初始化成功，优先级为 0）
             self._fetchers.sort(key=lambda f: f.priority)
@@ -1287,7 +1340,8 @@ class DataFetcherManager:
         is_jp = (not is_us) and (not is_hk) and _is_jp_market(stock_code)
         is_kr = (not is_us) and (not is_hk) and _is_kr_market(stock_code)
         is_tw = (not is_us) and (not is_hk) and _is_tw_market(stock_code)
-        market = "us" if is_us else "hk" if is_hk else "jp" if is_jp else "kr" if is_kr else "tw" if is_tw else "cn"
+        is_vn = (not is_us) and (not is_hk) and _is_vn_market(stock_code)
+        market = "us" if is_us else "hk" if is_hk else "vn" if is_vn else "jp" if is_jp else "kr" if is_kr else "tw" if is_tw else "cn"
         if market != "cn":
             fetchers = self._filter_daily_fetchers_for_market(fetchers, market)
         fetchers = self._filter_fetchers_by_capability(fetchers, capability="daily_data")
@@ -1682,6 +1736,7 @@ class DataFetcherManager:
             "AlphaVantageFetcher": "alphavantage",
             "EfinanceFetcher": "efinance",
             "TushareFetcher": "tushare",
+            "VnFetcher": "vnstock",
         }
         return mapping.get(fetcher_name, fetcher_name.replace("Fetcher", "").lower())
 
@@ -1765,6 +1820,19 @@ class DataFetcherManager:
         is_jp = (not is_us) and (not is_hk) and _is_jp_market(stock_code)
         is_kr = (not is_us) and (not is_hk) and _is_kr_market(stock_code)
         is_tw = (not is_us) and (not is_hk) and _is_tw_market(stock_code)
+        is_vn = (not is_us) and (not is_hk) and _is_vn_market(stock_code)
+
+        if is_vn:
+            quote = self._try_fetcher_quote(stock_code, "VnFetcher")
+            if quote is not None:
+                logger.info(f"[å®žæ—¶è¡Œæƒ…] è¶Šè‚¡ {stock_code} æˆåŠŸèŽ·å– (æ¥æº: VnFetcher)")
+                return self._enrich_realtime_quote(
+                    quote,
+                    realtime_cache_ttl=getattr(config, "realtime_cache_ttl", None),
+                )
+            if log_final_failure:
+                logger.info(f"[å®žæ—¶è¡Œæƒ…] è¶Šè‚¡ {stock_code} æ— å¯ç”¨æ•°æ®æº")
+            return None
 
         if is_jp or is_kr or is_tw:
             market_label = "日股" if is_jp else "韩股" if is_kr else "台股"
@@ -2113,6 +2181,30 @@ class DataFetcherManager:
     def _supplement_from_longbridge(self, stock_code: str, primary_quote):
         """Shortcut kept for backward-compat with A-share general loop."""
         return self._supplement_quote(stock_code, primary_quote, "LongbridgeFetcher")
+
+    def get_ownership_structure(self, stock_code: str) -> Dict[str, Any]:
+        """Return disclosed ownership structure when the market/source supports it.
+
+        Ownership is intentionally separate from chip distribution and capital
+        flow: it must not be interpreted as same-day net buying or selling.
+        """
+        normalized = normalize_stock_code(stock_code)
+        if _market_tag(normalized) != "vn":
+            return {}
+        for fetcher in self._get_fetchers_snapshot():
+            if not self._is_fetcher_available(fetcher, capability="ownership"):
+                continue
+            method = getattr(fetcher, "get_ownership_structure", None)
+            if not callable(method):
+                continue
+            try:
+                payload = method(normalized)
+            except Exception as exc:
+                logger.warning("[ownership] %s failed for %s: %s", type(fetcher).__name__, normalized, exc)
+                continue
+            if isinstance(payload, dict) and payload.get("records"):
+                return payload
+        return {}
 
     def get_chip_distribution(self, stock_code: str):
         """

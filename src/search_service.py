@@ -38,6 +38,7 @@ from src.config import (
     normalize_news_strategy_profile,
     resolve_news_window_days,
 )
+from src.services.market_symbol_utils import is_vn_market_symbol, vn_market_base_symbol
 from src.services.run_diagnostics import record_provider_run, record_provider_run_started
 
 logger = logging.getLogger(__name__)
@@ -2124,11 +2125,23 @@ class SearchService:
         "{name} technical analysis",
         "{name} {code} performance volume",
     ]
+
+    ENHANCED_SEARCH_KEYWORDS_VI = [
+        "Tin tức tài chính mới nhất cổ phiếu {ticker}",
+        "Nhận định doanh nghiệp {name}",
+        "{name} {ticker} kết quả kinh doanh cổ phiếu",
+        "{ticker} phân tích kỹ thuật chứng khoán Việt Nam",
+        "{name} {ticker} Cafef Vietstock Tinnhanhchungkhoan",
+    ]
     NEWS_OVERSAMPLE_FACTOR = 2
     NEWS_OVERSAMPLE_MAX = 10
     FUTURE_TOLERANCE_DAYS = 1
     ANALYTICAL_INTEL_LOOKBACK_DAYS = 180
     ANALYTICAL_INTEL_DIMENSIONS = {"market_analysis", "earnings"}
+    VIETNAM_TIMEZONE = timezone(timedelta(hours=7))
+    VIETNAM_MIDDAY_START_MINUTE = 11 * 60 + 30
+    VIETNAM_MIDDAY_END_MINUTE = 13 * 60
+    VIETNAM_EVENING_START_MINUTE = 15 * 60
     _CHINESE_TEXT_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
     _US_STOCK_RE = re.compile(r"^[A-Za-z]{1,5}(\.[A-Za-z])?$")
     _DIRECT_NEWS_CATEGORY = "direct_company_news"
@@ -2365,6 +2378,8 @@ class SearchService:
     def _is_foreign_stock(stock_code: str) -> bool:
         """判断是否为港股或美股"""
         code = stock_code.strip()
+        if SearchService._is_vietnamese_stock(code):
+            return False
         # 美股：1-5个大写字母，可能包含点（如 BRK.B）
         if SearchService._US_STOCK_RE.match(code):
             return True
@@ -2375,6 +2390,48 @@ class SearchService:
         if code.isdigit() and len(code) == 5:
             return True
         return False
+
+    @staticmethod
+    def _is_vietnamese_stock(stock_code: str) -> bool:
+        """Return whether a symbol is explicitly marked as Vietnamese."""
+        return is_vn_market_symbol(stock_code)
+
+    @staticmethod
+    def _vietnamese_ticker(stock_code: str) -> str:
+        """Return the local ticker used by Vietnamese finance publishers."""
+        return vn_market_base_symbol(stock_code)
+
+    @classmethod
+    def _vietnam_run_period(cls, now: Optional[datetime] = None) -> str:
+        """Classify the Vietnam-local run period for localized news queries."""
+        current = now or datetime.now(cls.VIETNAM_TIMEZONE)
+        if current.tzinfo is None:
+            current = current.replace(tzinfo=cls.VIETNAM_TIMEZONE)
+        current = current.astimezone(cls.VIETNAM_TIMEZONE)
+        minute_of_day = current.hour * 60 + current.minute
+        if cls.VIETNAM_MIDDAY_START_MINUTE <= minute_of_day < cls.VIETNAM_MIDDAY_END_MINUTE:
+            return "midday"
+        if minute_of_day >= cls.VIETNAM_EVENING_START_MINUTE:
+            return "evening"
+        return "latest"
+
+    @classmethod
+    def _build_vietnamese_stock_news_query(
+        cls,
+        stock_code: str,
+        stock_name: str,
+        *,
+        now: Optional[datetime] = None,
+    ) -> str:
+        ticker = cls._vietnamese_ticker(stock_code)
+        period = cls._vietnam_run_period(now)
+        if period == "midday":
+            phrase = f"Tin tức tài chính biến động sáng nay cổ phiếu {ticker}"
+        elif period == "evening":
+            phrase = f"Tin tức tài chính cuối ngày cổ phiếu {ticker}"
+        else:
+            phrase = f"Tin tức tài chính mới nhất cổ phiếu {ticker}"
+        return f"{phrase} {stock_name} Cafef Vietstock Tinnhanhchungkhoan"
 
     @classmethod
     def _contains_chinese_text(cls, value: Optional[str]) -> bool:
@@ -2469,6 +2526,8 @@ class SearchService:
         prefer_chinese: bool,
     ) -> Dict[str, str]:
         """Resolve Brave locale hints without forcing US bias onto non-US symbols."""
+        if cls._is_vietnamese_stock(stock_code):
+            return {"search_lang": "vi", "country": "VN"}
         if prefer_chinese:
             return {"search_lang": "zh-hans", "country": "CN"}
         if cls._is_us_stock(stock_code):
@@ -2608,6 +2667,11 @@ class SearchService:
                 code_for_variants = base
             elif suffix == "US" and re.fullmatch(r"[A-Z]{1,5}", base):
                 code_for_variants = base
+            elif suffix == "VN" and base:
+                cls._append_unique(terms, raw)
+                cls._append_unique(terms, upper)
+                cls._append_unique(terms, base)
+                return terms
 
         is_us_ticker = bool(cls._US_STOCK_RE.match(code_for_variants))
         if not is_us_ticker:
@@ -3604,10 +3668,13 @@ class SearchService:
         )
 
         # 构建搜索查询（优化搜索效果）
+        is_vietnamese = self._is_vietnamese_stock(stock_code)
         is_foreign = self._is_foreign_stock(stock_code)
         if focus_keywords:
             # 如果提供了关键词，直接使用关键词作为查询
             query = " ".join(focus_keywords)
+        elif is_vietnamese:
+            query = self._build_vietnamese_stock_news_query(stock_code, stock_name)
         elif prefer_chinese:
             query = f"{stock_name} {stock_code} 股票 最新消息"
         elif is_foreign:
@@ -3636,7 +3703,7 @@ class SearchService:
         cache_key = self._cache_key(
             (
                 f"{query}|target={stock_code}:{stock_name}|"
-                f"news_pref={'zh' if prefer_chinese else 'default'}"
+                f"news_pref={'vi' if is_vietnamese else 'zh' if prefer_chinese else 'default'}"
             ),
             max_results,
             search_days,
@@ -3891,7 +3958,13 @@ class SearchService:
             SearchResponse 对象
         """
         if event_types is None:
-            if self._is_foreign_stock(stock_code):
+            if self._is_vietnamese_stock(stock_code):
+                event_types = [
+                    "báo cáo tài chính",
+                    "cổ đông lớn bán ra",
+                    "kết quả kinh doanh",
+                ]
+            elif self._is_foreign_stock(stock_code):
                 event_types = ["earnings report", "insider selling", "quarterly results"]
             else:
                 event_types = ["年报预告", "减持公告", "业绩快报"]
@@ -3945,10 +4018,63 @@ class SearchService:
         results = {}
         search_count = 0
 
+        is_vietnamese = self._is_vietnamese_stock(stock_code)
         is_foreign = self._is_foreign_stock(stock_code)
         is_index_etf = self.is_index_or_etf(stock_code, stock_name)
 
-        if is_foreign:
+        if is_vietnamese:
+            ticker = self._vietnamese_ticker(stock_code)
+            search_dimensions = [
+                {
+                    'name': 'latest_news',
+                    'query': self._build_vietnamese_stock_news_query(stock_code, stock_name),
+                    'desc': 'Tin tức mới nhất',
+                    'tavily_topic': 'news',
+                    'strict_freshness': True,
+                },
+                {
+                    'name': 'market_analysis',
+                    'query': f"Nhận định doanh nghiệp {stock_name} cổ phiếu {ticker} phân tích đầu tư",
+                    'desc': 'Nhận định thị trường',
+                    'tavily_topic': None,
+                    'strict_freshness': False,
+                },
+                {
+                    'name': 'risk_check',
+                    'query': (
+                        f"{stock_name} {ticker} rủi ro doanh nghiệp kết quả kinh doanh "
+                        "thanh tra xử phạt cổ đông lớn bán ra"
+                    ),
+                    'desc': 'Đánh giá rủi ro',
+                    'tavily_topic': 'news',
+                    'strict_freshness': True,
+                },
+                {
+                    'name': 'announcements',
+                    'query': (
+                        f"{stock_name} {ticker} công bố thông tin báo cáo tài chính "
+                        "nghị quyết Cafef Vietstock"
+                    ),
+                    'desc': 'Công bố thông tin',
+                    'tavily_topic': 'news',
+                    'strict_freshness': True,
+                },
+                {
+                    'name': 'earnings',
+                    'query': f"Kết quả kinh doanh lợi nhuận doanh thu {stock_name} {ticker} dự báo",
+                    'desc': 'Kết quả kinh doanh',
+                    'tavily_topic': None,
+                    'strict_freshness': False,
+                },
+                {
+                    'name': 'industry',
+                    'query': f"Triển vọng ngành đối thủ cạnh tranh thị phần {stock_name} {ticker}",
+                    'desc': 'Phân tích ngành',
+                    'tavily_topic': None,
+                    'strict_freshness': False,
+                },
+            ]
+        elif is_foreign:
             search_dimensions = [
                 {
                     'name': 'latest_news',
@@ -4298,10 +4424,18 @@ class SearchService:
         successful_providers = []
         
         # 使用多个关键词模板搜索
+        is_vietnamese = self._is_vietnamese_stock(stock_code)
         is_foreign = self._is_foreign_stock(stock_code)
-        keywords = self.ENHANCED_SEARCH_KEYWORDS_EN if is_foreign else self.ENHANCED_SEARCH_KEYWORDS
+        if is_vietnamese:
+            keywords = self.ENHANCED_SEARCH_KEYWORDS_VI
+        else:
+            keywords = self.ENHANCED_SEARCH_KEYWORDS_EN if is_foreign else self.ENHANCED_SEARCH_KEYWORDS
         for i, keyword_template in enumerate(keywords[:max_attempts]):
-            query = keyword_template.format(name=stock_name, code=stock_code)
+            query = keyword_template.format(
+                name=stock_name,
+                code=stock_code,
+                ticker=self._vietnamese_ticker(stock_code),
+            )
             
             logger.info(f"[增强搜索] 第 {i+1}/{max_attempts} 次搜索: {query}")
             
