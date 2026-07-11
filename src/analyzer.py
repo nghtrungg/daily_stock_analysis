@@ -119,10 +119,11 @@ def _localized_text(language: Any, *, en: str, zh: str, ko: str, vi: Optional[st
 
 
 def _effective_report_language_for_stock(report_language: Any, stock_code: str = "") -> str:
-    """Force Vietnamese output/rendering for explicitly marked Vietnam stocks."""
+    """Keep the Vietnam-first default scoped to explicitly marked VN stocks."""
     if is_vn_market_symbol(stock_code):
         return "vi"
-    return normalize_report_language(report_language)
+    language = normalize_report_language(report_language)
+    return "zh" if language == "vi" else language
 
 
 def _normalize_risk_warning_values(value: Any) -> List[str]:

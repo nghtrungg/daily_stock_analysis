@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from src.schemas.decision_action import localize_action_label
 from src.utils.sanitize import sanitize_decision_signal_payload, sanitize_decision_signal_text
 
 
@@ -80,9 +79,9 @@ def format_decision_signal_excerpt(summary: Any, report_language: str = "zh") ->
     }[language]
 
     parts = []
-    action_label = (
-        localize_action_label(summary.get("action"), language)
-        or _public_scalar(summary.get("action_label") or summary.get("action"), max_length=32)
+    action_label = _public_scalar(
+        summary.get("action_label") or summary.get("action"),
+        max_length=32,
     )
     if action_label:
         parts.append(f"{labels['action']}: {action_label}")

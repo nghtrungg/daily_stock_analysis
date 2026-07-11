@@ -1,11 +1,17 @@
-# Market Review Report
+# 大盘复盘
 
-## Major Indexes
+## 指数表现
 
-- Shanghai Composite: 3250.12 (+0.85%)
-- Shenzhen Component: 10521.36 (+1.02%)
-- ChiNext Index: 2156.78 (+1.35%)
+| 指数 | 涨跌幅 | 量能 |
+| --- | --- | --- |
+| 上证指数 | +0.8% | 放量 |
+| 创业板指 | -0.2% | 缩量 |
 
-## Market Breadth
+## 资金方向
 
-Advancers: 3920 | Decliners: 1349 | Limit up: 155 | Limit down: 3
+- 北向资金小幅净流入。
+- 高股息、半导体、消费电子轮动活跃。
+
+## 明日观察
+
+关注成交额能否维持在万亿附近，以及权重板块是否继续承接。

@@ -1,89 +1,71 @@
-# English Documentation Index
+# 文档中心
 
-This is the entry point for project documentation. The README covers the project overview and quick start; detailed setup, configuration, deployment, feature usage, and troubleshooting docs are linked below.
+这里是项目文档入口。README 负责项目概览和快速开始；更完整的配置、部署、功能说明和排障内容从这里进入。
 
-> For Chinese documentation, see [docs/INDEX.md](INDEX.md).
+## 按场景选择
 
-## Choose By Goal
-
-| I want to | Start with | Then read |
+| 我想要 | 先看 | 继续看 |
 | --- | --- | --- |
-| Understand what the project does | [README (EN)](README_EN.md) | [Full Guide (EN)](full-guide_EN.md) |
-| Run the project for the first time | [README (EN)](README_EN.md) | [Full Guide (EN)](full-guide_EN.md) |
-| Configure model providers | [LLM Config Guide (EN)](LLM_CONFIG_GUIDE_EN.md) | [Provider Configuration Guide](llm-providers.md) <sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub> |
-| Configure notifications | [Notification Baseline](notifications.md) <sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub> | [Full Guide (EN)](full-guide_EN.md) |
-| Deploy to a server or cloud platform | [Deploy Guide (EN)](DEPLOY_EN.md) | [Cloud WebUI Deployment](deploy-webui-cloud.md) <sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>, [Zeabur Deployment](docker/zeabur-deployment.md) <sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub> |
-| Use Bot / IM integrations | [Bot Commands (EN)](bot-command_EN.md) | [Bot Platform Docs](bot/) <sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub> |
-| Troubleshoot runtime issues | [FAQ (EN)](FAQ_EN.md) | [Changelog](CHANGELOG.md) |
-| Troubleshoot data-source failures | [Data-source stability diagrams](data-source-stability.md) <sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub> | [FAQ (EN)](FAQ_EN.md) |
-| Contribute code or docs | [Contributing Guide (EN)](CONTRIBUTING_EN.md) | [API Spec](architecture/api_spec.json) |
+| 快速了解项目能做什么 | [README](../README.md) | [完整配置与部署指南](full-guide.md) |
+| 第一次把项目跑起来 | [小白客户端安装与配置](beginner-client-setup.md) | [完整配置与部署指南](full-guide.md) |
+| 配置大模型渠道 | [LLM 配置指南](LLM_CONFIG_GUIDE.md) | [LLM 服务商配置指南](llm-providers.md) |
+| 配置推送通知 | [通知能力基线](notifications.md) | [完整配置与部署指南](full-guide.md) |
+| 部署到服务器或云平台 | [部署指南](DEPLOY.md) | [云端 WebUI 部署](deploy-webui-cloud.md)、[Zeabur 部署](docker/zeabur-deployment.md) |
+| 使用 Bot / IM 接入 | [Bot 命令与接入](bot-command.md) | [Bot 平台配置](bot/) |
+| 排查运行问题 | [FAQ](FAQ.md) | [更新日志](CHANGELOG.md) |
+| 参与开发或提交 PR | [贡献指南](CONTRIBUTING.md) | [API 规格](architecture/api_spec.json) |
 
-## Getting Started
+## 快速开始
 
-| Document | Contents |
+| 文档 | 内容 |
 | --- | --- |
-| [README (EN)](README_EN.md) | Project overview, key features, quick start, sample output |
-| [Full Guide (EN)](full-guide_EN.md) | Environment setup, run modes, configuration, deployment paths, and common issues |
-| [FAQ (EN)](FAQ_EN.md) | Common configuration, model, notification, deployment, and runtime issues |
-| [Data-source stability diagrams](data-source-stability.md) <sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub> | Existing-source routing, fallback chains, and recommended configuration profiles |
-| [Changelog](CHANGELOG.md) | Release notes, capability changes, and migration notes |
+| [README](../README.md) | 项目定位、核心能力、快速开始、推送效果 |
+| [小白客户端安装与配置](beginner-client-setup.md) | 面向不会代码用户的客户端下载、Anspire Open / AIHubMix 模型配置、新闻源配置和常见问题 |
+| [完整配置与部署指南](full-guide.md) | 环境准备、运行方式、配置说明、部署路径和常见问题 |
+| [FAQ](FAQ.md) | 常见配置、模型、通知、部署和运行问题 |
+| [更新日志](CHANGELOG.md) | 版本变化、能力调整和迁移说明 |
 
-## Configuration
+## 配置
 
-| Document | Contents |
+| 文档 | 内容 |
 | --- | --- |
-| [LLM Config Guide (EN)](LLM_CONFIG_GUIDE_EN.md) | Model providers, three-tier configuration, Web settings, and common model setup |
-| [Provider Configuration Guide](llm-providers.md) <sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub> | Provider presets, GitHub Actions mapping, error categories, and diagnostics |
-| [LiteLLM YAML Example](examples/litellm_config.example.yaml) | Example LiteLLM multi-provider configuration |
-| [Notification Baseline](notifications.md) <sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub> | WeChat Work, Feishu, Telegram, Discord, Slack, Email, and other notification channels |
-| [Tushare Stock List Guide](TUSHARE_STOCK_LIST_GUIDE.md) <sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub> | Tushare stock-list configuration and usage notes |
+| [LLM 配置指南](LLM_CONFIG_GUIDE.md) | 大模型渠道、三层配置、Web 设置页和常见模型配置 |
+| [LLM 服务商配置指南](llm-providers.md) | Provider 预设、Actions 映射、错误分类和诊断建议 |
+| [LiteLLM YAML 示例](examples/litellm_config.example.yaml) | LiteLLM 多渠道配置示例 |
+| [通知能力基线](notifications.md) | 企业微信、飞书、Telegram、Discord、Slack、邮件等通知渠道配置 |
+| [Tushare 股票列表指南](TUSHARE_STOCK_LIST_GUIDE.md) | Tushare 股票列表相关配置和使用说明 |
 
-## Usage Topics
+## 使用专题
 
-| Document | Contents |
+| 文档 | 内容 |
 | --- | --- |
-| [Bot Commands (EN)](bot-command_EN.md) | Bot commands, webhooks, platform integration, and callback behavior |
-| [Bot Platform Docs](bot/) <sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub> | Feishu, DingTalk, Discord, and related Bot configuration screenshots and notes |
-| [Real-Time Alert Center](alerts.md) <sub><sub>![P4 Badge](https://img.shields.io/badge/P4-yellow?style=flat)</sub></sub> | EventMonitor baseline, Web rule management, notification attempts, cooldown state, and phase boundaries |
-| [DecisionSignal Topic](decision-signals.md) <sub><sub>![P7 Badge](https://img.shields.io/badge/P7-orange?style=flat)</sub></sub> | AI signal fields, API, Web display, alert/notification/portfolio-risk linkage, outcome evaluation, redaction, migration, and rollback |
-| [Analysis Context Pack Contract, Runtime Consumption, And Visibility](analysis-context-pack.md) <sub><sub>![P6 Badge](https://img.shields.io/badge/P6-orange?style=flat)</sub></sub> | AnalysisContextPack first-scope boundaries, field quality states, P1/P2 internal contracts, P3 prompt-summary consumption, P4 history/API/Web low-sensitivity visibility, P5 data-quality scoring, and P6 migration/rollback notes, plus source anchors; the full guide adds #1386 market-phase analysis, migration, and rollback entry points |
-| [Image Extraction Prompt](image-extract-prompt.md) <sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub> | Prompt and boundaries for extracting stock information from images |
-| [OpenClaw Skill Integration](openclaw-skill-integration.md) <sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub> | OpenClaw / Skill external integration notes |
+| [Bot 命令与接入](bot-command.md) | Bot 命令、Webhook、平台接入和回调说明 |
+| [Bot 平台配置](bot/) | 飞书、钉钉、Discord 等 Bot 配置截图和补充说明 |
+| [实时告警中心](alerts.md) | EventMonitor 基线、Web 规则管理、通知结果、冷却状态和 Phase 边界 |
+| [分析上下文包契约、运行态消费与可见性](analysis-context-pack.md) | AnalysisContextPack 首版范围、字段质量状态、P1/P2 内部契约、P3 Prompt 摘要消费、P4 历史/API/Web 低敏可见性、P5 数据质量评分、P6 迁移回滚与源码锚点；完整指南补充 #1386 阶段感知分析、迁移与回滚入口 |
+| [图片识别 Prompt](image-extract-prompt.md) | 图片识别股票信息的 Prompt 与使用边界 |
+| [OpenClaw Skill 集成](openclaw-skill-integration.md) | OpenClaw / Skill 外部集成说明 |
 
-## Deployment And Packaging
+## 部署与打包
 
-| Document | Contents |
+| 文档 | 内容 |
 | --- | --- |
-| [Deploy Guide (EN)](DEPLOY_EN.md) | Server deployment, Docker, systemd, Supervisor, and related options |
-| [Cloud WebUI Deployment](deploy-webui-cloud.md) <sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub> | Cloud server WebUI access and deployment notes |
-| [Zeabur Deployment](docker/zeabur-deployment.md) <sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub> | Zeabur platform deployment |
-| [Desktop Packaging](desktop-package.md) <sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub> | Electron desktop app and Web artifact packaging |
+| [部署指南](DEPLOY.md) | 服务器部署、Docker、systemd、Supervisor 等部署方式 |
+| [云端 WebUI 部署](deploy-webui-cloud.md) | 云服务器访问 WebUI 的部署说明 |
+| [Zeabur 部署](docker/zeabur-deployment.md) | Zeabur 平台部署说明 |
+| [桌面端打包说明](desktop-package.md) | Electron 桌面端和 Web 构建产物打包说明 |
 
-## Reference And Development
+## 参考与开发
 
-| Document | Contents |
+| 文档 | 内容 |
 | --- | --- |
-| [API Spec](architecture/api_spec.json) | FastAPI OpenAPI artifact |
-| [Contributing Guide (EN)](CONTRIBUTING_EN.md) | Issues, pull requests, tests, documentation sync, and collaboration expectations |
+| [API 规格](architecture/api_spec.json) | FastAPI OpenAPI 规格产物 |
+| [贡献指南](CONTRIBUTING.md) | Issue、PR、测试、文档同步和协作要求 |
 
-## Languages
+## 多语言
 
-| Document | Contents |
+| 文档 | 内容 |
 | --- | --- |
-| [Chinese Documentation Index](INDEX.md) | Chinese documentation entry point |
-| [Traditional Chinese README](README_CHT.md) | Traditional Chinese project overview and quick start |
-
-## China-Market Glossary
-
-| Term | Meaning |
-| --- | --- |
-| **A-shares** | Stocks listed on the Shanghai or Shenzhen stock exchanges, denominated in CNY |
-| **Northbound capital flow** | Net buy/sell flow from foreign investors through Stock Connect programs |
-| **Dragon-Tiger List** | Daily SSE/SZSE disclosure of heavily traded stocks and top trading seats |
-| **Chip distribution** | Cost-basis distribution of outstanding shares, often used to estimate support and resistance |
-| **Tushare** | Chinese financial data API that requires a token |
-| **AkShare** | Open-source Python market data library |
-| **Baostock** | Free Python SDK for historical A-share data |
-| **WeChat Work** | Tencent enterprise messaging platform with webhook notifications |
-| **Feishu** | ByteDance enterprise collaboration platform with webhook notifications |
-| **PushPlus / ServerChan** | Chinese mobile push notification services |
+| [英文文档索引](INDEX_EN.md) | English documentation index |
+| [英文 README](README_EN.md) | English project overview and quick start |
+| [繁中 README](README_CHT.md) | 繁體中文項目概覽與快速開始 |

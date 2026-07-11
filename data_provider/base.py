@@ -1211,7 +1211,12 @@ class DataFetcherManager:
         pytdx = PytdxFetcher()      # 通达信数据源（可配 PYTDX_HOST/PYTDX_PORT）
         baostock = BaostockFetcher()
         yfinance = YfinanceFetcher()
-        vn = VnFetcher()
+        enabled_markets = {
+            str(market).strip().lower()
+            for market in (getattr(config, "enabled_markets", []) or [])
+            if str(market).strip()
+        }
+        vn = VnFetcher() if "vn" in enabled_markets else None
         optional_fetchers: List[BaseFetcher] = []
 
         tushare_token = (getattr(config, "tushare_token", None) or "").strip()
@@ -1263,12 +1268,12 @@ class DataFetcherManager:
                 pytdx,
                 baostock,
                 yfinance,
-                vn,
+                *([vn] if vn is not None else []),
                 *optional_fetchers,
             ]
             self._fetchers = self._filter_fetchers_for_enabled_markets(
                 default_fetchers,
-                set(getattr(config, "enabled_markets", []) or []),
+                enabled_markets,
             )
 
             # 按优先级排序（Tushare 如果配置了 Token 且初始化成功，优先级为 0）

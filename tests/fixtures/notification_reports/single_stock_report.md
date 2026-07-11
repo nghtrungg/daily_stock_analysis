@@ -1,16 +1,18 @@
-# Single Stock Report
+# 贵州茅台 600519 分析报告
 
-## Analysis Summary
+## 核心判断
 
-- Stock: Example Stock (600000)
-- Signal: Hold
-- Score: 65
-- Trend: Neutral to bullish
+- 技术面：均线多头排列，成交量温和放大。
+- 基本面：盈利质量稳定，估值处于历史中位附近。
 
-## Risk Warning
+| 指标 | 当前值 | 解释 |
+| --- | --- | --- |
+| RSI | 58 | 中性偏强 |
+| MACD | 金叉 | 动能改善 |
 
-Short-term volatility is elevated. Confirm liquidity and stop-loss rules before acting.
+## 操作计划
 
-## Action Plan
+1. 回踩关键均线不破时观察。
+2. 跌破风控位时降低仓位。
 
-Watch price behavior near the support and resistance zones. Do not treat this fixture as investment advice.
+`risk_level = medium`
