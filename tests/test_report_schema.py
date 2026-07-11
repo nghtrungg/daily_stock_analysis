@@ -146,6 +146,7 @@ class TestAnalyzerSchemaFallback(unittest.TestCase):
     def test_parse_response_valid_json_succeeds(self) -> None:
         """Valid JSON produces correct AnalysisResult."""
         analyzer = GeminiAnalyzer()
+        analyzer._config_override = SimpleNamespace(report_language="zh")
         response = json.dumps({
             "stock_name": "贵州茅台",
             "sentiment_score": 72,
@@ -165,6 +166,7 @@ class TestAnalyzerSchemaFallback(unittest.TestCase):
 
     def test_parse_response_preserves_explicit_action_in_raw_result(self) -> None:
         analyzer = GeminiAnalyzer()
+        analyzer._config_override = SimpleNamespace(report_language="zh")
         response = json.dumps({
             "stock_name": "贵州茅台",
             "sentiment_score": 58,

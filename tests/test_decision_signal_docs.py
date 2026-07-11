@@ -48,9 +48,9 @@ def test_decision_signal_topic_references_live_api_schema_and_docs() -> None:
     assert "sanitize_decision_signal_payload()" in topic
     assert "DECISION_SIGNAL_*" in topic
     assert "revert" in topic
-    assert "decision-signals.md" in full_guide
+    assert "[full-guide_EN.md](full-guide_EN.md)" in full_guide
     assert "decision-signals.md" in full_guide_en
-    assert "decision-signals.md" in index
+    assert "[INDEX_EN.md](INDEX_EN.md)" in index
     assert "decision-signals.md" in index_en
     assert "decision-signals.md" in alerts
     assert "decision-signals.md" in notifications
