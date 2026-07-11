@@ -51,6 +51,7 @@ _PUBLIC_SOURCE_LABELS_EN = {
 _MARKET_STATUS_PREFIX = {
     "zh": "市场状态",
     "en": "Market status",
+    "vi": "Trạng thái thị trường",
 }
 _MARKET_LABELS_ZH = {
     "cn": "A股",
@@ -63,6 +64,13 @@ _MARKET_LABELS_EN = {
     "hk": "Hong Kong",
     "us": "US",
     "tw": "Taiwan",
+}
+_MARKET_LABELS_VI = {
+    "cn": "Trung Quốc",
+    "hk": "Hồng Kông",
+    "us": "Hoa Kỳ",
+    "tw": "Đài Loan",
+    "vn": "Việt Nam",
 }
 _PHASE_LABELS_ZH = {
     "premarket": "盘前",
@@ -81,6 +89,15 @@ _PHASE_LABELS_EN = {
     "postmarket": "Post-market",
     "non_trading": "Non-trading",
     "unknown": "Unknown phase",
+}
+_PHASE_LABELS_VI = {
+    "premarket": "Trước giờ mở cửa",
+    "intraday": "Trong phiên",
+    "lunch_break": "Nghỉ trưa",
+    "closing_auction": "Gần đóng cửa",
+    "postmarket": "Sau giờ đóng cửa",
+    "non_trading": "Ngày không giao dịch",
+    "unknown": "Không rõ phiên",
 }
 
 
@@ -190,8 +207,9 @@ def format_public_phase_pack_excerpt(
     overview = _as_mapping(analysis_context_pack_overview)
     if not phase_summary and not overview:
         return ""
-    # Korean reuses the English structural summary; output language is set by directive.
-    lang = "en" if str(report_language or "").lower().startswith(("en", "ko")) else "zh"
+    # Korean reuses the English structural summary; Vietnamese has its own copy.
+    language_key = str(report_language or "").lower()
+    lang = "vi" if language_key.startswith("vi") else "en" if language_key.startswith(("en", "ko")) else "zh"
     source_label = _source_label(source, lang)
 
     lines: List[str] = []
@@ -210,6 +228,17 @@ def format_public_phase_pack_excerpt(
             lines.append("- " + " | ".join(parts))
             if phase_summary.get("is_partial_bar") is True:
                 lines.append("- partial-bar warning: intraday data may be incomplete")
+        elif lang == "vi":
+            parts = [f"Phiên: {phase}"]
+            if market:
+                parts.append(f"Thị trường: {market}")
+            if trigger_source:
+                parts.append(f"Nguồn kích hoạt: {trigger_source}")
+            if source_label:
+                parts.append(f"Nguồn tóm tắt: {source_label}")
+            lines.append("- " + " | ".join(parts))
+            if phase_summary.get("is_partial_bar") is True:
+                lines.append("- Lưu ý dữ liệu trong phiên: nến hiện tại có thể chưa hoàn tất")
         else:
             parts = [f"阶段：{phase}"]
             if market:
@@ -226,10 +255,12 @@ def format_public_phase_pack_excerpt(
     if isinstance(quality, Mapping):
         level = _safe_text(quality.get("level"))
         if level:
-            lines.append(f"- {'data quality' if lang == 'en' else '数据质量'}: {level}")
+            quality_label = {"en": "data quality", "vi": "Chất lượng dữ liệu", "zh": "数据质量"}[lang]
+            lines.append(f"- {quality_label}: {level}")
         limitations = _list_strings(quality.get("limitations"), limit=2)
         for item in limitations:
-            lines.append(f"- {'limitation' if lang == 'en' else '限制'}: {item}")
+            limitation_label = {"en": "limitation", "vi": "Giới hạn", "zh": "限制"}[lang]
+            lines.append(f"- {limitation_label}: {item}")
 
     return "\n".join(lines)
 
@@ -247,10 +278,11 @@ def format_public_market_status_line(
     if phase is None:
         return ""
 
-    # Korean reuses the English structural summary; output language is set by directive.
-    lang = "en" if str(report_language or "").lower().startswith(("en", "ko")) else "zh"
-    phase_labels = _PHASE_LABELS_EN if lang == "en" else _PHASE_LABELS_ZH
-    market_labels = _MARKET_LABELS_EN if lang == "en" else _MARKET_LABELS_ZH
+    # Korean reuses the English structural summary; Vietnamese has its own copy.
+    language_key = str(report_language or "").lower()
+    lang = "vi" if language_key.startswith("vi") else "en" if language_key.startswith(("en", "ko")) else "zh"
+    phase_labels = {"en": _PHASE_LABELS_EN, "vi": _PHASE_LABELS_VI, "zh": _PHASE_LABELS_ZH}[lang]
+    market_labels = {"en": _MARKET_LABELS_EN, "vi": _MARKET_LABELS_VI, "zh": _MARKET_LABELS_ZH}[lang]
     phase_label = phase_labels.get(phase, phase)
     market = _safe_text(phase_summary.get("market"))
     market_key = market.lower()
@@ -259,7 +291,7 @@ def format_public_market_status_line(
         value = f"{market_label} · {phase_label}"
     else:
         value = phase_label
-    separator = ": " if lang == "en" else "："
+    separator = ": " if lang in {"en", "vi"} else "："
     return f"{_MARKET_STATUS_PREFIX[lang]}{separator}{value}"
 
 

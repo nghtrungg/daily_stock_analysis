@@ -12,7 +12,7 @@ Fixes: https://github.com/ZhuLinsen/daily_stock_analysis/issues/644
 import re
 from typing import Optional
 
-from src.services.market_symbol_utils import get_suffix_market
+from src.services.market_symbol_utils import get_suffix_market, is_vn_market_symbol
 
 
 def detect_market(stock_code: Optional[str]) -> str:
@@ -25,6 +25,9 @@ def detect_market(stock_code: Optional[str]) -> str:
         return "cn"
 
     code = stock_code.strip().upper()
+
+    if is_vn_market_symbol(code):
+        return "vn"
 
     # HK stocks: HK00700, 00700.HK, or 5-digit pure numbers
     if code.startswith("HK") or code.endswith(".HK"):
@@ -146,6 +149,22 @@ _MARKET_GUIDELINES = {
             "price limit; do not apply China A-share-specific concepts such as Northbound flows or Dragon Tiger lists."
         ),
     },
+}
+
+_MARKET_ROLES["vn"] = {
+    "zh": "越股",
+    "en": "Vietnam stock",
+}
+
+_MARKET_GUIDELINES["vn"] = {
+    "zh": (
+        "- 本次分析对象为 **越股**（越南证券市场，代码带 `.VN` 后缀）。\n"
+        "- 请按越南市场语境分析，关注 VND 汇率、HOSE/HNX/UPCoM 交易制度、外资持股限制、行业政策与流动性；不要套用 A 股的北向资金、龙虎榜等概念。"
+    ),
+    "en": (
+        "- This analysis covers a **Vietnam stock** (explicit `.VN` marker).\n"
+        "- Use Vietnam-market context: VND FX, HOSE/HNX/UPCoM trading rules, foreign ownership limits, sector policy, and liquidity; do not apply China A-share-specific concepts such as Northbound flows or Dragon Tiger lists."
+    ),
 }
 
 

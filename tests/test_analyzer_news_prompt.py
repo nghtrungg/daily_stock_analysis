@@ -147,6 +147,36 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
         self.assertIn("支撑/压力位", prompt)
         self.assertIn("洗盘观察", prompt)
 
+    def test_analysis_prompt_for_vietnamese_market_forces_vietnamese_output(self) -> None:
+        with patch.object(GeminiAnalyzer, "_init_litellm", return_value=None):
+            analyzer = GeminiAnalyzer()
+
+        prompt = analyzer._get_analysis_system_prompt("en", stock_code="FPT.VN")
+
+        self.assertIn("`.VN` market marker", prompt)
+        self.assertIn("100% in Vietnamese", prompt)
+        self.assertIn("final markdown dashboard, technical analysis text, risk evaluations, positive catalysts", prompt)
+        self.assertIn("Vietnam Midday Break Mode", prompt)
+        self.assertIn("This is a midday analysis of the morning session", prompt)
+        self.assertIn("Action Checklist for the 13:00 reopening", prompt)
+        self.assertNotIn("All human-readable JSON values must be written in English.", prompt)
+
+    def test_format_prompt_for_vietnamese_market_forces_dashboard_values_to_vietnamese(self) -> None:
+        with patch.object(GeminiAnalyzer, "_init_litellm", return_value=None):
+            analyzer = GeminiAnalyzer()
+
+        context = {
+            "code": "FPT.VN",
+            "stock_name": "FPT",
+            "date": "2026-07-09",
+            "today": {},
+        }
+
+        prompt = analyzer._format_prompt(context, "FPT", report_language="en", news_context=None)
+
+        self.assertIn("Every human-readable JSON value that will appear in the final markdown dashboard must be 100% Vietnamese.", prompt)
+        self.assertNotIn("All human-readable JSON values must be in English.", prompt)
+
     def test_analysis_prompt_score_scale_splits_reduce_and_sell_bands(self) -> None:
         for legacy in (False, True):
             with self.subTest(legacy=legacy):
@@ -634,6 +664,36 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
         self.assertNotIn("prompt_trend_direction", original)
         self.assertNotIn("多头排列，持续上涨", sanitized["signal_reasons"])
         self.assertEqual(sanitized["prompt_trend_direction"], "bearish")
+
+    def test_sanitize_trend_marks_ma20_as_support_when_price_is_above_it(self) -> None:
+        sanitized = _sanitize_trend_analysis_for_prompt(
+            {
+                "current_price": 56.6,
+                "ma20": 56.2,
+                "signal_reasons": [],
+                "risk_factors": [],
+            }
+        )
+
+        self.assertEqual(sanitized["ma20_role"], "support")
+        self.assertTrue(sanitized["price_above_ma20"])
+        self.assertTrue(any("MA20" in note and "support" in note.lower() for note in sanitized["prompt_consistency_notes"]))
+
+    def test_prompt_requires_evidence_for_public_investment_benefit_claims(self) -> None:
+        analyzer = GeminiAnalyzer()
+        prompt = analyzer._format_prompt(
+            {
+                "code": "VNM.VN",
+                "stock_name": "Vinamilk",
+                "today": {"close": 56.6},
+                "trend_analysis": {"current_price": 56.6, "ma20": 56.2},
+            },
+            "Vinamilk",
+            news_context="2026-07-10: company releases a product update.",
+        )
+
+        self.assertIn("public-infrastructure investment", prompt)
+        self.assertIn("direct mechanism", prompt)
 
 
 if __name__ == "__main__":

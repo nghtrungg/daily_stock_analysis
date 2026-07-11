@@ -150,6 +150,12 @@ def _phase_rule_zh(ctx: Dict[str, Any], phase: str) -> str:
             base += " 今日最后一根日线可能尚未完成，不得当作完整日线复盘。"
         if phase == "lunch_break":
             base += " 午间休市期间应说明后续复盘仍需下午交易确认。"
+            if _is_vietnam_context(ctx):
+                base += (
+                    " 越南市场 11:30-13:00 午间休市时，必须切换为上午盘中段分析："
+                    "This is a midday analysis of the morning session. Evaluate if morning volume indicates "
+                    "an afternoon breakout or breakdown, and adapt the Action Checklist for the 13:00 reopening."
+                )
         if phase == "closing_auction":
             base += " 临近收盘时应更偏向收盘前风险控制和是否隔夜持仓。"
         return base
@@ -175,6 +181,12 @@ def _phase_rule_en(ctx: Dict[str, Any], phase: str) -> str:
             base += " The latest daily bar may be unfinished; do not treat it as a complete daily candle."
         if phase == "lunch_break":
             base += " During the lunch break, later confirmation depends on the afternoon session."
+            if _is_vietnam_context(ctx):
+                base += (
+                    " For Vietnam's 11:30-13:00 midday break, switch context to: "
+                    "\"This is a midday analysis of the morning session. Evaluate if morning volume indicates "
+                    "an afternoon breakout or breakdown, and adapt the Action Checklist for the 13:00 reopening.\""
+                )
         if phase == "closing_auction":
             base += " Near the close, emphasize end-of-day risk control and overnight-position decisions."
         return base
@@ -205,6 +217,10 @@ def _string_value(value: Any) -> str:
         return ""
     text = str(value).strip()
     return text
+
+
+def _is_vietnam_context(ctx: Dict[str, Any]) -> bool:
+    return _string_value(ctx.get("market")).lower() == "vn"
 
 
 def _int_like(value: Any) -> Optional[int]:

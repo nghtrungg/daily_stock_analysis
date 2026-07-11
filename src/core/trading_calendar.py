@@ -15,14 +15,14 @@
 
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
 from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from src.services.market_symbol_utils import get_suffix_market
+from src.services.market_symbol_utils import get_suffix_market, is_vn_market_symbol
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +37,9 @@ except ImportError:
         "Run: pip install exchange-calendars"
     )
 
-# Market -> exchange code (exchange-calendars)
-MARKET_EXCHANGE = {"cn": "XSHG", "hk": "XHKG", "us": "XNYS", "jp": "XTKS", "kr": "XKRX", "tw": "XTAI"}
+# Market -> exchange code (exchange-calendars). Vietnam has no supported
+# exchange-calendars identifier, so its regular HOSE session is handled below.
+MARKET_EXCHANGE = {"cn": "XSHG", "hk": "XHKG", "us": "XNYS", "jp": "XTKS", "kr": "XKRX", "tw": "XTAI", "vn": None}
 
 # Market -> IANA timezone for "today"
 MARKET_TIMEZONE = {
@@ -48,6 +49,7 @@ MARKET_TIMEZONE = {
     "jp": "Asia/Tokyo",
     "kr": "Asia/Seoul",
     "tw": "Asia/Taipei",
+    "vn": "Asia/Ho_Chi_Minh",
 }
 
 # P0 market phase baseline (Issue #1386). This is an intentionally small
@@ -64,7 +66,16 @@ _CLOSING_AUCTION_WINDOW_MINUTES = {
     "jp": 5,
     "kr": 10,
     "tw": 5,
+    "vn": 15,
 }
+
+# HOSE listed-stock sessions published by HOSE: 09:00-11:30 and 13:00-14:45,
+# with the 14:30-14:45 closing call auction. This is a weekday session baseline;
+# exchange holidays remain a future calendar-data integration.
+_VN_OPEN_TIME = time(9, 0)
+_VN_BREAK_START = time(11, 30)
+_VN_BREAK_END = time(13, 0)
+_VN_CLOSE_TIME = time(14, 45)
 _SUPPORTED_ANALYSIS_PHASES = {
     "auto",
     "premarket",
@@ -135,6 +146,8 @@ def get_market_for_stock(code: str) -> Optional[str]:
 
     from data_provider import is_us_stock_code, is_us_index_code, is_hk_stock_code
 
+    if is_vn_market_symbol(code):
+        return "vn"
     if is_us_stock_code(code) or is_us_index_code(code):
         return "us"
     if is_hk_stock_code(code):
@@ -161,6 +174,8 @@ def is_market_open(market: str, check_date: date) -> bool:
     Returns:
         True if trading day (or fail-open), False otherwise
     """
+    if market == "vn":
+        return check_date.weekday() < 5
     if not _XCALS_AVAILABLE:
         return True
     ex = MARKET_EXCHANGE.get(market)
@@ -200,6 +215,42 @@ def get_market_now(
     return current_time.astimezone(tz)
 
 
+def _previous_vn_weekday(check_date: date) -> date:
+    previous = check_date - timedelta(days=1)
+    while previous.weekday() >= 5:
+        previous -= timedelta(days=1)
+    return previous
+
+
+def _vn_session_bounds(market_now: datetime) -> Tuple[datetime, datetime]:
+    return (
+        datetime.combine(market_now.date(), _VN_OPEN_TIME, tzinfo=market_now.tzinfo),
+        datetime.combine(market_now.date(), _VN_CLOSE_TIME, tzinfo=market_now.tzinfo),
+    )
+
+
+def _infer_vn_market_phase(market_now: datetime) -> MarketPhase:
+    if market_now.weekday() >= 5:
+        return MarketPhase.NON_TRADING
+
+    session_open, session_close = _vn_session_bounds(market_now)
+    break_start = datetime.combine(market_now.date(), _VN_BREAK_START, tzinfo=market_now.tzinfo)
+    break_end = datetime.combine(market_now.date(), _VN_BREAK_END, tzinfo=market_now.tzinfo)
+    closing_start = session_close - timedelta(minutes=_CLOSING_AUCTION_WINDOW_MINUTES["vn"])
+
+    if market_now < session_open:
+        return MarketPhase.PREMARKET
+    if market_now >= session_close:
+        return MarketPhase.POSTMARKET
+    if market_now < break_start:
+        return MarketPhase.INTRADAY
+    if market_now < break_end:
+        return MarketPhase.LUNCH_BREAK
+    if market_now < closing_start:
+        return MarketPhase.INTRADAY
+    return MarketPhase.CLOSING_AUCTION
+
+
 def get_effective_trading_date(
     market: Optional[str], current_time: Optional[datetime] = None
 ) -> date:
@@ -214,6 +265,12 @@ def get_effective_trading_date(
     """
     market_now = get_market_now(market, current_time=current_time)
     fallback_date = market_now.date()
+
+    if market == "vn":
+        if market_now.weekday() >= 5:
+            return _previous_vn_weekday(market_now.date())
+        _, session_close = _vn_session_bounds(market_now)
+        return market_now.date() if market_now >= session_close else _previous_vn_weekday(market_now.date())
 
     if not _XCALS_AVAILABLE:
         return fallback_date
@@ -300,12 +357,14 @@ def infer_market_phase(
     """
     if market not in MARKET_EXCHANGE or market not in MARKET_TIMEZONE:
         return MarketPhase.UNKNOWN
+    market_now = get_market_now(market, current_time=current_time)
+    if market == "vn":
+        return _infer_vn_market_phase(market_now)
     if not _XCALS_AVAILABLE:
         return MarketPhase.UNKNOWN
 
     ex = MARKET_EXCHANGE[market]
     tz_name = MARKET_TIMEZONE[market]
-    market_now = get_market_now(market, current_time=current_time)
     local_date = market_now.date()
 
     try:
@@ -383,8 +442,11 @@ def _session_open_close_for_today(
     market: str,
     market_now: datetime,
 ) -> Tuple[Optional[datetime], Optional[datetime]]:
-    ex = MARKET_EXCHANGE.get(market)
     tz_name = MARKET_TIMEZONE.get(market)
+    if market == "vn":
+        return _vn_session_bounds(market_now) if market_now.weekday() < 5 else (None, None)
+
+    ex = MARKET_EXCHANGE.get(market)
     if not ex or not tz_name or not _XCALS_AVAILABLE:
         return None, None
 
@@ -410,7 +472,7 @@ def _phase_minutes(
         or phase in {MarketPhase.UNKNOWN, MarketPhase.NON_TRADING, MarketPhase.POSTMARKET}
     ):
         return None, None, False
-    if not _XCALS_AVAILABLE:
+    if not _XCALS_AVAILABLE and market != "vn":
         return None, None, False
 
     try:
@@ -483,7 +545,7 @@ def build_market_phase_context(
         phase = MarketPhase.UNKNOWN
         _add_warning_code(warnings, "unknown_market")
     else:
-        if not _XCALS_AVAILABLE:
+        if not _XCALS_AVAILABLE and market != "vn":
             _add_warning_code(warnings, "calendar_unavailable")
         if requested_phase == "auto":
             phase = infer_market_phase(market, current_time=current_time)

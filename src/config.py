@@ -711,6 +711,7 @@ class Config:
     
     # === 自选股配置 ===
     stock_list: List[str] = field(default_factory=list)
+    enabled_markets: List[str] = field(default_factory=lambda: ["vn"])
 
     # === 飞书云文档配置 ===
     feishu_app_id: Optional[str] = None
@@ -952,7 +953,7 @@ class Config:
 
     # 报告类型：simple(精简) 或 full(完整)
     report_type: str = "simple"
-    report_language: str = "zh"
+    report_language: str = "vi"
 
     # 仅分析结果摘要：true 时只推送汇总，不含个股详情（Issue #262）
     report_summary_only: bool = False
@@ -1026,8 +1027,8 @@ class Config:
     schedule_times: List[str] = field(default_factory=lambda: ["18:00"])
     schedule_run_immediately: bool = True     # 启动时是否立即执行一次
     run_immediately: bool = True              # 启动时是否立即执行一次（非定时模式）
-    market_review_enabled: bool = True        # 是否启用大盘复盘
-    daily_market_context_enabled: bool = True   # 是否将大盘环境摘要用于个股分析 Prompt 与保守护栏
+    market_review_enabled: bool = False       # Vietnam-focused default: no unsupported non-VN market review
+    daily_market_context_enabled: bool = False  # Do not inject a non-VN market context by default
     # 大盘复盘市场区域：cn(A股)、hk(港股)、us(美股)、jp(日股)、kr(韩股)、both(全部市场)
     market_review_region: str = "cn"
     market_review_color_scheme: str = "green_up"
@@ -1257,7 +1258,7 @@ class Config:
         # 解析自选股列表（逗号分隔，统一为大写 Issue #355）
         stock_list_str = cls._resolve_env_value(
             'STOCK_LIST',
-            default='',
+            default='VNM.VN',
             prefer_env_file=True,
         )
         stock_list = [
@@ -1265,6 +1266,7 @@ class Config:
             for c in split_stock_list(stock_list_str)
             if (c or "").strip()
         ]
+        enabled_markets = cls._parse_enabled_markets(os.getenv("ENABLED_MARKETS", "vn"))
         
         # === LiteLLM multi-key parsing ===
         # GEMINI_API_KEYS (comma-separated) > GEMINI_API_KEY (single)
@@ -1617,6 +1619,7 @@ class Config:
 
         return cls(
             stock_list=stock_list,
+            enabled_markets=enabled_markets,
             feishu_app_id=os.getenv('FEISHU_APP_ID'),
             feishu_app_secret=os.getenv('FEISHU_APP_SECRET'),
             feishu_folder_token=os.getenv('FEISHU_FOLDER_TOKEN'),
@@ -1976,8 +1979,8 @@ class Config:
             ),
             schedule_run_immediately=schedule_run_immediately,
             run_immediately=legacy_run_immediately,
-            market_review_enabled=os.getenv('MARKET_REVIEW_ENABLED', 'true').lower() == 'true',
-            daily_market_context_enabled=os.getenv('DAILY_MARKET_CONTEXT_ENABLED', 'true').lower() == 'true',
+            market_review_enabled=os.getenv('MARKET_REVIEW_ENABLED', 'false').lower() == 'true',
+            daily_market_context_enabled=os.getenv('DAILY_MARKET_CONTEXT_ENABLED', 'false').lower() == 'true',
             market_review_region=cls._parse_market_review_region(
                 os.getenv('MARKET_REVIEW_REGION', 'cn')
             ),
@@ -2554,16 +2557,16 @@ class Config:
         if file_value is not None:
             return file_value
 
-        return env_value or "zh"
+        return env_value or "vi"
 
     @classmethod
     def _parse_report_language(cls, value: Optional[str]) -> str:
-        """Parse REPORT_LANGUAGE, fallback to zh for invalid values."""
-        normalized = normalize_report_language(value, default="zh")
+        """Parse REPORT_LANGUAGE, fallback to vi for invalid values."""
+        normalized = normalize_report_language(value, default="vi")
         raw = (value or "").strip()
         if raw and not is_supported_report_language_value(raw):
             logging.getLogger(__name__).warning(
-                "REPORT_LANGUAGE '%s' invalid, fallback to 'zh' (valid: zh/en)",
+                "REPORT_LANGUAGE '%s' invalid, fallback to 'vi' (valid: zh/en/ko/vi)",
                 value,
             )
         return normalized
@@ -2587,6 +2590,26 @@ class Config:
             news_max_age_days=self.news_max_age_days,
             news_strategy_profile=self.news_strategy_profile,
         )
+
+    @classmethod
+    def _parse_enabled_markets(cls, value: Optional[str]) -> List[str]:
+        """Parse the provider market allowlist, defaulting to Vietnam only."""
+        supported = ("cn", "hk", "us", "jp", "kr", "tw", "vn")
+        requested = {
+            item.strip().lower()
+            for item in str(value or "vn").split(",")
+            if item.strip()
+        }
+        if "all" in requested:
+            return list(supported)
+        enabled = [market for market in supported if market in requested]
+        if enabled:
+            return enabled
+        logging.getLogger(__name__).warning(
+            "ENABLED_MARKETS %r has no supported values; falling back to vn",
+            value,
+        )
+        return ["vn"]
 
     @classmethod
     def _parse_market_review_region(cls, value: str) -> str:

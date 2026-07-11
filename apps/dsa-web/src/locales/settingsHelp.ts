@@ -340,6 +340,14 @@ const settingsHelpZhCN: SettingsHelpMap = {
     impact: ['影响 AlphaSift 适配层来源校验和显式修复安装。'],
     notes: ['请确认来源可信；AlphaSift 是实验性质选股能力，启用前应理解相关风险。'],
   },
+  'settings.data_source.ENABLED_MARKETS': {
+    title: 'Enabled Markets',
+    summary: 'Controls which markets built-in default data providers may serve.',
+    usage: 'Use comma-separated market codes; the default is vn. Use all to restore every supported market.',
+    valueNotes: ['vn keeps only Vietnam providers; for example vn,us enables Vietnam and US providers.'],
+    impact: ['Affects default DataFetcherManager initialization and which built-in providers can participate in fallback.'],
+    notes: ['This is a reversible runtime allowlist; it does not delete market code or historical data.'],
+  },
   'settings.data_source.REALTIME_SOURCE_PRIORITY': {
     title: '实时行情源优先级',
     summary: '配置多个实时行情源的尝试顺序。',
@@ -1494,6 +1502,14 @@ const settingsHelpEnUS: SettingsHelpMap = {
     valueNotes: ['Custom local paths or wheels are not handled by the repair endpoint; install them into the backend Python environment first.', 'This field is treated as sensitive, so the settings page does not show the full value.'],
     impact: ['Affects AlphaSift adapter source validation and explicit repair installs.'],
     notes: ['Use a trusted source only. AlphaSift is an experimental screening capability, so understand the risk before enabling it.'],
+  },
+  'settings.data_source.ENABLED_MARKETS': {
+    title: 'Enabled Markets',
+    summary: 'Controls which markets built-in default data providers may serve.',
+    usage: 'Use comma-separated market codes; the default is vn. Use all to restore every supported market.',
+    valueNotes: ['vn keeps only Vietnam providers; for example vn,us enables Vietnam and US providers.'],
+    impact: ['Affects default DataFetcherManager initialization and which built-in providers can participate in fallback.'],
+    notes: ['This is a reversible runtime allowlist; it does not delete market code or historical data.'],
   },
   'settings.data_source.REALTIME_SOURCE_PRIORITY': {
     title: 'Realtime Source Priority',

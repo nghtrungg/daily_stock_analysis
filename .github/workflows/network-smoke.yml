@@ -11,6 +11,7 @@ concurrency:
 
 jobs:
   smoke:
+    if: github.event_name == 'workflow_dispatch' || vars.NETWORK_SMOKE_ENABLED == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -783,6 +783,12 @@ class TestMarketReviewFieldsRegistered(unittest.TestCase):
         self.assertEqual(field["validation"]["enum"], ["green_up", "red_up"])
         self.assertFalse(field["is_sensitive"])
 
+    def test_enabled_markets_field_defaults_to_vietnam_only(self):
+        field = get_field_definition("ENABLED_MARKETS")
+        self.assertEqual(field["category"], "data_source")
+        self.assertEqual(field["default_value"], "vn")
+        self.assertIn("all", field["validation"]["allowed_values"])
+
     def test_market_review_region_field_definition_exists(self):
         field = get_field_definition("MARKET_REVIEW_REGION")
         self.assertEqual(field["category"], "system")
@@ -804,7 +810,7 @@ class TestMarketReviewFieldsRegistered(unittest.TestCase):
         self.assertEqual(field["category"], "system")
         self.assertEqual(field["data_type"], "boolean")
         self.assertEqual(field["ui_control"], "switch")
-        self.assertEqual(field["default_value"], "true")
+        self.assertEqual(field["default_value"], "false")
         self.assertFalse(field["is_sensitive"])
 
     def test_schema_response_includes_market_review_color_scheme(self):

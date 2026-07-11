@@ -1839,6 +1839,75 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
         self.assertIn("direct_company_news", context)
         self.assertIn("标题命中股票代码 600519", context)
 
+    def test_search_stock_news_uses_vietnamese_query_for_vn_market_marker(self) -> None:
+        service, mock_search = self._create_service_with_mock_provider()
+
+        service.search_stock_news("FPT.VN", "FPT", max_results=3)
+
+        query = mock_search.call_args.args[0]
+        self.assertIn("Tin tức tài chính", query)
+        self.assertIn("cổ phiếu FPT", query)
+        self.assertIn("Cafef Vietstock Tinnhanhchungkhoan", query)
+        self.assertNotIn("stock latest news", query)
+
+    def test_vietnamese_news_query_switches_for_midday_and_evening_runs(self) -> None:
+        midday = datetime(2026, 7, 9, 11, 45, tzinfo=SearchService.VIETNAM_TIMEZONE)
+        evening = datetime(2026, 7, 9, 16, 10, tzinfo=SearchService.VIETNAM_TIMEZONE)
+
+        midday_query = SearchService._build_vietnamese_stock_news_query("FPT.VN", "FPT", now=midday)
+        evening_query = SearchService._build_vietnamese_stock_news_query("FPT.VN", "FPT", now=evening)
+
+        self.assertIn("Tin tức tài chính biến động sáng nay cổ phiếu FPT", midday_query)
+        self.assertIn("Tin tức tài chính cuối ngày cổ phiếu FPT", evening_query)
+        self.assertIn("Cafef Vietstock Tinnhanhchungkhoan", midday_query)
+
+    def test_search_comprehensive_intel_uses_vietnamese_dimension_queries(self) -> None:
+        fresh = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        service, mock_search = self._create_service_with_mock_provider()
+        mock_search.side_effect = [
+            _response([_result("FPT tin tức mới", fresh)]),
+            _response([_result("Nhận định FPT", None)]),
+            _response([_result("Rủi ro FPT", fresh)]),
+        ]
+
+        with patch("src.search_service.time.sleep"):
+            service.search_comprehensive_intel("FPT.VN", "FPT", max_searches=3)
+
+        queries = [call.args[0] for call in mock_search.call_args_list]
+        self.assertIn("Tin tức tài chính", queries[0])
+        self.assertIn("cổ phiếu FPT", queries[0])
+        self.assertIn("Nhận định doanh nghiệp FPT", queries[1])
+        self.assertIn("rủi ro doanh nghiệp", queries[2])
+
+    def test_vietnamese_base_ticker_counts_as_direct_news_hit(self) -> None:
+        fresh = datetime.now().date().isoformat()
+        service = SearchService(
+            bocha_keys=["dummy_key"],
+            searxng_public_instances_enabled=False,
+            news_max_age_days=3,
+            news_strategy_profile="short",
+        )
+        provider = SimpleNamespace(
+            is_available=True,
+            name="VietnamProvider",
+            search=MagicMock(
+                return_value=_response(
+                    [
+                        _result(
+                            "FPT báo lãi quý mới tăng mạnh",
+                            fresh,
+                            snippet="FPT công bố kết quả kinh doanh tích cực.",
+                        )
+                    ]
+                )
+            ),
+        )
+        service._providers = [provider]
+
+        resp = service.search_stock_news("FPT.VN", "FPT", max_results=1)
+
+        self.assertEqual(resp.results[0].relevance_category, "direct_company_news")
+
     def test_search_stock_news_brave_locale_matches_market_context(self) -> None:
         """Brave locale should follow Chinese-preferred vs US-stock contexts."""
         fresh_dt = datetime.now(timezone.utc).replace(microsecond=0)
@@ -1847,6 +1916,7 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
         for stock_code, stock_name, expected_lang, expected_country, title, description in (
             ("600519", "贵州茅台", "zh-hans", "CN", "中文资讯", "中文摘要"),
             ("AAPL", "Apple", "en", "US", "Apple earnings beat", "English summary"),
+            ("FPT.VN", "FPT", "vi", "VN", "FPT báo lãi quý mới", "Tin tức tài chính FPT"),
         ):
             with self.subTest(stock_code=stock_code):
                 fake_response = MagicMock()

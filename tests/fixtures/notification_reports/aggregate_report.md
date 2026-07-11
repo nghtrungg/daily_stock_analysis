@@ -1,21 +1,15 @@
-# A股智能分析日报
+# Aggregate Notification Report
 
-## 今日结论
+## Dashboard
 
-- 市场风险偏好回升，短线资金偏向高股息与 AI 算力。
-- 默认仍发送完整报告，本样例用于验证不同通知渠道的格式化保真。
+Total analyzed: 3 stocks | Buy: 0 | Hold: 2 | Sell: 1
 
-| 股票 | 信号 | 建议 |
-| --- | --- | --- |
-| 600519 | 趋势强势 | 逢低关注 |
-| AAPL | 震荡整理 | 等待放量 |
+## Results
 
-## 风险提示
+- Example A (000657): Hold | Score 65 | Bullish bias
+- Example B (600105): Hold | Score 48 | Range-bound
+- Example C (300260): Sell | Score 35 | Bearish bias
 
-> 样例不构成投资建议。
+## Notes
 
-```text
-volume_signal = "watch"
-```
-
-[查看完整报告](https://example.com/reports/daily-stock-analysis)
+This is a fixture used by notification tests and is not investment advice.

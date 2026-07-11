@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+from src.schemas.decision_action import localize_action_label
 from src.utils.sanitize import sanitize_decision_signal_payload, sanitize_decision_signal_text
 
 
@@ -46,7 +47,8 @@ def format_decision_signal_excerpt(summary: Any, report_language: str = "zh") ->
 
     if not isinstance(summary, dict) or not summary:
         return ""
-    language = "en" if str(report_language or "").lower().startswith("en") else "zh"
+    language_key = str(report_language or "").lower()
+    language = "vi" if language_key.startswith("vi") else "en" if language_key.startswith("en") else "zh"
     labels = {
         "zh": {
             "heading": "AI 决策信号",
@@ -66,10 +68,22 @@ def format_decision_signal_excerpt(summary: Any, report_language: str = "zh") ->
             "risk_summary": "Risk",
             "source_report_id": "Report",
         },
+        "vi": {
+            "heading": "Tín hiệu quyết định AI",
+            "action": "Hành động",
+            "horizon": "Kỳ hạn",
+            "reason": "Lý do",
+            "watch_conditions": "Điều kiện theo dõi",
+            "risk_summary": "Rủi ro",
+            "source_report_id": "Báo cáo",
+        },
     }[language]
 
     parts = []
-    action_label = _public_scalar(summary.get("action_label") or summary.get("action"), max_length=32)
+    action_label = (
+        localize_action_label(summary.get("action"), language)
+        or _public_scalar(summary.get("action_label") or summary.get("action"), max_length=32)
+    )
     if action_label:
         parts.append(f"{labels['action']}: {action_label}")
     horizon = _public_scalar(summary.get("horizon"), max_length=16)

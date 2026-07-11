@@ -81,6 +81,50 @@ class TestReportRenderer(unittest.TestCase):
         self.assertIn("贵州茅台", out)
         self.assertIn("持有", out)
 
+    def test_vietnamese_market_forces_vietnamese_dashboard_labels(self) -> None:
+        """VN tickers render markdown dashboard chrome in Vietnamese."""
+        r = _make_result(
+            code="FPT.VN",
+            name="FPT",
+            operation_advice="Mua",
+            analysis_summary="Ưu tiên theo dõi sau giờ nghỉ trưa",
+            dashboard={
+                "core_conclusion": {"one_sentence": "Theo dõi điểm mở cửa lại lúc 13:00"},
+                "intelligence": {"latest_news": "Tin mới từ Cafef"},
+                "battle_plan": {
+                    "sniper_points": {"stop_loss": "92"},
+                    "action_checklist": ["Kiểm tra thanh khoản sau 13:00"],
+                },
+            },
+            report_language="en",
+        )
+
+        out = render("markdown", [r], summary_only=False, extra_context={"report_language": "en"})
+
+        self.assertIsNotNone(out)
+        self.assertIn("Bảng điều khiển quyết định", out)
+        self.assertIn("Tóm tắt", out)
+        self.assertIn("Danh sách kiểm tra", out)
+        self.assertNotIn("Decision Dashboard", out)
+
+    def test_vietnamese_report_localizes_status_and_decision_signal_chrome(self) -> None:
+        r = _with_decision_signal_summary(_make_result(
+            code="VNM.VN",
+            name="Vinamilk",
+            operation_advice="Hold and watch",
+            report_language="vi",
+        ))
+        r.market_phase_summary = {"market": "vn", "phase": "intraday"}
+
+        out = render("markdown", [r], summary_only=False)
+
+        self.assertIsNotNone(out)
+        self.assertIn("Trạng thái thị trường: Việt Nam · Trong phiên", out)
+        self.assertIn("Tín hiệu quyết định AI", out)
+        self.assertIn("Hành động: Bán", out)
+        self.assertNotIn("AI 决策信号", out)
+        self.assertNotIn("Hold and watch", out)
+
     def test_render_markdown_full(self) -> None:
         """Markdown platform renders full report."""
         r = _make_result()

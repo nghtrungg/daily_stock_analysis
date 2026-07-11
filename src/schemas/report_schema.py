@@ -70,6 +70,14 @@ class ChipStructure(BaseModel):
     chip_health: Optional[str] = None
 
 
+class MoneyFlowIndicators(BaseModel):
+    """OHLCV-derived technical money-flow indicators."""
+
+    mfi_14: Optional[Union[int, float, str]] = None
+    cmf_20: Optional[Union[int, float, str]] = None
+    note: Optional[str] = None
+
+
 class DataPerspective(BaseModel):
     """Data perspective block."""
 
@@ -77,6 +85,7 @@ class DataPerspective(BaseModel):
     price_position: Optional[PricePosition] = None
     volume_analysis: Optional[VolumeAnalysis] = None
     chip_structure: Optional[ChipStructure] = None
+    money_flow_indicators: Optional[MoneyFlowIndicators] = None
 
 
 class Intelligence(BaseModel):

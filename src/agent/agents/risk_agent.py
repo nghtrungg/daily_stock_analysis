@@ -22,6 +22,7 @@ from typing import Optional
 from src.agent.agents.base_agent import BaseAgent
 from src.agent.protocols import AgentContext, AgentOpinion
 from src.agent.runner import try_parse_json
+from src.services.market_symbol_utils import is_vn_market_symbol
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,12 @@ class RiskAgent(BaseAgent):
     ]
 
     def system_prompt(self, ctx: AgentContext) -> str:
+        language_rule = ""
+        if is_vn_market_symbol(ctx.stock_code):
+            language_rule = """
+## Output Language
+The stock code contains the `.VN` market marker. Keep JSON keys and enum values unchanged, but write every human-readable risk evaluation value in Vietnamese only.
+"""
         return """\
 You are a **Risk Screening Agent** focused exclusively on identifying \
 risks and red flags for the given stock.
@@ -77,7 +84,7 @@ Return **only** a JSON object:
 
 Important: be thorough but factual. Only flag risks backed by evidence \
 from your search results. Do NOT invent risks.
-"""
+""" + language_rule
 
     def build_user_message(self, ctx: AgentContext) -> str:
         parts = [f"Screen stock **{ctx.stock_code}**"]

@@ -100,19 +100,29 @@ from src.schemas.decision_scale import (
 from src.schemas.report_schema import AnalysisReportSchema
 from src.market_context import detect_market, get_market_role, get_market_guidelines
 from src.services.daily_market_context import format_daily_market_context_prompt_section
+from src.services.market_symbol_utils import is_vn_market_symbol
 from src.market_phase_prompt import format_market_phase_prompt_section
 
 logger = logging.getLogger(__name__)
 
 
-def _localized_text(language: Any, *, en: str, zh: str, ko: str) -> str:
-    """Pick a deterministic fallback string for the report language (zh/en/ko)."""
+def _localized_text(language: Any, *, en: str, zh: str, ko: str, vi: Optional[str] = None) -> str:
+    """Pick a deterministic fallback string for the report language."""
     normalized = normalize_report_language(language)
     if normalized == "en":
         return en
     if normalized == "ko":
         return ko
+    if normalized == "vi":
+        return vi if vi is not None else en
     return zh
+
+
+def _effective_report_language_for_stock(report_language: Any, stock_code: str = "") -> str:
+    """Force Vietnamese output/rendering for explicitly marked Vietnam stocks."""
+    if is_vn_market_symbol(stock_code):
+        return "vi"
+    return normalize_report_language(report_language)
 
 
 def _normalize_risk_warning_values(value: Any) -> List[str]:
@@ -789,6 +799,21 @@ def _sanitize_trend_analysis_for_prompt(
     prompt_notes: List[str] = []
     trend_direction = _infer_trend_direction(trend_dict)
 
+    current_price = _safe_float(trend_dict.get("current_price"), default=math.nan)
+    ma20 = _safe_float(trend_dict.get("ma20"), default=math.nan)
+    if math.isfinite(current_price) and math.isfinite(ma20) and ma20 > 0:
+        price_above_ma20 = current_price >= ma20
+        trend_dict["price_above_ma20"] = price_above_ma20
+        trend_dict["ma20_role"] = "support" if price_above_ma20 else "resistance"
+        if price_above_ma20:
+            prompt_notes.append(
+                f"Close {current_price:.2f} is above MA20 {ma20:.2f}; treat MA20 as support after the close, not as overhead resistance unless a later close falls back below it."
+            )
+        else:
+            prompt_notes.append(
+                f"Close {current_price:.2f} remains below MA20 {ma20:.2f}; MA20 may be treated as overhead resistance until a close breaks above it."
+            )
+
     if trend_direction == "bearish":
         filtered_signal_reasons = _filter_conflicting_trend_items(
             signal_reasons,
@@ -987,6 +1012,47 @@ def fill_price_position_if_needed(
             logger.info("[price_position] Filled placeholder fields from computed data")
     except Exception as e:
         logger.warning("[price_position] Fill failed, skipping: %s", e)
+
+
+def fill_money_flow_indicators_if_needed(
+    result: "AnalysisResult",
+    trend_result: Any = None,
+) -> None:
+    """Attach deterministic MFI/CMF values to the public dashboard.
+
+    These are OHLCV-derived technical proxies, not ownership or investor-type
+    net-flow data.
+    """
+    if not result:
+        return
+    trend = _as_dict_for_decision_guard(trend_result)
+    mfi = _coerce_numeric_value(trend.get("mfi_14"))
+    cmf = _coerce_numeric_value(trend.get("cmf_20"))
+    if mfi is None and cmf is None:
+        return
+
+    language = normalize_report_language(getattr(result, "report_language", "zh"))
+    notes = {
+        "zh": "由 OHLCV 计算的技术资金流代理，不能替代外资、机构或自营商的买卖数据。",
+        "en": "OHLCV-derived technical flow proxy; not foreign, institutional, or proprietary-trading flow data.",
+        "ko": "OHLCV 기반 기술적 자금흐름 대용치이며 외국인·기관·자기매매 데이터가 아닙니다.",
+        "vi": "Chỉ báo dòng tiền kỹ thuật tính từ OHLCV; không phải dữ liệu mua/bán ròng của khối ngoại, tổ chức hoặc tự doanh.",
+    }
+    dashboard = result.dashboard if isinstance(result.dashboard, dict) else {}
+    result.dashboard = dashboard
+    data_perspective = dashboard.get("data_perspective")
+    if not isinstance(data_perspective, dict):
+        data_perspective = {}
+        dashboard["data_perspective"] = data_perspective
+    existing = data_perspective.get("money_flow_indicators")
+    if not isinstance(existing, dict):
+        existing = {}
+    if _is_value_placeholder(existing.get("mfi_14")) and mfi is not None:
+        existing["mfi_14"] = round(mfi, 2)
+    if _is_value_placeholder(existing.get("cmf_20")) and cmf is not None:
+        existing["cmf_20"] = round(cmf, 4)
+    existing.setdefault("note", notes.get(language, notes["en"]))
+    data_perspective["money_flow_indicators"] = existing
 
 
 def stabilize_decision_with_structure(
@@ -1313,10 +1379,22 @@ def _capital_flow_bias_with_status(
 def _capital_flow_status_for_stability(reason: str, language: str) -> str:
     normalized = str(reason or "").strip().lower()
     if "not_supported" in normalized or "unsupported" in normalized or "not available" in normalized:
-        return "市场资金流服务暂不支持" if language == "zh" else "Capital flow source unsupported"
+        if language == "zh":
+            return "市场资金流服务暂不支持"
+        if language == "vi":
+            return "Nguồn dữ liệu dòng tiền chưa hỗ trợ"
+        return "Capital flow source unsupported"
     if "empty_stock_flow" in normalized or "missing" in normalized:
-        return "资金流数据缺失" if language == "zh" else "capital flow data unavailable"
-    return "资金流数据不可用" if language == "zh" else "capital flow unavailable"
+        if language == "zh":
+            return "资金流数据缺失"
+        if language == "vi":
+            return "Thiếu dữ liệu dòng tiền"
+        return "capital flow data unavailable"
+    if language == "zh":
+        return "资金流数据不可用"
+    if language == "vi":
+        return "Dữ liệu dòng tiền không khả dụng"
+    return "capital flow unavailable"
 
 
 def _set_decision_stability_unavailable(
@@ -1408,7 +1486,8 @@ def _apply_hold_watch_dashboard(
     if not isinstance(core, dict):
         core = {}
         dashboard["core_conclusion"] = core
-    core["signal_type"] = "🟡持有观望" if language == "zh" else "🟡 Hold / Watch"
+    signal_types = {"zh": "🟡持有观望", "en": "🟡 Hold / Watch", "ko": "🟡 보유 / 관찰", "vi": "🟡 Nắm giữ / Theo dõi"}
+    core["signal_type"] = signal_types.get(language, signal_types["en"])
     core["one_sentence"] = f"{advice}：{reason}" if language == "zh" else f"{advice}: {reason}"
 
     position_advice = core.get("position_advice")
@@ -1457,6 +1536,12 @@ def _downgrade_buy_without_capital_flow(
         no_position = "空仓先不追买，等待资金流恢复、支撑确认或有效突破后再行动。"
         has_position = "持仓以关键支撑为风控线，资金流恢复前控制仓位。"
         confidence = "低"
+    elif language == "vi":
+        advice = "Nắm giữ và theo dõi"
+        reason = f"{status_text}; khuyến nghị mua chưa có xác nhận từ dòng tiền, nên tạm thời theo dõi."
+        no_position = "Không mua đuổi; chờ dòng tiền hồi phục, xác nhận hỗ trợ hoặc bứt phá hợp lệ."
+        has_position = "Dùng vùng hỗ trợ quan trọng làm mốc kiểm soát rủi ro và giữ tỷ trọng thận trọng đến khi dòng tiền cải thiện."
+        confidence = "Thấp"
     else:
         advice = "Hold and watch"
         reason = f"{status_text}; the buy call lacks capital-flow confirmation, so treat it as watch-only."
@@ -1537,8 +1622,13 @@ def _set_structural_hold_wording(
             "shakeout": "흔들기 관찰",
             "hold": "보유 관찰",
         },
+        "vi": {
+            "range": "Theo dõi đi ngang",
+            "shakeout": "Theo dõi rũ bỏ",
+            "hold": "Nắm giữ và theo dõi",
+        },
     }
-    advice_default = {"zh": "持有观察", "en": "Hold and watch", "ko": "보유 관찰"}.get(language, "Hold and watch")
+    advice_default = {"zh": "持有观察", "en": "Hold and watch", "ko": "보유 관찰", "vi": "Nắm giữ và theo dõi"}.get(language, "Hold and watch")
     advice = advice_map.get(language, advice_map["en"]).get(advice_key, advice_default)
     reason_templates = {
         "zh": {
@@ -1565,6 +1655,14 @@ def _set_structural_hold_wording(
             "hold_shakeout": "가격이 지지선 부근까지 눌렸지만 유출이 확인되지 않아 흔들기 관찰로 처리하는 것이 적절합니다.",
             "hold_mid_range": "가격이 지지선과 저항선 사이이고 자금 흐름이 불명확해 박스권 관망이 더 실행 가능합니다.",
         },
+        "vi": {
+            "buy_near_resistance": "Giá gần vùng kháng cự nhưng chưa có xác nhận dòng tiền vào, nên không phù hợp để mua đuổi nhịp hồi.",
+            "buy_with_outflow": "Dòng tiền lớn rút ra mâu thuẫn với khuyến nghị mua; hãy chờ xác nhận hỗ trợ hoặc dòng tiền quay lại.",
+            "sell_near_support": "Giá gần hỗ trợ và chưa có dấu hiệu dòng tiền rút ra liên tục, nên một phiên giảm chưa đủ để bán ngay.",
+            "sell_with_inflow": "Dòng tiền lớn vào mâu thuẫn với khuyến nghị bán; nên nắm giữ và theo dõi việc phá vỡ hỗ trợ.",
+            "hold_shakeout": "Giá lùi về gần hỗ trợ nhưng chưa xác nhận dòng tiền rút ra; phù hợp hơn với kịch bản theo dõi rũ bỏ.",
+            "hold_mid_range": "Giá nằm giữa hỗ trợ và kháng cự, trong khi dòng tiền chưa rõ ràng; theo dõi biên độ sẽ khả thi hơn.",
+        },
     }
     reason = reason_templates.get(language, reason_templates["en"]).get(reason_key, "")
     if calibrate_score:
@@ -1578,6 +1676,8 @@ def _set_structural_hold_wording(
             result.trend_prediction = "Sideways"
         elif language == "ko":
             result.trend_prediction = "횡보"
+        elif language == "vi":
+            result.trend_prediction = "Đi ngang"
 
     if language == "zh":
         no_position = "空仓先不追涨杀跌，等待支撑确认、放量突破或资金回流后再行动。"
@@ -1585,6 +1685,9 @@ def _set_structural_hold_wording(
     elif language == "ko":
         no_position = "현금 보유 시 추격·투매를 삼가고 지지 확인·대량 돌파·자금 재유입 후 행동하세요."
         has_position = "보유 시 핵심 지지선을 리스크 관리선으로 삼고, 이탈 전까지 관찰과 분할 관리 위주로 대응하세요."
+    elif language == "vi":
+        no_position = "Không mua đuổi hoặc bán hoảng loạn; chờ xác nhận hỗ trợ, bứt phá hoặc dòng tiền quay lại."
+        has_position = "Dùng hỗ trợ quan trọng làm mốc kiểm soát rủi ro và quản trị tỷ trọng cho đến khi hỗ trợ bị phá vỡ."
     else:
         no_position = "Do not chase or panic; wait for support confirmation, breakout, or renewed inflow."
         has_position = "Use key support as the risk line and manage position size unless support fails."
@@ -2341,7 +2444,7 @@ class GeminiAnalyzer:
 
     def _get_analysis_system_prompt(self, report_language: str, stock_code: str = "") -> str:
         """Build the analyzer system prompt with output-language guidance."""
-        lang = normalize_report_language(report_language)
+        lang = _effective_report_language_for_stock(report_language, stock_code)
         market_role = get_market_role(stock_code, lang)
         market_guidelines = get_market_guidelines(stock_code, lang)
         skill_instructions, default_skill_policy, use_legacy_default_prompt = self._get_skill_prompt_sections()
@@ -2364,6 +2467,22 @@ class GeminiAnalyzer:
                 .replace("{default_skill_policy_section}", default_skill_policy_section)
                 .replace("{skills_section}", skills_section)
             )
+        if is_vn_market_symbol(stock_code):
+            return base_prompt + """
+
+## Output Language (highest priority)
+
+- Keep all JSON keys unchanged.
+- `decision_type` must remain `buy|hold|sell`.
+- The stock code contains the `.VN` market marker, so all human-readable JSON values must be written 100% in Vietnamese.
+- This strict Vietnamese requirement applies to the final markdown dashboard, technical analysis text, risk evaluations, positive catalysts, checklist items, and all narrative summaries.
+- Do not mix English or Chinese into user-facing values except for stock tickers, company legal names, source names, and unavoidable financial abbreviations.
+
+## Vietnam Midday Break Mode
+
+- If the current system time is between 11:30 and 13:00 Vietnam Time, change context to: "This is a midday analysis of the morning session. Evaluate if morning volume indicates an afternoon breakout or breakdown, and adapt the Action Checklist for the 13:00 reopening."
+- In that mode, the `battle_plan.action_checklist` and `phase_decision.next_check_time` must focus on the 13:00 reopening, afternoon confirmation levels, and invalidation conditions.
+"""
         if lang == "en":
             return base_prompt + """
 
@@ -3377,7 +3496,10 @@ class GeminiAnalyzer:
 
         code = context.get('code', 'Unknown')
         config = self._get_runtime_config()
-        report_language = normalize_report_language(getattr(config, "report_language", "zh"))
+        report_language = _effective_report_language_for_stock(
+            getattr(config, "report_language", "zh"),
+            code,
+        )
         system_prompt = self._get_analysis_system_prompt(report_language, stock_code=code)
         skill_instructions, default_skill_policy, use_legacy_default_prompt = self._get_skill_prompt_sections()
         
@@ -3462,17 +3584,20 @@ class GeminiAnalyzer:
                     en='AI analysis is unavailable because no API key is configured.',
                     zh='AI 分析功能未启用（未配置 API Key）',
                     ko='API 키가 설정되지 않아 AI 분석을 사용할 수 없습니다.',
+                    vi='Không thể phân tích bằng AI vì chưa cấu hình API key.',
                 ),
                 risk_warning=_localized_text(
                     report_language,
                     en='Configure an LLM API key (GEMINI_API_KEY/ANTHROPIC_API_KEY/OPENAI_API_KEY) and retry.',
                     zh='请配置 LLM API Key（GEMINI_API_KEY/ANTHROPIC_API_KEY/OPENAI_API_KEY）后重试',
                     ko='LLM API 키(GEMINI_API_KEY/ANTHROPIC_API_KEY/OPENAI_API_KEY)를 설정한 뒤 다시 시도하세요.',
+                    vi='Hãy cấu hình LLM API key (GEMINI_API_KEY/ANTHROPIC_API_KEY/OPENAI_API_KEY) rồi thử lại.',
                 ),
                 success=False,
                 error_message=_localized_text(
                     report_language,
                     en='LLM API key is not configured',
+                    vi='Chưa cấu hình LLM API key',
                     zh='LLM API Key 未配置',
                     ko='LLM API 키가 설정되지 않았습니다',
                 ),
@@ -3593,7 +3718,7 @@ class GeminiAnalyzer:
                 result.search_performed = bool(news_context)
                 result.market_snapshot = self._build_market_snapshot(context)
                 result.model_used = model_used
-                result.report_language = report_language
+                result.report_language = _effective_report_language_for_stock(report_language, code)
                 normalize_chip_structure_availability(result, context.get("chip"))
 
                 # 内容完整性校验（可选）
@@ -3652,12 +3777,14 @@ class GeminiAnalyzer:
                 analysis_summary=_localized_text(
                     report_language,
                     en=f'Analysis failed: {safe_error[:100]}',
+                    vi=f'Phân tích thất bại: {safe_error[:100]}',
                     zh=f'分析过程出错: {safe_error[:100]}',
                     ko=f'분석 중 오류가 발생했습니다: {safe_error[:100]}',
                 ),
                 risk_warning=_localized_text(
                     report_language,
                     en='Analysis failed. Please retry later or review manually.',
+                    vi='Phân tích thất bại. Vui lòng thử lại sau hoặc kiểm tra thủ công.',
                     zh='分析失败，请稍后重试或手动分析',
                     ko='분석에 실패했습니다. 잠시 후 다시 시도하거나 수동으로 검토하세요.',
                 ),
@@ -3686,7 +3813,7 @@ class GeminiAnalyzer:
             news_context: 预先搜索的新闻内容
         """
         code = context.get('code', 'Unknown')
-        report_language = normalize_report_language(report_language)
+        report_language = _effective_report_language_for_stock(report_language, code)
         _, _, use_legacy_default_prompt = self._get_skill_prompt_sections()
         
         # 优先使用上下文中的股票名称（从 realtime_quote 获取）
@@ -3915,6 +4042,31 @@ class GeminiAnalyzer:
 """
 
         # 添加筹码分布数据
+        ownership_block = (
+            fundamental_context.get("ownership", {})
+            if isinstance(fundamental_context, dict)
+            else {}
+        )
+        ownership_data = (
+            ownership_block.get("data", {})
+            if isinstance(ownership_block, dict)
+            else {}
+        )
+        if (
+            isinstance(ownership_block, dict)
+            and ownership_block.get("status") == "ok"
+            and isinstance(ownership_data, dict)
+            and ownership_data.get("records")
+        ):
+            prompt += f"""
+### Ownership structure (disclosed records, not daily order flow)
+- Source: {ownership_data.get('source', 'N/A')}; retrieved: {ownership_data.get('as_of', 'N/A')}; records: {ownership_data.get('record_count', 0)}.
+- Use these records only to describe disclosed ownership. Do not infer that foreign, institutional, or proprietary investors are accumulating or distributing unless a dated net-flow source explicitly says so.
+```json
+{json.dumps(ownership_data, ensure_ascii=False)}
+```
+"""
+
         if 'chip' in context:
             chip = context['chip']
             profit_ratio = chip.get('profit_ratio', 0)
@@ -3960,7 +4112,10 @@ class GeminiAnalyzer:
 | 趋势强度 | {trend.get('trend_strength', 0)}/100 | |
 | **乖离率(MA5)** | **{trend.get('bias_ma5', 0):+.2f}%** | {bias_warning} |
 | 乖离率(MA10) | {trend.get('bias_ma10', 0):+.2f}% | |
+| MA20 | {trend.get('ma20', unknown_text)} | role={trend.get('ma20_role', unknown_text)} |
 | 量能状态 | {trend.get('volume_status', unknown_text)} | {trend.get('volume_trend', '')} |
+| MFI(14) | {trend.get('mfi_14', unknown_text)} | 80+ overbought; 20- oversold |
+| CMF(20) | {trend.get('cmf_20', unknown_text)} | positive=inflow proxy; negative=outflow proxy |
 | 系统信号 | {trend.get('buy_signal', unknown_text)} | |
 | 系统评分 | {trend.get('signal_score', 0)}/100 | |
 
@@ -3992,7 +4147,10 @@ class GeminiAnalyzer:
 | 趋势强度 | {trend.get('trend_strength', 0)}/100 | |
 | **价格位置(MA5)** | **{trend.get('bias_ma5', 0):+.2f}%** | {bias_warning} |
 | 价格位置(MA10) | {trend.get('bias_ma10', 0):+.2f}% | |
+| MA20 | {trend.get('ma20', unknown_text)} | role={trend.get('ma20_role', unknown_text)} |
 | 量能状态 | {trend.get('volume_status', unknown_text)} | {trend.get('volume_trend', '')} |
+| MFI(14) | {trend.get('mfi_14', unknown_text)} | 80+ overbought; 20- oversold |
+| CMF(20) | {trend.get('cmf_20', unknown_text)} | positive=inflow proxy; negative=outflow proxy |
 | 系统信号 | {trend.get('buy_signal', unknown_text)} | |
 | 系统评分 | {trend.get('signal_score', 0)}/100 | |
 
@@ -4083,6 +4241,12 @@ class GeminiAnalyzer:
 
 请为 **{stock_name}({code})** 生成【决策仪表盘】，严格按照 JSON 格式输出。
 """
+        prompt += """
+### Fundamental evidence guardrail (mandatory)
+- Treat a company-specific causal claim as verified only when it is explicitly supported by the supplied dated news or `fundamental_context`.
+- Do not claim that broad policy themes, including public-infrastructure investment, benefit a company unless the supplied evidence names the company and explains the direct mechanism.
+- If the evidence does not support a causal link or earnings forecast, omit it from `earnings_outlook` and `positive_catalysts`; do not convert an unverified inference into a forecast.
+"""
         if context.get('is_index_etf'):
             prompt += """
 > ⚠️ **指数/ETF 分析约束**：该标的为指数跟踪型 ETF 或市场指数。
@@ -4130,7 +4294,17 @@ class GeminiAnalyzer:
  
 请输出完整的 JSON 格式决策仪表盘。"""
 
-        if report_language == "en":
+        if is_vn_market_symbol(code) or report_language == "vi":
+            prompt += """
+
+### Output language requirements (highest priority)
+- Keep every JSON key exactly as defined above; do not translate keys.
+- `decision_type` must remain `buy`, `hold`, or `sell`.
+- Every human-readable JSON value that will appear in the final markdown dashboard must be 100% Vietnamese.
+- This includes `stock_name`, `trend_prediction`, `operation_advice`, `confidence_level`, all nested dashboard text, checklist items, risk alerts, catalysts, and every summary field.
+- Do not mix English or Chinese except for stock tickers, company legal names, source names, and unavoidable financial abbreviations.
+"""
+        elif report_language == "en":
             prompt += """
 
 ### Output language requirements (highest priority)
@@ -4164,10 +4338,16 @@ class GeminiAnalyzer:
         
         return prompt
     
-    def _format_volume(self, volume: Optional[float]) -> str:
+    def _format_volume(self, volume: Optional[float], language: str = "zh") -> str:
         """格式化成交量显示"""
         if volume is None:
-            return 'N/A'
+            return 'Không có dữ liệu' if language == "vi" else 'N/A'
+        if language == "vi":
+            if volume >= 1e6:
+                return f"{volume / 1e6:.2f} triệu cổ phiếu"
+            if volume >= 1e3:
+                return f"{volume / 1e3:.2f} nghìn cổ phiếu"
+            return f"{volume:.0f} cổ phiếu"
         if volume >= 1e8:
             return f"{volume / 1e8:.2f} 亿股"
         elif volume >= 1e4:
@@ -4175,10 +4355,18 @@ class GeminiAnalyzer:
         else:
             return f"{volume:.0f} 股"
     
-    def _format_amount(self, amount: Optional[float]) -> str:
+    def _format_amount(self, amount: Optional[float], language: str = "zh") -> str:
         """格式化成交额显示"""
         if amount is None:
-            return 'N/A'
+            return 'Không có dữ liệu' if language == "vi" else 'N/A'
+        if language == "vi":
+            if amount >= 1e9:
+                return f"{amount / 1e9:.2f} tỷ"
+            if amount >= 1e6:
+                return f"{amount / 1e6:.2f} triệu"
+            if amount >= 1e3:
+                return f"{amount / 1e3:.2f} nghìn"
+            return f"{amount:.0f}"
         if amount >= 1e8:
             return f"{amount / 1e8:.2f} 亿元"
         elif amount >= 1e4:
@@ -4186,14 +4374,14 @@ class GeminiAnalyzer:
         else:
             return f"{amount:.0f} 元"
 
-    def _format_percent(self, value: Optional[float]) -> str:
+    def _format_percent(self, value: Optional[float], language: str = "zh") -> str:
         """格式化百分比显示"""
         if value is None:
-            return 'N/A'
+            return 'Không có dữ liệu' if language == "vi" else 'N/A'
         try:
             return f"{float(value):.2f}%"
         except (TypeError, ValueError):
-            return 'N/A'
+            return 'Không có dữ liệu' if language == "vi" else 'N/A'
 
     def _format_price(self, value: Optional[float]) -> str:
         """格式化价格显示"""
@@ -4210,10 +4398,29 @@ class GeminiAnalyzer:
         realtime = context.get('realtime', {}) or {}
         yesterday = context.get('yesterday', {}) or {}
 
+        language = _effective_report_language_for_stock(
+            getattr(self._get_runtime_config(), "report_language", "zh"), context.get("code", "")
+        )
         prev_close = yesterday.get('close')
         close = today.get('close')
+        open_price = today.get('open')
         high = today.get('high')
         low = today.get('low')
+
+        if language == "vi":
+            # Also protect reports built from cached daily rows produced before
+            # the provider-level unit normalization existed.
+            numeric_close = _coerce_numeric_value(close)
+            if numeric_close and numeric_close > 0:
+                for value_name in ("open_price", "high", "low"):
+                    value = _coerce_numeric_value(locals()[value_name])
+                    if value and 900 <= value / numeric_close <= 1100:
+                        if value_name == "open_price":
+                            open_price = value / 1000.0
+                        elif value_name == "high":
+                            high = value / 1000.0
+                        else:
+                            low = value / 1000.0
 
         amplitude = None
         change_amount = None
@@ -4229,25 +4436,29 @@ class GeminiAnalyzer:
                 change_amount = None
 
         snapshot = {
-            "date": context.get('date', '未知'),
+            "date": context.get('date', 'Không rõ' if language == "vi" else '未知'),
             "close": self._format_price(close),
-            "open": self._format_price(today.get('open')),
+            "open": self._format_price(open_price),
             "high": self._format_price(high),
             "low": self._format_price(low),
             "prev_close": self._format_price(prev_close),
-            "pct_chg": self._format_percent(today.get('pct_chg')),
+            "pct_chg": self._format_percent(
+                ((float(close) - float(prev_close)) / float(prev_close) * 100)
+                if language == "vi" and _coerce_numeric_value(close) is not None and _coerce_numeric_value(prev_close) not in (None, 0)
+                else today.get('pct_chg'), language
+            ),
             "change_amount": self._format_price(change_amount),
-            "amplitude": self._format_percent(amplitude),
-            "volume": self._format_volume(today.get('volume')),
-            "amount": self._format_amount(today.get('amount')),
+            "amplitude": self._format_percent(amplitude, language),
+            "volume": self._format_volume(today.get('volume'), language),
+            "amount": self._format_amount(today.get('amount'), language),
         }
 
         if realtime:
             snapshot.update({
                 "price": self._format_price(realtime.get('price')),
-                "volume_ratio": realtime.get('volume_ratio', 'N/A'),
-                "turnover_rate": self._format_percent(realtime.get('turnover_rate')),
-                "source": getattr(realtime.get('source'), 'value', realtime.get('source', 'N/A')),
+                "volume_ratio": realtime.get('volume_ratio', 'Không có dữ liệu' if language == "vi" else 'N/A'),
+                "turnover_rate": self._format_percent(realtime.get('turnover_rate'), language),
+                "source": getattr(realtime.get('source'), 'value', realtime.get('source', 'Không có dữ liệu' if language == "vi" else 'N/A')),
             })
 
         return snapshot
@@ -4494,8 +4705,9 @@ class GeminiAnalyzer:
         如果解析失败，尝试智能提取或返回默认结果
         """
         try:
-            report_language = normalize_report_language(
-                getattr(self._get_runtime_config(), "report_language", "zh")
+            report_language = _effective_report_language_for_stock(
+                getattr(self._get_runtime_config(), "report_language", "zh"),
+                code,
             )
             try:
                 _json_str, data = self._extract_analysis_json_object(response_text)
@@ -4566,14 +4778,14 @@ class GeminiAnalyzer:
                 hot_topics=data.get('hot_topics', ''),
                 # 综合
                 analysis_summary=data.get('analysis_summary', _localized_text(
-                    report_language, en='Analysis completed', zh='分析完成', ko='분석 완료')),
+                    report_language, en='Analysis completed', zh='分析完成', ko='분석 완료', vi='Đã hoàn tất phân tích')),
                 key_points=data.get('key_points', ''),
                 risk_warning=data.get('risk_warning', ''),
                 buy_reason=data.get('buy_reason', ''),
                 # 元数据
                 search_performed=data.get('search_performed', False),
                 data_sources=data.get('data_sources', _localized_text(
-                    report_language, en='Technical data', zh='技术面数据', ko='기술적 데이터')),
+                    report_language, en='Technical data', zh='技术面数据', ko='기술적 데이터', vi='Dữ liệu kỹ thuật')),
                 success=True,
             )
             return populate_decision_action_fields(
@@ -4653,8 +4865,9 @@ class GeminiAnalyzer:
         name: str
     ) -> AnalysisResult:
         """从纯文本响应中尽可能提取分析信息"""
-        report_language = normalize_report_language(
-            getattr(self._get_runtime_config(), "report_language", "zh")
+        report_language = _effective_report_language_for_stock(
+            getattr(self._get_runtime_config(), "report_language", "zh"),
+            code,
         )
         # 尝试识别关键词来判断情绪
         sentiment_score = 50
@@ -4685,7 +4898,7 @@ class GeminiAnalyzer:
         
         # 截取前500字符作为摘要
         summary = response_text[:500] if response_text else _localized_text(
-            report_language, en='No analysis result', zh='无分析结果', ko='분석 결과 없음')
+            report_language, en='No analysis result', zh='无分析结果', ko='분석 결과 없음', vi='Không có kết quả phân tích')
         
         result = AnalysisResult(
             code=code,

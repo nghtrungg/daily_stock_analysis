@@ -139,7 +139,7 @@
 {% if phase_decision.get('data_limitations') %}
 **{{ labels.data_limitations_label }}**:
 {% for limitation in phase_decision.get('data_limitations') %}
-- {{ limitation }}
+- {{ localize_system_text(limitation) }}
 {% endfor %}
 {% endif %}
 
@@ -202,10 +202,10 @@
 
 {% if not dashboard %}
 {% if result.buy_reason %}
-**💡 操作理由**: {{ result.buy_reason }}
+**💡 {{ labels.operation_reason_label }}**: {{ result.buy_reason }}
 {% endif %}
 {% if result.risk_warning %}
-**⚠️ 风险提示**: {{ result.risk_warning }}
+**⚠️ {{ labels.risk_warning_label }}**: {{ result.risk_warning }}
 {% endif %}
 {% endif %}
 

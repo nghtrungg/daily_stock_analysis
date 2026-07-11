@@ -16,6 +16,7 @@ from typing import Optional
 from src.agent.agents.base_agent import BaseAgent
 from src.agent.protocols import AgentContext, AgentOpinion
 from src.agent.runner import try_parse_json
+from src.services.market_symbol_utils import is_vn_market_symbol
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,12 @@ class TechnicalAgent(BaseAgent):
         baseline = ""
         if self.technical_skill_policy:
             baseline = f"\n{self.technical_skill_policy}\n"
+        language_rule = ""
+        if is_vn_market_symbol(ctx.stock_code):
+            language_rule = """
+## Output Language
+The stock code contains the `.VN` market marker. Keep JSON keys and enum values unchanged, but write every human-readable technical analysis value in Vietnamese only.
+"""
 
         return f"""\
 You are a **Technical Analysis Agent** specialising in Chinese A-shares, \
@@ -73,6 +80,7 @@ Return **only** a JSON object (no markdown fences):
   "volume_status": "heavy|normal|light",
   "pattern": "<detected pattern or none>"
 }}
+{language_rule}
 """
 
     def build_user_message(self, ctx: AgentContext) -> str:

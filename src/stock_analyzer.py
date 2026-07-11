@@ -127,6 +127,16 @@ class TrendAnalysisResult:
     rsi_status: RSIStatus = RSIStatus.NEUTRAL
     rsi_signal: str = ""              # RSI 信号描述
 
+    # Deterministic OHLCV money-flow indicators, available without a
+    # provider-specific capital-flow feed.
+    mfi_14: float = 50.0
+    cmf_20: float = 0.0
+    money_flow_signal: str = ""
+
+    # Classify MA20 from the actual close rather than a narrative inference.
+    price_above_ma20: bool = False
+    ma20_role: str = "resistance"
+
     # 买入信号
     buy_signal: BuySignal = BuySignal.WAIT
     signal_score: int = 0            # 综合评分 0-100
@@ -166,6 +176,11 @@ class TrendAnalysisResult:
             'rsi_24': self.rsi_24,
             'rsi_status': self.rsi_status.value,
             'rsi_signal': self.rsi_signal,
+            'mfi_14': self.mfi_14,
+            'cmf_20': self.cmf_20,
+            'money_flow_signal': self.money_flow_signal,
+            'price_above_ma20': self.price_above_ma20,
+            'ma20_role': self.ma20_role,
         }
 
 
@@ -198,6 +213,8 @@ class StockTrendAnalyzer:
     RSI_LONG = 24              # 长期RSI周期
     RSI_OVERBOUGHT = 70        # 超买阈值
     RSI_OVERSOLD = 30          # 超卖阈值
+    MFI_PERIOD = 14
+    CMF_PERIOD = 20
     
     def __init__(self):
         """初始化分析器"""
@@ -230,6 +247,7 @@ class StockTrendAnalyzer:
         # 计算 MACD 和 RSI
         df = self._calculate_macd(df)
         df = self._calculate_rsi(df)
+        df = self._calculate_money_flow(df)
 
         # 获取最新数据
         latest = df.iloc[-1]
@@ -257,7 +275,10 @@ class StockTrendAnalyzer:
         # 6. RSI 分析
         self._analyze_rsi(df, result)
 
-        # 7. 生成买入信号
+        # 7. Money-flow analysis (MFI / CMF)
+        self._analyze_money_flow(df, result)
+
+        # 8. 生成买入信号
         self._generate_signal(result)
 
         return result
@@ -337,6 +358,45 @@ class StockTrendAnalyzer:
             df[col_name] = rsi
 
         return df
+
+    def _calculate_money_flow(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Calculate MFI(14) and CMF(20) from canonical OHLCV bars.
+
+        These are deterministic flow proxies.  They do not claim to identify
+        foreign, proprietary, or institutional orders.
+        """
+        df = df.copy()
+        required = {"high", "low", "close", "volume"}
+        if not required.issubset(df.columns):
+            df["MFI_14"] = 50.0
+            df["CMF_20"] = 0.0
+            return df
+
+        high = pd.to_numeric(df["high"], errors="coerce")
+        low = pd.to_numeric(df["low"], errors="coerce")
+        close = pd.to_numeric(df["close"], errors="coerce")
+        volume = pd.to_numeric(df["volume"], errors="coerce").fillna(0.0).clip(lower=0.0)
+        typical_price = (high + low + close) / 3.0
+        raw_money_flow = typical_price * volume
+        price_change = typical_price.diff()
+        positive_flow = raw_money_flow.where(price_change > 0, 0.0)
+        negative_flow = raw_money_flow.where(price_change < 0, 0.0).abs()
+        positive_sum = positive_flow.rolling(self.MFI_PERIOD, min_periods=1).sum()
+        negative_sum = negative_flow.rolling(self.MFI_PERIOD, min_periods=1).sum()
+
+        money_ratio = positive_sum / negative_sum.replace(0.0, np.nan)
+        mfi = 100.0 - (100.0 / (1.0 + money_ratio))
+        mfi = mfi.mask((negative_sum == 0) & (positive_sum > 0), 100.0)
+        mfi = mfi.mask((positive_sum == 0) & (negative_sum > 0), 0.0)
+        df["MFI_14"] = mfi.fillna(50.0).clip(lower=0.0, upper=100.0)
+
+        price_range = high - low
+        multiplier = ((close - low) - (high - close)) / price_range.replace(0.0, np.nan)
+        money_flow_volume = multiplier.fillna(0.0) * volume
+        volume_sum = volume.rolling(self.CMF_PERIOD, min_periods=1).sum()
+        cmf = money_flow_volume.rolling(self.CMF_PERIOD, min_periods=1).sum() / volume_sum.replace(0.0, np.nan)
+        df["CMF_20"] = cmf.fillna(0.0).clip(lower=-1.0, upper=1.0)
+        return df
     
     def _analyze_trend(self, df: pd.DataFrame, result: TrendAnalysisResult) -> None:
         """
@@ -407,6 +467,8 @@ class StockTrendAnalyzer:
             result.bias_ma10 = (price - result.ma10) / result.ma10 * 100
         if result.ma20 > 0:
             result.bias_ma20 = (price - result.ma20) / result.ma20 * 100
+            result.price_above_ma20 = price >= result.ma20
+            result.ma20_role = "support" if result.price_above_ma20 else "resistance"
     
     def _analyze_volume(self, df: pd.DataFrame, result: TrendAnalysisResult) -> None:
         """
@@ -581,6 +643,25 @@ class StockTrendAnalyzer:
         else:
             result.rsi_status = RSIStatus.OVERSOLD
             result.rsi_signal = f"⭐ RSI超卖({rsi_mid:.1f}<30)，反弹机会大"
+
+    def _analyze_money_flow(self, df: pd.DataFrame, result: TrendAnalysisResult) -> None:
+        """Expose MFI/CMF values with a conservative descriptive signal."""
+        latest = df.iloc[-1]
+        result.mfi_14 = float(latest.get("MFI_14", 50.0))
+        result.cmf_20 = float(latest.get("CMF_20", 0.0))
+        if result.mfi_14 >= 80:
+            mfi_text = "MFI overbought"
+        elif result.mfi_14 <= 20:
+            mfi_text = "MFI oversold"
+        else:
+            mfi_text = "MFI neutral"
+        if result.cmf_20 >= 0.05:
+            cmf_text = "CMF positive"
+        elif result.cmf_20 <= -0.05:
+            cmf_text = "CMF negative"
+        else:
+            cmf_text = "CMF neutral"
+        result.money_flow_signal = f"{mfi_text}; {cmf_text}"
 
     def _generate_signal(self, result: TrendAnalysisResult) -> None:
         """

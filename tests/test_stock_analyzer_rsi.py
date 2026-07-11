@@ -60,6 +60,44 @@ class StockAnalyzerRsiTestCase(unittest.TestCase):
                 alert_rsi = calculate_alert_rsi(close, period)
                 self.assertAlmostEqual(float(report_rsi[f"RSI_{period}"].iloc[-1]), float(alert_rsi.iloc[-1]))
 
+    def test_calculate_money_flow_indicators_returns_finite_mfi_and_cmf(self) -> None:
+        analyzer = StockTrendAnalyzer()
+        close = pd.Series(REPORT_RSI_CLOSE, dtype="float64")
+        df = pd.DataFrame(
+            {
+                "high": close + 0.8,
+                "low": close - 0.6,
+                "close": close,
+                "volume": pd.Series(range(1_000, 1_000 + len(close) * 100, 100)),
+            }
+        )
+
+        result = analyzer._calculate_money_flow(df)
+        latest = result.iloc[-1]
+
+        self.assertTrue(0.0 <= float(latest["MFI_14"]) <= 100.0)
+        self.assertTrue(-1.0 <= float(latest["CMF_20"]) <= 1.0)
+
+    def test_analyze_marks_ma20_as_support_after_close_breaks_above_it(self) -> None:
+        analyzer = StockTrendAnalyzer()
+        closes = list(range(40, 60)) + [56.6]
+        df = pd.DataFrame(
+            {
+                "date": pd.date_range("2026-01-01", periods=len(closes)),
+                "open": closes,
+                "high": [price + 0.5 for price in closes],
+                "low": [price - 0.5 for price in closes],
+                "close": closes,
+                "volume": [1_000_000] * len(closes),
+            }
+        )
+
+        result = analyzer.analyze(df, "VNM.VN")
+
+        self.assertGreater(result.current_price, result.ma20)
+        self.assertEqual(result.ma20_role, "support")
+        self.assertTrue(result.price_above_ma20)
+
 
 if __name__ == "__main__":
     unittest.main()

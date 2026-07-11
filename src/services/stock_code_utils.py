@@ -9,7 +9,7 @@ import re
 from typing import Optional
 
 from data_provider.base import canonical_stock_code, is_bse_code
-from src.services.market_symbol_utils import normalize_suffix_market_symbol
+from src.services.market_symbol_utils import is_vn_market_symbol, normalize_suffix_market_symbol
 
 
 # Known exchange prefixes (case-insensitive) and the digit lengths they accept.
@@ -99,6 +99,8 @@ def is_code_like(value: str) -> bool:
         return True
     if _strip_exchange_suffix(text) is not None:
         return True
+    if is_vn_market_symbol(text):
+        return True
     if re.match(r"^[A-Z]{1,5}(?:\.(?:US|[A-Z]))?$", text):
         return True
     # Support exchange-prefixed codes: SH600519, SZ000001, BJ920493, HK00700
@@ -124,6 +126,8 @@ def normalize_code(raw: str) -> Optional[str]:
     suffix_symbol = normalize_suffix_market_symbol(text)
     if suffix_symbol is not None:
         return suffix_symbol
+    if is_vn_market_symbol(text):
+        return text
     if any(text.endswith(suffix) for suffix in _PRESERVE_SUFFIXES):
         return None
     if re.match(r"^[A-Z]{1,5}(?:\.(?:US|[A-Z]))?$", text):

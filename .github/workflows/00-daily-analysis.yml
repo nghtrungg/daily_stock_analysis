@@ -380,6 +380,7 @@ jobs:
           # ==========================================
           # 避免直接写入 STOCK_LIST，保留同名 Environment variables 的 runner 环境值。
           STOCK_LIST_CONFIG: ${{ vars.STOCK_LIST || secrets.STOCK_LIST }}
+          ENABLED_MARKETS: ${{ vars.ENABLED_MARKETS || secrets.ENABLED_MARKETS || 'vn' }}
           MARKET_REVIEW_REGION: ${{ vars.MARKET_REVIEW_REGION || secrets.MARKET_REVIEW_REGION || 'cn' }}
           MARKET_REVIEW_COLOR_SCHEME: ${{ vars.MARKET_REVIEW_COLOR_SCHEME || secrets.MARKET_REVIEW_COLOR_SCHEME || 'green_up' }}
           
@@ -387,10 +388,10 @@ jobs:
           # 运行配置 ⬅️ 新增！
           # ==========================================
           REPORT_TYPE: ${{ vars.REPORT_TYPE || secrets.REPORT_TYPE || 'simple' }}
-          REPORT_LANGUAGE: ${{ vars.REPORT_LANGUAGE || secrets.REPORT_LANGUAGE || '' }}
+          REPORT_LANGUAGE: ${{ vars.REPORT_LANGUAGE || secrets.REPORT_LANGUAGE || 'vi' }}
           REPORT_SHOW_LLM_MODEL: ${{ vars.REPORT_SHOW_LLM_MODEL || secrets.REPORT_SHOW_LLM_MODEL || 'true' }}
           SINGLE_STOCK_NOTIFY: ${{ vars.SINGLE_STOCK_NOTIFY || secrets.SINGLE_STOCK_NOTIFY || 'false' }}
-          MARKET_REVIEW_ENABLED: ${{ vars.MARKET_REVIEW_ENABLED || secrets.MARKET_REVIEW_ENABLED || 'true' }}
+          MARKET_REVIEW_ENABLED: ${{ vars.MARKET_REVIEW_ENABLED || secrets.MARKET_REVIEW_ENABLED || 'false' }}
           ANALYSIS_DELAY: ${{ vars.ANALYSIS_DELAY || secrets.ANALYSIS_DELAY || '0' }}
           TRADING_DAY_CHECK_ENABLED: ${{ vars.TRADING_DAY_CHECK_ENABLED || secrets.TRADING_DAY_CHECK_ENABLED || 'true' }}
           
@@ -414,7 +415,7 @@ jobs:
           if [ -n "${STOCK_LIST_CONFIG:-}" ]; then
             export STOCK_LIST="$STOCK_LIST_CONFIG"
           elif [ -z "${STOCK_LIST:-}" ]; then
-            export STOCK_LIST="600519"
+            export STOCK_LIST="VNM.VN"
           fi
 
           # 处理 LITELLM YAML 配置文件

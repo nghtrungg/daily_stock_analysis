@@ -347,7 +347,7 @@ For the notification baseline, diagnostics, and deployment notes, see [Notificat
 > - **ETFs**: Returns available items, marks missing capabilities as `not_supported`, and does not affect the original flow overall.
 > - **US/HK stocks**: Returns `valuation/growth/earnings/belong_boards` (sourced from `info.sector`/`info.industry`) via the yfinance adapter; `institution/capital_flow/dragon_tiger/boards` stay `not_supported` because no offshore data feed exists today. Falls back to a full `not_supported` block if yfinance is unavailable or returns empty payloads. Still fail-open.
 > - **Japanese/Korean stocks**: Current MVP uses Yfinance daily/basic quote coverage only; `institution`, `capital_flow`, `dragon_tiger`, and `boards` are not fully supported and degrade to `not_supported` (see [market boundaries](market-support.md)).
-> - **Taiwan stocks**: On top of the US/HK offshore base path, the `institution` block additionally surfaces raw 三大法人 (institutional) net buy/sell figures (TWSE T86 / TPEx, default-on, fail-open — stays `not_supported` when data is unavailable); `capital_flow`, `dragon_tiger`, and `boards` remain `not_supported`.
+> - **Taiwan stocks**: On top of the US/HK offshore base path, the `institution` block additionally surfaces raw three major institutional investor groups (institutional) net buy/sell figures (TWSE T86 / TPEx, default-on, fail-open — stays `not_supported` when data is unavailable); `capital_flow`, `dragon_tiger`, and `boards` remain `not_supported`.
 > - Any exception uses fail-open logic, only logs errors without affecting the main technical/news/chip pipeline.
 > - **Field contracts**:
 >   - `fundamental_context.belong_boards` = related board list for the stock; A-shares are sourced from AkShare board membership, US/HK from yfinance `info.sector`/`info.industry`, `[]` when unavailable;
@@ -727,7 +727,7 @@ Market-phase context construction still supports the legacy internal `analysis_i
 
 ### Web Phase Labels (Issue #1386 P4b)
 
-P4b completes the Web visibility slice without adding a phase override selector. The in-progress TaskPanel only shows the requested `analysis_phase` echoed by P4a; in the current task-panel UI, `auto` is explicitly labeled as the requested automatic phase (`请求阶段: 自动阶段`) and is not presented as the final inferred phase. The final report page renders the actual market phase from `report.meta.market_phase_summary.phase`, and shows a `Partial bar` marker when `is_partial_bar=true`.
+P4b completes the Web visibility slice without adding a phase override selector. The in-progress TaskPanel only shows the requested `analysis_phase` echoed by P4a; in the current task-panel UI, `auto` is explicitly labeled as the requested automatic phase (`Requested phase: automatic phase`) and is not presented as the final inferred phase. The final report page renders the actual market phase from `report.meta.market_phase_summary.phase`, and shows a `Partial bar` marker when `is_partial_bar=true`.
 
 Data-quality visibility continues to reuse `report.details.analysis_context_pack_overview.data_quality` and the existing `AnalysisContextSummary` component. The Web UI only displays the phase label alongside the low-sensitivity data-quality summary; it does not expose the full `AnalysisContextPack`, prompt summary, raw payloads, or stripped snapshot internals. History-list fields, Bot, schedule, GitHub Actions, Desktop, notification summaries, and advanced phase override UI remain follow-up work.
 
@@ -1191,14 +1191,14 @@ Single-stock reports now keep the existing free-text `operation_advice` and add 
 
 | `action` | Common source text | `decision_type` bridge |
 | --- | --- | --- |
-| `buy` | `strong_buy`, `强烈买入`, `buy`, `买入`, `布局`, `建仓` | `buy` |
-| `add` | `add`, `加仓`, `增持`, `accumulate` | `buy` |
-| `hold` | `hold`, `持有`, `持有观察`, `洗盘观察` | `hold` |
-| `watch` | `watch`, `观望`, `等待`, `wait` | `hold` |
-| `reduce` | `reduce`, `减仓`, `trim` | `sell` |
-| `sell` | `sell`, `卖出`, `清仓`, `strong_sell`, `强烈卖出` | `sell` |
-| `avoid` | `avoid`, `回避`, `规避`, `不建议买入`, `避免买入`, `do not buy` | `hold` |
-| `alert` | `alert`, `风险预警`, `警惕`, `触发告警`, `risk alert` | `hold` |
+| `buy` | `strong_buy`, `strong buy`, `buy`, `buy`, `position build`, `open position` | `buy` |
+| `add` | `add`, `add position`, `increase holding`, `accumulate` | `buy` |
+| `hold` | `hold`, `hold`, `hold and watch`, `shakeout watch` | `hold` |
+| `watch` | `watch`, `watch`, `wait`, `wait` | `hold` |
+| `reduce` | `reduce`, `reduce position`, `trim` | `sell` |
+| `sell` | `sell`, `sell`, `close position`, `strong_sell`, `strong sell` | `sell` |
+| `avoid` | `avoid`, `avoid`, `avoid risk`, `not recommended to buy`, `avoid buying`, `do not buy` | `hold` |
+| `alert` | `alert`, `risk warning`, `caution`, `trigger alert`, `risk alert` | `hold` |
 
 The `decision_type` bridge in the table only documents compatibility between the eight-state action taxonomy and the legacy three-state statistics contract. #1390 P0 does not automatically write `action` back into the existing `decision_type`. If upstream sends both an explicit `action` and a semantically different `decision_type`, legacy statistics, backtesting, and old report semantics still follow `decision_type` / the existing inference chain; `action/action_label` remains structured display metadata.
 
@@ -1212,7 +1212,7 @@ Unknown or ambiguous advice is not coerced into `watch` or `hold`; it returns em
 
 Automatic extraction consumes structured fields from the completed report only. It does not parse Markdown, backfill old history, add configuration, or change the main report contract. Extraction failures, unknown or ambiguous advice, non-stock reports, and unrecognized markets skip signal writes without affecting report persistence. `source_report_id` is the just-saved `AnalysisHistory.id`; `trace_id` prefers the runtime diagnostics trace and falls back to the pipeline trace or `query_id`; `stock_name` comes from `AnalysisResult.name`; `trigger_source` comes from the runtime entrypoint and falls back to `system`.
 
-For P2 automatic extraction, `market_phase` first reads `market_phase_summary.phase` from the saved context snapshot and then falls back to `AnalysisResult.market_phase_summary.phase`; data quality first reads `analysis_context_pack_overview.data_quality` from the saved context snapshot and then falls back to `AnalysisResult.analysis_context_pack_overview.data_quality`. Price-plan extraction reuses the same sniper-point parser used by history persistence, mapping `dashboard.battle_plan.sniper_points.ideal_buy/secondary_buy/stop_loss/take_profit` to `entry_low/entry_high/stop_loss/target_price`; `ideal_buy` alone writes `entry_low`, `secondary_buy` alone writes `entry_high`, and when both are present they are sorted into `entry_low <= entry_high`. Missing stop-loss or target prices only lower the service-computed `plan_quality` instead of inventing fields. `watch_conditions` first reads `dashboard.phase_decision.watch_conditions` and then falls back to `dashboard.battle_plan.action_checklist`. `catalyst_summary` is written only when `dashboard.intelligence.positive_catalysts` exists and is a list. `confidence` uses a conservative report-level mapping: `高/high=0.8`, `中/medium/mid=0.6`, `低/low=0.4`; the original report confidence level remains in `metadata`.
+For P2 automatic extraction, `market_phase` first reads `market_phase_summary.phase` from the saved context snapshot and then falls back to `AnalysisResult.market_phase_summary.phase`; data quality first reads `analysis_context_pack_overview.data_quality` from the saved context snapshot and then falls back to `AnalysisResult.analysis_context_pack_overview.data_quality`. Price-plan extraction reuses the same sniper-point parser used by history persistence, mapping `dashboard.battle_plan.sniper_points.ideal_buy/secondary_buy/stop_loss/take_profit` to `entry_low/entry_high/stop_loss/target_price`; `ideal_buy` alone writes `entry_low`, `secondary_buy` alone writes `entry_high`, and when both are present they are sorted into `entry_low <= entry_high`. Missing stop-loss or target prices only lower the service-computed `plan_quality` instead of inventing fields. `watch_conditions` first reads `dashboard.phase_decision.watch_conditions` and then falls back to `dashboard.battle_plan.action_checklist`. `catalyst_summary` is written only when `dashboard.intelligence.positive_catalysts` exists and is a list. `confidence` uses a conservative report-level mapping: `high=0.8`, `medium/mid=0.6`, `low=0.4`; the original report confidence level remains in `metadata`.
 
 Starting with P3, `DecisionSignalService` owns lifecycle defaults. Explicit `horizon` / `expires_at` values always win. When `horizon` is omitted, `alert` or `premarket/intraday/lunch_break/closing_auction` defaults to `intraday`, while `postmarket/non_trading/unknown` or missing phase context defaults to `3d`. When `expires_at` is omitted, `intraday` first uses `metadata.market_phase_summary.minutes_to_close/minutes_to_open`; without context it uses deterministic TTL fallback values (CN 4h, HK 5.5h, US 6.5h, unknown 4h). `1d/3d/5d/10d` use natural days, and `swing/long` do not auto-expire. The fallback TTL is only a no-context degradation path, not an exchange-calendar close time. Automatic extraction writes only low-sensitive `market_phase_summary.phase/session_date/minutes_to_open/minutes_to_close` hints into `metadata.market_phase_summary`; final `horizon/expires_at` values are still computed by the service.
 
