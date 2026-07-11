@@ -405,7 +405,7 @@ def _handle_analyze_pattern(stock_code: str, days: int = 60) -> dict:
     # --- Multi-candle patterns (use last 10 days) ---
     if n >= 3:
         i = n - 1
-        # Morning Star (早晨之星) — bottom reversal
+    # Morning Star — bottom reversal
         if (is_bearish(i - 2) and body(i - 2) > avg_body * 1.5
                 and body(i - 1) < avg_body * 0.4
                 and is_bullish(i) and body(i) > avg_body * 1.5
@@ -415,7 +415,7 @@ def _handle_analyze_pattern(stock_code: str, days: int = 60) -> dict:
                 "day_offset": -2, "strength": "强", "desc": "三根K线底部反转形态"
             })
 
-        # Evening Star (黄昏之星) — top reversal
+    # Evening Star — top reversal
         if (is_bullish(i - 2) and body(i - 2) > avg_body * 1.5
                 and body(i - 1) < avg_body * 0.4
                 and is_bearish(i) and body(i) > avg_body * 1.5
@@ -425,7 +425,7 @@ def _handle_analyze_pattern(stock_code: str, days: int = 60) -> dict:
                 "day_offset": -2, "strength": "强", "desc": "三根K线顶部反转形态"
             })
 
-        # Engulfing (吞没形态)
+    # Engulfing pattern
         if (is_bullish(i) and is_bearish(i - 1)
                 and o[i] < c[i - 1] and c[i] > o[i - 1]):
             patterns_detected.append({
@@ -440,7 +440,7 @@ def _handle_analyze_pattern(stock_code: str, days: int = 60) -> dict:
             })
 
     # --- Chart patterns over the window ---
-    # Double bottom detection (简化版: 两个相近低点 + 中间高点)
+    # Simplified double-bottom detection: two nearby lows with an intervening high.
     recent_lows_idx = sorted(range(n), key=lambda i: l[i])[:5]
     if len(recent_lows_idx) >= 2:
         lo1, lo2 = sorted(recent_lows_idx[:2])

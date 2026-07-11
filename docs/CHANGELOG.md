@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [docs] Translate repository-facing documentation and prompt copy to English while retaining Vietnamese report output.
+
 - [improvement] Add Vietnam-first analysis defaults, VN market data routing, Vietnamese report localization, and GitHub Actions configuration guidance.
 - [docs] 新增 AnalysisContextPack P0 上下文盘点。
 - [feature] 新增 AnalysisContextPack P1 内部契约与脱敏序列化测试。

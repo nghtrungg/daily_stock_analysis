@@ -83,41 +83,41 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
             analyzer = GeminiAnalyzer()
 
         fake_state = SimpleNamespace(
-            skill_instructions="### 技能 1: 波段低吸\n- 关注支撑确认",
+            skill_instructions="### Skill 1: Swing pullback\n- Confirm support before entry",
             default_skill_policy="",
         )
         with patch("src.agent.factory.resolve_skill_prompt_state", return_value=fake_state):
             prompt = analyzer._get_analysis_system_prompt("zh", stock_code="600519")
 
-        self.assertIn("### 技能 1: 波段低吸", prompt)
-        self.assertNotIn("专注于趋势交易", prompt)
+        self.assertIn("### Skill 1: Swing pullback", prompt)
+        self.assertNotIn("trend-trading specialist", prompt)
 
     def test_analysis_prompt_uses_injected_skill_sections_instead_of_hardcoded_trend_baseline(self) -> None:
         with patch.object(GeminiAnalyzer, "_init_litellm", return_value=None):
             analyzer = GeminiAnalyzer(
-                skill_instructions="### 技能 1: 缠论\n- 关注中枢与背驰",
+                skill_instructions="### Skill 1: Chan theory\n- Track pivots and divergence",
                 default_skill_policy="",
             )
 
         prompt = analyzer._get_analysis_system_prompt("zh", stock_code="600519")
 
-        self.assertIn("### 技能 1: 缠论", prompt)
-        self.assertNotIn("专注于趋势交易", prompt)
-        self.assertNotIn("多头排列：MA5 > MA10 > MA20", prompt)
+        self.assertIn("### Skill 1: Chan theory", prompt)
+        self.assertNotIn("trend-trading specialist", prompt)
+        self.assertNotIn("Required bullish alignment: MA5 > MA10 > MA20", prompt)
 
     def test_analysis_prompt_keeps_injected_default_policy_for_implicit_default_run(self) -> None:
         with patch.object(GeminiAnalyzer, "_init_litellm", return_value=None):
             analyzer = GeminiAnalyzer(
-                skill_instructions="### 技能 1: 默认多头趋势",
-                default_skill_policy="## 默认技能基线（必须严格遵守）\n- **多头排列必须条件**：MA5 > MA10 > MA20",
+                skill_instructions="### Skill 1: Default bullish trend",
+                default_skill_policy="## Default Skill Baseline\n- **Required bullish alignment**: MA5 > MA10 > MA20",
                 use_legacy_default_prompt=True,
             )
 
         prompt = analyzer._get_analysis_system_prompt("zh", stock_code="600519")
 
-        self.assertIn("专注于趋势交易", prompt)
-        self.assertIn("多头排列必须条件", prompt)
-        self.assertIn("多头排列：MA5 > MA10 > MA20", prompt)
+        self.assertIn("investment analyst", prompt)
+        self.assertIn("Required bullish alignment", prompt)
+        self.assertIn("MA5 > MA10 > MA20", prompt)
 
     def test_analysis_prompt_requires_phase_decision_in_main_and_legacy_modes(self) -> None:
         for legacy in (False, True):
@@ -133,8 +133,8 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
             self.assertIn('"phase_decision"', prompt)
             self.assertIn('"watch_conditions"', prompt)
             self.assertIn('"data_limitations"', prompt)
-            self.assertIn("quote/daily_bars/technical 存在 stale、fallback、missing、fetch_failed、partial 或 estimated", prompt)
-            self.assertIn("`confidence_level` 不得为高", prompt)
+            self.assertIn("stale, partial, missing, estimated, or fallback data", prompt)
+            self.assertIn("confidence limitations", prompt)
 
     def test_analysis_prompt_contains_actionability_guardrails(self) -> None:
         with patch.object(GeminiAnalyzer, "_init_litellm", return_value=None):
@@ -142,10 +142,10 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
 
         prompt = analyzer._get_analysis_system_prompt("zh", stock_code="002812")
 
-        self.assertIn("可操作性与稳定性约束", prompt)
-        self.assertIn("不得仅因为单日涨跌", prompt)
-        self.assertIn("支撑/压力位", prompt)
-        self.assertIn("洗盘观察", prompt)
+        self.assertIn("Actionability guardrails", prompt)
+        self.assertIn("Do not flip directly between buy and sell", prompt)
+        self.assertIn("support/resistance", prompt)
+        self.assertIn("hold/watch", prompt)
 
     def test_analysis_prompt_for_vietnamese_market_forces_vietnamese_output(self) -> None:
         with patch.object(GeminiAnalyzer, "_init_litellm", return_value=None):
@@ -189,11 +189,11 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
 
                 prompt = analyzer._get_analysis_system_prompt("zh", stock_code="600519")
 
-                self.assertIn("### 减仓（20-39分）", prompt)
-                self.assertIn("### 卖出（0-19分）", prompt)
-                self.assertIn("20-39：减仓，`action=reduce`，`decision_type=sell`。", prompt)
-                self.assertIn("0-19：卖出，`action=sell`，`decision_type=sell`。", prompt)
-                self.assertNotIn("### 卖出/减仓（0-39分）", prompt)
+                self.assertIn("20-39: reduce exposure", prompt)
+                self.assertIn("0-19: sell", prompt)
+                self.assertIn("action=reduce", prompt)
+                self.assertIn("action=sell", prompt)
+                self.assertNotIn("sell/reduce (0-39)", prompt)
 
     def test_prompt_contains_time_constraints(self) -> None:
         with patch.object(GeminiAnalyzer, "_init_litellm", return_value=None):

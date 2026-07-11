@@ -57,6 +57,8 @@ Requirements:
                 return prompt + "\nAlways answer in English.\n"
             if report_language == "ko":
                 return prompt + "\n항상 한국어로 답변하세요.\n"
+            if report_language == "vi":
+                return prompt + "\nAlways answer in Vietnamese.\n"
             return prompt + "\n默认使用中文回答。\n"
 
         skills = ""
@@ -161,6 +163,14 @@ should sum to 100; all-zero means no effective signal and must not be faked.
 - Keep every JSON key unchanged.
 - `decision_type` must remain `buy|hold|sell`.
 - Write all human-readable JSON values in Korean (한국어).
+"""
+        if report_language == "vi":
+            return prompt + """
+
+## Output Language
+- Keep every JSON key unchanged.
+- `decision_type` must remain `buy|hold|sell`.
+- Write all human-readable JSON values in Vietnamese.
 """
         return prompt + """
 

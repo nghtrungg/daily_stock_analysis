@@ -449,6 +449,89 @@ CHAT_SYSTEM_PROMPT = """你是一位{market_role}投资分析 Agent，拥有数�
 {language_section}
 """
 
+# English-first prompts used by the current runtime.  The legacy templates
+# above remain available for backwards compatibility with older integrations.
+ENGLISH_AGENT_SYSTEM_PROMPT = """
+You are a {market_role} investment-analysis agent with data tools and switchable trading skills.
+Produce a professional decision-dashboard JSON report.
+
+{market_guidelines}
+
+## Required workflow
+
+Follow these phases in order and wait for every tool result before starting the next phase:
+
+1. Market data: call `get_realtime_quote` and `get_daily_history`.
+2. Technical and positioning data: call `analyze_trend` and `get_chip_distribution`.
+3. Intelligence: call `search_stock_news` for current news, disclosures, insider selling, and earnings risks.
+4. Synthesis: use the returned data and active skills to produce the final dashboard.
+
+Never merge tools from different phases into one call. Never invent numbers or facts. If a tool fails,
+record the reason, continue with available data, and do not repeatedly call the failed tool.
+
+{default_skill_policy_section}
+{skills_section}
+{language_section}
+
+## Output contract
+
+Return one valid JSON object with these keys. Keep keys and enum values unchanged:
+
+```json
+{{
+  "stock_name": "display name",
+  "sentiment_score": 0,
+  "trend_prediction": "bullish|neutral|bearish",
+  "operation_advice": "buy|add|hold|reduce|sell|wait",
+  "decision_type": "buy|hold|sell",
+  "confidence_level": "high|medium|low",
+  "dashboard": {{
+    "core_conclusion": {{"one_sentence": "", "signal_type": "", "time_sensitivity": "", "position_advice": {{"no_position": "", "has_position": ""}}}},
+    "data_perspective": {{"trend_status": {{}}, "price_position": {{}}, "volume_analysis": {{}}, "chip_structure": {{}}}},
+    "intelligence": {{"latest_news": "", "risk_alerts": [], "positive_catalysts": [], "earnings_outlook": "", "sentiment_summary": ""}},
+    "battle_plan": {{"sniper_points": {{}}, "position_strategy": {{}}, "action_checklist": []}},
+    "phase_decision": {{"phase_context": {{}}, "action_window": "", "immediate_action": "", "watch_conditions": [], "next_check_time": "", "confidence_reason": "", "data_limitations": []}},
+    "signal_attribution": {{"technical_indicators": 0, "news_sentiment": 0, "fundamentals": 0, "market_conditions": 0, "strongest_bullish_signal": "", "strongest_bearish_signal": ""}}
+  }},
+  "analysis_summary": "",
+  "key_points": "",
+  "risk_warning": "",
+  "buy_reason": "",
+  "trend_analysis": "",
+  "short_term_outlook": "",
+  "medium_term_outlook": "",
+  "technical_analysis": "",
+  "ma_analysis": "",
+  "volume_analysis": "",
+  "pattern_analysis": "",
+  "fundamental_analysis": "",
+  "sector_position": "",
+  "company_highlights": "",
+  "news_summary": "",
+  "market_sentiment": "",
+  "hot_topics": ""
+}}
+```
+
+Be conservative when data is stale, partial, missing, estimated, or when the market phase is uncertain.
+Include actionable prices only when the evidence supports them; otherwise state the limitation clearly.
+"""
+
+ENGLISH_CHAT_SYSTEM_PROMPT = """
+You are a {market_role} investment-analysis agent with data tools and switchable trading skills.
+Answer the user's stock-investing question using verified tool data.
+
+{market_guidelines}
+
+Follow this order: market data (`get_realtime_quote`, `get_daily_history`), technical and positioning
+data (`analyze_trend`, `get_chip_distribution`), current intelligence (`search_stock_news`), then synthesis.
+Wait for each phase to finish, never invent facts, and explain tool failures while using available data.
+
+{default_skill_policy_section}
+{skills_section}
+{language_section}
+"""
+
 
 def _build_language_section(
     report_language: str,
@@ -483,11 +566,18 @@ def _build_language_section(
 - Reply in English.
 - If you output JSON, keep the keys unchanged and write every human-readable value in English.
 """
-        return """
-## 输出语言
+        if normalized == "vi":
+            return """
+## Output Language
 
-- 默认使用中文回答。
-- 若输出 JSON，键名保持不变，所有面向用户的文本值使用中文。
+- Reply in Vietnamese.
+- If you output JSON, keep the keys unchanged and write every human-readable value in Vietnamese.
+"""
+        return """
+## Output Language
+
+- Reply in Chinese.
+- If you output JSON, keep the keys unchanged and write every human-readable value in Chinese.
 """
 
     if normalized == "en":
@@ -500,12 +590,22 @@ def _build_language_section(
 - This includes `stock_name`, `trend_prediction`, `operation_advice`, `confidence_level`, all dashboard text, checklist items, and summaries.
 """
 
-    return """
-## 输出语言
+    if normalized == "vi":
+        return """
+## Output Language
 
-- 所有 JSON 键名保持不变。
-- `decision_type` 必须保持为 `buy|hold|sell`。
-- 所有面向用户的人类可读文本值必须使用中文。
+- Keep every JSON key unchanged.
+- `decision_type` must remain `buy|hold|sell`.
+- All human-readable JSON values must be written in Vietnamese.
+- This includes the decision dashboard, technical analysis, risk evaluations, catalysts, checklist items, and summaries.
+"""
+
+    return """
+## Output Language
+
+- Keep every JSON key unchanged.
+- `decision_type` must remain `buy|hold|sell`.
+- All human-readable JSON values must be written in Chinese.
 """
 
 
@@ -553,7 +653,7 @@ class AgentExecutor:
         # Build system prompt with skills
         skills_section = ""
         if self.skill_instructions:
-            skills_section = f"## 激活的交易技能\n\n{self.skill_instructions}"
+            skills_section = f"## Active Trading Skills\n\n{self.skill_instructions}"
         default_skill_policy_section = ""
         if self.default_skill_policy:
             default_skill_policy_section = f"\n{self.default_skill_policy}\n"
@@ -564,7 +664,7 @@ class AgentExecutor:
         prompt_template = (
             LEGACY_DEFAULT_AGENT_SYSTEM_PROMPT
             if self.use_legacy_default_prompt
-            else AGENT_SYSTEM_PROMPT
+            else ENGLISH_AGENT_SYSTEM_PROMPT
         )
         system_prompt = prompt_template.format(
             market_role=market_role,
@@ -605,7 +705,7 @@ class AgentExecutor:
         # Build system prompt with skills
         skills_section = ""
         if self.skill_instructions:
-            skills_section = f"## 激活的交易技能\n\n{self.skill_instructions}"
+            skills_section = f"## Active Trading Skills\n\n{self.skill_instructions}"
         default_skill_policy_section = ""
         if self.default_skill_policy:
             default_skill_policy_section = f"\n{self.default_skill_policy}\n"
@@ -616,7 +716,7 @@ class AgentExecutor:
         prompt_template = (
             LEGACY_DEFAULT_CHAT_SYSTEM_PROMPT
             if self.use_legacy_default_prompt
-            else CHAT_SYSTEM_PROMPT
+            else ENGLISH_CHAT_SYSTEM_PROMPT
         )
         system_prompt = prompt_template.format(
             market_role=market_role,
@@ -644,21 +744,21 @@ class AgentExecutor:
         if context:
             context_parts = []
             if context.get("stock_code"):
-                context_parts.append(f"股票代码: {context['stock_code']}")
+                context_parts.append(f"Stock code: {context['stock_code']}")
             if context.get("stock_name"):
-                context_parts.append(f"股票名称: {context['stock_name']}")
+                context_parts.append(f"Stock name: {context['stock_name']}")
             if context.get("previous_price"):
-                context_parts.append(f"上次分析价格: {context['previous_price']}")
+                context_parts.append(f"Previous analysis price: {context['previous_price']}")
             if context.get("previous_change_pct"):
-                context_parts.append(f"上次涨跌幅: {context['previous_change_pct']}%")
+                context_parts.append(f"Previous change: {context['previous_change_pct']}%")
             if context.get("previous_analysis_summary"):
                 summary = context["previous_analysis_summary"]
                 summary_text = json.dumps(summary, ensure_ascii=False) if isinstance(summary, dict) else str(summary)
-                context_parts.append(f"上次分析摘要:\n{summary_text}")
+                context_parts.append(f"Previous analysis summary:\n{summary_text}")
             if context.get("previous_strategy"):
                 strategy = context["previous_strategy"]
                 strategy_text = json.dumps(strategy, ensure_ascii=False) if isinstance(strategy, dict) else str(strategy)
-                context_parts.append(f"上次策略分析:\n{strategy_text}")
+                context_parts.append(f"Previous strategy analysis:\n{strategy_text}")
             daily_market_context_section = format_daily_market_context_prompt_section(
                 context.get("daily_market_context"),
                 report_language=report_language,
@@ -666,9 +766,9 @@ class AgentExecutor:
             if daily_market_context_section:
                 context_parts.append(daily_market_context_section.strip())
             if context_parts:
-                context_msg = "[系统提供的历史分析上下文，可供参考对比]\n" + "\n".join(context_parts)
+                context_msg = "[Historical analysis context provided by the system]\n" + "\n".join(context_parts)
                 messages.append({"role": "user", "content": context_msg})
-                messages.append({"role": "assistant", "content": "好的，我已了解该股票的历史分析数据。请告诉我你想了解什么？"})
+                messages.append({"role": "assistant", "content": "I understand the historical analysis for this stock. What would you like to know?"})
 
         messages.append({"role": "user", "content": message})
         baseline_len = len(messages)
@@ -697,7 +797,7 @@ class AgentExecutor:
                 assistant_message_id=assistant_message_id,
             )
         else:
-            error_note = f"[分析失败] {result.error or '未知错误'}"
+            error_note = f"[Analysis failed] {result.error or 'Unknown error'}"
             conversation_manager.add_message(session_id, "assistant", error_note)
 
         return result
@@ -836,15 +936,17 @@ class AgentExecutor:
         if context:
             report_language = normalize_report_language(context.get("report_language", "zh"))
             if context.get("stock_code"):
-                parts.append(f"\n股票代码: {context['stock_code']}")
+                parts.append(f"\nStock code: {context['stock_code']}")
             if context.get("report_type"):
-                parts.append(f"报告类型: {context['report_type']}")
+                parts.append(f"Report type: {context['report_type']}")
             if report_language == "en":
-                parts.append("输出语言: English（所有 JSON 键名保持不变，所有面向用户的文本值使用英文）")
+                parts.append("Output language: English (keep all JSON keys unchanged and write all human-readable values in English)")
             elif report_language == "ko":
-                parts.append("출력 언어: 한국어（모든 JSON 키는 그대로 유지하고, 사용자 노출 텍스트 값은 한국어로 작성）")
+                parts.append("Output language: Korean (keep all JSON keys unchanged and write all human-readable values in Korean)")
+            elif report_language == "vi":
+                parts.append("Output language: Vietnamese (keep all JSON keys unchanged and write all human-readable values in Vietnamese)")
             else:
-                parts.append("输出语言: 中文（所有 JSON 键名保持不变，所有面向用户的文本值使用中文）")
+                parts.append("Output language: Chinese (keep all JSON keys unchanged and write all human-readable values in Chinese)")
 
             market_phase_section = format_market_phase_prompt_section(
                 context.get("market_phase_context"),
@@ -866,11 +968,11 @@ class AgentExecutor:
 
             # Inject pre-fetched context data to avoid redundant fetches
             if context.get("realtime_quote"):
-                parts.append(f"\n[系统已获取的实时行情]\n{json.dumps(context['realtime_quote'], ensure_ascii=False)}")
+                parts.append(f"\n[Realtime quote already fetched by the system]\n{json.dumps(context['realtime_quote'], ensure_ascii=False)}")
             if context.get("chip_distribution"):
-                parts.append(f"\n[系统已获取的筹码分布]\n{json.dumps(context['chip_distribution'], ensure_ascii=False)}")
+                parts.append(f"\n[Chip distribution already fetched by the system]\n{json.dumps(context['chip_distribution'], ensure_ascii=False)}")
             if context.get("news_context"):
-                parts.append(f"\n[系统已获取的新闻与舆情情报]\n{context['news_context']}")
+                parts.append(f"\n[News and sentiment context already fetched by the system]\n{context['news_context']}")
 
-        parts.append("\n请使用可用工具获取缺失的数据（如历史K线、新闻等），然后以决策仪表盘 JSON 格式输出分析结果。")
+        parts.append("\nUse the available tools to fetch missing data (such as historical prices and news), then return the result as a decision-dashboard JSON object.")
         return "\n".join(parts)

@@ -58,7 +58,10 @@ def format_market_phase_prompt_section(
 
     # Korean reuses the English structural context; the output-language
     # directive (see decision agent) constrains the model to write in Korean.
-    lang = "en" if str(report_language or "").lower() in {"en", "ko"} else "zh"
+    # Keep all operational prompt instructions English-first.  The model's
+    # requested report language is enforced separately by the output-language
+    # section, including Vietnamese for Vietnam symbols and ``REPORT_LANGUAGE=vi``.
+    lang = "en" if str(report_language or "").lower() in {"en", "ko", "vi"} else "zh"
     raw_phase = market_phase_context.get("phase")
     phase = raw_phase if isinstance(raw_phase, str) and raw_phase in _KNOWN_PHASES else "unknown"
 

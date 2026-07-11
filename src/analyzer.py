@@ -119,11 +119,11 @@ def _localized_text(language: Any, *, en: str, zh: str, ko: str, vi: Optional[st
 
 
 def _effective_report_language_for_stock(report_language: Any, stock_code: str = "") -> str:
-    """Keep the Vietnam-first default scoped to explicitly marked VN stocks."""
+    """Resolve the requested report language without silently replacing Vietnamese."""
     if is_vn_market_symbol(stock_code):
         return "vi"
     language = normalize_report_language(report_language)
-    return "zh" if language == "vi" else language
+    return language
 
 
 def _normalize_risk_warning_values(value: Any) -> List[str]:
@@ -2355,6 +2355,46 @@ class GeminiAnalyzer:
 - 建议输出可选展示字段 `dashboard.signal_attribution` 六字段；解释推荐理由的构成，包括技术指标、新闻舆情、基本面、市场环境的贡献度，以及最强看多/看空信号。
 - 盘前、非交易日或未知阶段不得伪造今日盘中走势；quote/daily_bars/technical 存在 stale、fallback、missing、fetch_failed、partial 或 estimated 时，`confidence_level` 不得为高。"""
 
+    # English-first runtime prompt.  The legacy templates remain available for
+    # compatibility, while normal analysis uses this language-neutral scaffold.
+    ENGLISH_SYSTEM_PROMPT = """
+You are a {market_placeholder} investment analyst producing a professional decision dashboard.
+
+{guidelines_placeholder}
+
+{default_skill_policy_section}
+{skills_section}
+
+## Required workflow
+
+Use verified market data, technical indicators, positioning data, and current intelligence. Never invent
+numbers or facts. Treat stale, partial, missing, estimated, or fallback data as confidence limitations.
+Keep the JSON schema and enum values unchanged, include `dashboard.phase_decision`, and provide actionable
+levels only when the evidence supports them. Explain uncertainty and tool failures explicitly.
+
+## Output contract
+
+Return one valid JSON object containing `stock_name`, `sentiment_score`, `trend_prediction`,
+`operation_advice`, `decision_type`, `confidence_level`, `dashboard`, `analysis_summary`, `key_points`,
+`risk_warning`, `buy_reason`, `trend_analysis`, `short_term_outlook`, `medium_term_outlook`,
+`technical_analysis`, `ma_analysis`, `volume_analysis`, `pattern_analysis`, `fundamental_analysis`,
+`sector_position`, `company_highlights`, `news_summary`, `market_sentiment`, and `hot_topics`.
+The nested dashboard must contain `core_conclusion`, `data_perspective`, `intelligence`, `battle_plan`,
+and the seven-field `"phase_decision"` object with `"watch_conditions"` and `"data_limitations"`.
+Keep `decision_type` within `buy|hold|sell`.
+
+## Score bands
+
+- 20-39: reduce exposure (`action=reduce`, `decision_type=sell`) when the trend weakens or risk dominates.
+- 0-19: sell (`action=sell`, `decision_type=sell`) when major risk or a clear breakdown is present.
+
+## Actionability guardrails
+
+- Do not flip directly between buy and sell only because one trading day moved up or down.
+- Base recommendations on support/resistance, volume, positioning, capital flow, and risk flags.
+- If price is between support/resistance and capital flow is unclear, prefer hold/watch or a range-bound setup.
+"""
+
     TEXT_SYSTEM_PROMPT = """你是一位专业的股票分析助手。
 
 - 回答必须基于用户提供的数据与上下文
@@ -2450,20 +2490,24 @@ class GeminiAnalyzer:
         market_guidelines = get_market_guidelines(stock_code, lang)
         skill_instructions, default_skill_policy, use_legacy_default_prompt = self._get_skill_prompt_sections()
         if use_legacy_default_prompt:
-            base_prompt = self.LEGACY_DEFAULT_SYSTEM_PROMPT.replace(
+            base_prompt = self.ENGLISH_SYSTEM_PROMPT.replace(
                 "{market_placeholder}", market_role
             ).replace(
                 "{guidelines_placeholder}", market_guidelines
+            ).replace(
+                "{default_skill_policy_section}", f"{default_skill_policy}\n" if default_skill_policy else ""
+            ).replace(
+                "{skills_section}", f"## Active Trading Skills\n\n{skill_instructions}\n" if skill_instructions else ""
             )
         else:
             skills_section = ""
             if skill_instructions:
-                skills_section = f"## 激活的交易技能\n\n{skill_instructions}\n"
+                skills_section = f"## Active Trading Skills\n\n{skill_instructions}\n"
             default_skill_policy_section = ""
             if default_skill_policy:
                 default_skill_policy_section = f"{default_skill_policy}\n"
             base_prompt = (
-                self.SYSTEM_PROMPT.replace("{market_placeholder}", market_role)
+                self.ENGLISH_SYSTEM_PROMPT.replace("{market_placeholder}", market_role)
                 .replace("{guidelines_placeholder}", market_guidelines)
                 .replace("{default_skill_policy_section}", default_skill_policy_section)
                 .replace("{skills_section}", skills_section)
@@ -2493,6 +2537,16 @@ class GeminiAnalyzer:
 - `decision_type` must remain `buy|hold|sell`.
 - All human-readable JSON values must be written in English.
 - Use the common English company name when you are confident; otherwise keep the original listed company name instead of inventing one.
+- This includes `stock_name`, `trend_prediction`, `operation_advice`, `confidence_level`, nested dashboard text, checklist items, and all narrative summaries.
+"""
+        if lang == "vi":
+            return base_prompt + """
+
+## Output Language (highest priority)
+
+- Keep all JSON keys unchanged.
+- `decision_type` must remain `buy|hold|sell`.
+- All human-readable JSON values must be written in Vietnamese.
 - This includes `stock_name`, `trend_prediction`, `operation_advice`, `confidence_level`, nested dashboard text, checklist items, and all narrative summaries.
 """
         if lang == "ko":
