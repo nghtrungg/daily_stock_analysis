@@ -1483,6 +1483,14 @@ A: 检查是否启用了 Actions，以及 cron 表达式是否正确（注意是
 
 更多问题请 [提交 Issue](https://github.com/ZhuLinsen/daily_stock_analysis/issues)
 
+## 容器资源建议
+
+完整分析建议使用 `1G` 内存；`512M` 仅适用于轻量 Web/API、单股和低并发场景，并应设置 `MAX_WORKERS=1`。高并发、多股票或启用完整资讯与报告能力时建议使用 `2G+`。
+
+## 相关专题
+
+结构化建议的 API、字段、脱敏和回滚边界见 [DecisionSignal 决策信号专题](decision-signals.md)。
+
 ## Agent 工具数据缓存与持久化
 
 - `get_daily_history` 会先尝试复用本地 `stock_daily` 日线缓存；缓存新鲜且至少覆盖首页默认的 30 条记录时，不再重复请求外部数据源。

@@ -64,6 +64,8 @@
 
 ## 多语言
 
+结构化建议的 API、字段、脱敏和回滚边界见 [DecisionSignal 决策信号专题](decision-signals.md)。
+
 | 文档 | 内容 |
 | --- | --- |
 | [英文文档索引](INDEX_EN.md) | English documentation index |

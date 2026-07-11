@@ -65,6 +65,8 @@ This is the entry point for project documentation. The README covers the project
 
 ## Languages
 
+For structured signal API, field, redaction, and rollback boundaries, see [DecisionSignal](decision-signals.md).
+
 | Document | Contents |
 | --- | --- |
 | [Chinese Documentation Index](INDEX.md) | Chinese documentation entry point |

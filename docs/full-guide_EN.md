@@ -1366,3 +1366,11 @@ Technical indicator rules use daily-close edge triggers only. Partial-bar handli
 ---
 
 For more questions, please [submit an Issue](https://github.com/ZhuLinsen/daily_stock_analysis/issues)
+
+## Container Resource Guidance
+
+Use `1G` memory for complete analysis. `512M` is only appropriate for lightweight Web/API, single-stock, low-concurrency use and requires `MAX_WORKERS=1`. Use `2G+` for concurrent, multi-stock, or full news and reporting workloads.
+
+## Related Topic
+
+See [DecisionSignal](decision-signals.md) for the structured-signal API, fields, redaction, and rollback boundaries.
