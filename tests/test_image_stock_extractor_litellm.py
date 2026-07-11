@@ -193,7 +193,7 @@ class TestCallLitellmVision:
     def test_raises_when_model_not_configured(self):
         cfg = _cfg(openai_vision_model=None, litellm_model="", gemini_api_keys=[], anthropic_api_keys=[], openai_api_keys=[])
         with patch("src.services.image_stock_extractor.get_config", return_value=cfg):
-            with pytest.raises(ValueError, match="未配置 Vision API"):
+            with pytest.raises(ValueError, match="Vision API is not configured"):
                 _call_litellm_vision("b64", "image/jpeg")
 
     def test_raises_when_no_key_for_model(self):
@@ -387,11 +387,11 @@ class TestExtractStockCodesFromImage:
 
     def test_rejects_unsupported_mime(self):
         jpeg = _make_jpeg_bytes()
-        with pytest.raises(ValueError, match="不支持的图片类型"):
+        with pytest.raises(ValueError, match="Unsupported image type"):
             extract_stock_codes_from_image(jpeg, "image/bmp")
 
     def test_rejects_empty_bytes(self):
-        with pytest.raises(ValueError, match="图片内容为空"):
+        with pytest.raises(ValueError, match="Image content is empty"):
             extract_stock_codes_from_image(b"", "image/jpeg")
 
     def test_rejects_wrong_magic_bytes(self):
@@ -405,5 +405,5 @@ class TestExtractStockCodesFromImage:
         with patch("src.services.image_stock_extractor.get_config", return_value=cfg), \
              patch("src.services.image_stock_extractor.litellm.completion",
                    side_effect=RuntimeError("network down")):
-            with pytest.raises(ValueError, match="Vision API 调用失败"):
+            with pytest.raises(ValueError, match="Vision API call failed"):
                 extract_stock_codes_from_image(jpeg, "image/jpeg")
