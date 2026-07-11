@@ -61,7 +61,7 @@ function getBrowserUiLanguage(navigatorLike?: Pick<Navigator, 'language' | 'lang
     }
   }
 
-  return 'zh';
+  return 'en';
 }
 
 export function resolveInitialUiLanguage({
@@ -81,7 +81,7 @@ export function resolveInitialUiLanguage({
 
 export function getRuntimeInitialLanguage(): UiLanguage {
   if (typeof window === 'undefined') {
-    return 'zh';
+    return 'en';
   }
 
   return resolveInitialUiLanguage({

@@ -100,11 +100,19 @@ class VietnamAgentLanguageDirectiveTestCase(unittest.TestCase):
         chat_section = _build_language_section("zh", chat_mode=True, stock_code="HPG.VN")
         self.assertIn("reply in Vietnamese", chat_section)
 
+    def test_executor_language_section_honors_vietnamese_report_language(self) -> None:
+        section = _build_language_section("vi")
+        self.assertIn("All human-readable JSON values must be written in Vietnamese.", section)
+
+        chat_section = _build_language_section("vi", chat_mode=True)
+        self.assertIn("Reply in Vietnamese.", chat_section)
+
 
 class StructuralLanguageRoutingTestCase(unittest.TestCase):
     def test_context_pack_korean_reuses_english_scaffolding(self) -> None:
         self.assertEqual(normalize_analysis_context_pack_language("ko"), "en")
         self.assertEqual(normalize_analysis_context_pack_language("en"), "en")
+        self.assertEqual(normalize_analysis_context_pack_language("vi"), "en")
         self.assertEqual(normalize_analysis_context_pack_language("zh"), "zh")
 
     def test_market_phase_korean_matches_english_structure(self) -> None:
