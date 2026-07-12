@@ -46,6 +46,9 @@ class PricePosition(BaseModel):
     ma5: Optional[Union[int, float, str]] = None
     ma10: Optional[Union[int, float, str]] = None
     ma20: Optional[Union[int, float, str]] = None
+    ma50: Optional[Union[int, float, str]] = None
+    ma200: Optional[Union[int, float, str]] = None
+    ma200_slope_pct: Optional[Union[int, float, str]] = None
     bias_ma5: Optional[Union[int, float, str]] = None
     bias_status: Optional[str] = None
     support_level: Optional[Union[int, float, str]] = None
@@ -78,6 +81,24 @@ class MoneyFlowIndicators(BaseModel):
     note: Optional[str] = None
 
 
+class OrderFlow(BaseModel):
+    """Observed VN active and optional investor-type flow."""
+
+    active_buy_volume: Optional[Union[int, float, str]] = None
+    active_sell_volume: Optional[Union[int, float, str]] = None
+    active_unknown_volume: Optional[Union[int, float, str]] = None
+    active_net_volume: Optional[Union[int, float, str]] = None
+    active_buy_ratio: Optional[Union[int, float, str]] = None
+    active_sell_ratio: Optional[Union[int, float, str]] = None
+    active_imbalance: Optional[Union[int, float, str]] = None
+    foreign_net_volume: Optional[Union[int, float, str]] = None
+    foreign_net_value: Optional[Union[int, float, str]] = None
+    proprietary_net_volume: Optional[Union[int, float, str]] = None
+    proprietary_net_value: Optional[Union[int, float, str]] = None
+    note: Optional[str] = None
+    coverage: Optional[Dict[str, Any]] = None
+
+
 class DataPerspective(BaseModel):
     """Data perspective block."""
 
@@ -86,12 +107,13 @@ class DataPerspective(BaseModel):
     volume_analysis: Optional[VolumeAnalysis] = None
     chip_structure: Optional[ChipStructure] = None
     money_flow_indicators: Optional[MoneyFlowIndicators] = None
+    order_flow: Optional[OrderFlow] = None
 
 
 class Intelligence(BaseModel):
     """Intelligence block."""
 
-    latest_news: Optional[str] = None
+    latest_news: Optional[Union[str, List[Any], Dict[str, Any]]] = None
     risk_alerts: Optional[List[str]] = None
     positive_catalysts: Optional[List[str]] = None
     earnings_outlook: Optional[str] = None

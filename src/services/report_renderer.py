@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.analyzer import AnalysisResult
+from src.analyzer import AnalysisResult, normalize_report_output_data
 from src.config import get_config
 from src.market_phase_summary import format_public_market_status_line, format_public_phase_pack_excerpt
 from src.services.decision_signal_summary import format_decision_signal_excerpt
@@ -137,6 +137,12 @@ def render(
         )
     )
     labels = get_report_labels(report_language)
+
+    # Older persisted reports and direct renderer callers may still contain
+    # raw floats or structured news arrays. Normalize at the final boundary as
+    # well as in the pipeline so every delivery channel stays scannable.
+    for result in results:
+        normalize_report_output_data(result)
 
     # Build template context with pre-computed signal levels (sorted by score)
     sorted_results = sorted(results, key=lambda x: x.sentiment_score, reverse=True)

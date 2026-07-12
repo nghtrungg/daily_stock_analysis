@@ -93,9 +93,15 @@
 | {{ labels.ma5_label }} | {{ price_data.get('ma5', 'N/A') }} |
 | {{ labels.ma10_label }} | {{ price_data.get('ma10', 'N/A') }} |
 | {{ labels.ma20_label }} | {{ price_data.get('ma20', 'N/A') }} |
+{% if price_data.get('ma50') is not none %}| {{ labels.ma50_label }} | {{ price_data.get('ma50', 'N/A') }} |{% endif %}
+{% if price_data.get('ma200') is not none %}| {{ labels.ma200_label }} | {{ price_data.get('ma200', 'N/A') }} |{% endif %}
 | {{ labels.bias_ma5_label }} | {{ price_data.get('bias_ma5', 'N/A') }}% {{ price_data.get('bias_status', 'N/A') }} |
 | {{ labels.support_level_label }} | {{ price_data.get('support_level', 'N/A') }} |
 | {{ labels.resistance_level_label }} | {{ price_data.get('resistance_level', 'N/A') }} |
+{% endif %}
+
+{% if data_persp.get('long_term_warning') %}
+**⚠️ {{ labels.long_term_warning_label }}**: {{ data_persp.get('long_term_warning') }}
 {% endif %}
 
 {% set vol_data = data_persp.get('volume_analysis', {}) %}
@@ -110,6 +116,14 @@
 **{{ labels.chip_label }}**: {{ chip_data.get('profit_ratio', 'N/A') }} | {{ chip_data.get('avg_cost', 'N/A') }} | {{ chip_data.get('concentration', 'N/A') }} {{ localize_chip_health(chip_data.get('chip_health', 'N/A'), report_language) }}
 {% elif chip_unavailable_reason %}
 **{{ labels.chip_label }}**: {{ chip_unavailable_reason }}
+{% endif %}
+
+{% set order_flow = data_persp.get('order_flow', {}) %}
+{% if order_flow %}
+**{{ labels.order_flow_label }}**: {{ labels.active_buy_label }} {{ order_flow.get('active_buy_volume', 'N/A') }} | {{ labels.active_sell_label }} {{ order_flow.get('active_sell_volume', 'N/A') }} | {{ labels.active_imbalance_label }} {{ order_flow.get('active_imbalance', 'N/A') }}
+{% if order_flow.get('foreign_net_value') is not none %}- {{ labels.foreign_net_label }}: {{ order_flow.get('foreign_net_value') }}{% endif %}
+{% if order_flow.get('proprietary_net_value') is not none %}- {{ labels.proprietary_net_label }}: {{ order_flow.get('proprietary_net_value') }}{% endif %}
+{% if order_flow.get('note') %}💡 *{{ order_flow.get('note') }}*{% endif %}
 {% endif %}
 {% endif %}
 

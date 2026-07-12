@@ -895,26 +895,31 @@ class HistoryService:
         Returns:
             Markdown formatted report string
         """
+        from src.analyzer import normalize_report_output_data
+
+        normalize_report_output_data(result)
         report_date = record.created_at.strftime("%Y-%m-%d") if record.created_at else datetime.now().strftime("%Y-%m-%d")
         report_time = record.created_at.strftime("%H:%M:%S") if record.created_at else datetime.now().strftime("%H:%M:%S")
         report_language = normalize_report_language(getattr(result, "report_language", "zh"))
         labels = get_report_labels(report_language)
 
-        def _label(en: str, zh: str, ko: str) -> str:
+        def _label(en: str, zh: str, ko: str, vi: str) -> str:
             if report_language == "en":
                 return en
             if report_language == "ko":
                 return ko
+            if report_language == "vi":
+                return vi
             return zh
 
-        analysis_date_label = _label("Analysis Date", "分析日期", "분석일")
-        report_time_label = _label("Report Time", "报告生成时间", "생성 시각")
-        reason_label = _label("Rationale", "操作理由", "판단 근거")
-        risk_warning_label = _label("Risk Warning", "风险提示", "리스크 경고")
-        technical_heading = _label("Technicals", "技术面", "기술적 분석")
-        ma_label = _label("Moving Averages", "均线", "이동평균")
-        volume_analysis_label = _label("Volume", "量能", "거래량")
-        news_heading = _label("News Flow", "消息面", "뉴스 흐름")
+        analysis_date_label = _label("Analysis Date", "分析日期", "분석일", "Ngày phân tích")
+        report_time_label = _label("Report Time", "报告生成时间", "생성 시각", "Thời gian tạo báo cáo")
+        reason_label = _label("Rationale", "操作理由", "판단 근거", "Cơ sở quyết định")
+        risk_warning_label = _label("Risk Warning", "风险提示", "리스크 경고", "Cảnh báo rủi ro")
+        technical_heading = _label("Technicals", "技术面", "기술적 분석", "Phân tích kỹ thuật")
+        ma_label = _label("Moving Averages", "均线", "이동평균", "Đường trung bình")
+        volume_analysis_label = _label("Volume", "量能", "거래량", "Thanh khoản")
+        news_heading = _label("News Flow", "消息面", "뉴스 흐름", "Dòng tin tức")
 
         # Escape markdown special characters in stock name
         name_escaped = self._escape_md(
@@ -1033,9 +1038,22 @@ class HistoryService:
                     f"| {labels['ma5_label']} | {price_data.get('ma5', 'N/A')} |",
                     f"| {labels['ma10_label']} | {price_data.get('ma10', 'N/A')} |",
                     f"| {labels['ma20_label']} | {price_data.get('ma20', 'N/A')} |",
+                    *(
+                        [f"| {labels['ma50_label']} | {price_data.get('ma50')} |"]
+                        if price_data.get('ma50') is not None else []
+                    ),
+                    *(
+                        [f"| {labels['ma200_label']} | {price_data.get('ma200')} |"]
+                        if price_data.get('ma200') is not None else []
+                    ),
                     f"| {labels['bias_ma5_label']} | {price_data.get('bias_ma5', 'N/A')}% {bias_emoji}{bias_status} |",
                     f"| {labels['support_level_label']} | {price_data.get('support_level', 'N/A')} |",
                     f"| {labels['resistance_level_label']} | {price_data.get('resistance_level', 'N/A')} |",
+                    "",
+                ])
+            if data_persp.get('long_term_warning'):
+                report_lines.extend([
+                    f"**⚠️ {labels['long_term_warning_label']}**: {data_persp['long_term_warning']}",
                     "",
                 ])
             # 量能分析
@@ -1075,6 +1093,24 @@ class HistoryService:
                         f"**{labels['chip_label']}**: {chip_unavailable_reason}",
                         "",
                     ])
+            order_flow = data_persp.get('order_flow', {})
+            if isinstance(order_flow, dict) and order_flow:
+                report_lines.extend([
+                    f"**{labels['order_flow_label']}**: "
+                    f"{labels['active_buy_label']} {order_flow.get('active_buy_volume', 'N/A')} | "
+                    f"{labels['active_sell_label']} {order_flow.get('active_sell_volume', 'N/A')} | "
+                    f"{labels['active_imbalance_label']} {order_flow.get('active_imbalance', 'N/A')}",
+                    *(
+                        [f"- {labels['foreign_net_label']}: {order_flow['foreign_net_value']}"]
+                        if order_flow.get('foreign_net_value') is not None else []
+                    ),
+                    *(
+                        [f"- {labels['proprietary_net_label']}: {order_flow['proprietary_net_value']}"]
+                        if order_flow.get('proprietary_net_value') is not None else []
+                    ),
+                    *([f"💡 *{order_flow['note']}*"] if order_flow.get('note') else []),
+                    "",
+                ])
 
         # ========== 作战计划 ==========
         battle = dashboard.get('battle_plan', {}) if dashboard else {}

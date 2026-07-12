@@ -10,6 +10,7 @@ A股自选股智能分析系统 - AI分析层
 3. 解析 LLM 响应为结构化 AnalysisResult
 """
 
+import ast
 import json
 import logging
 import math
@@ -304,6 +305,69 @@ class _AllModelsFailedError(Exception):
 from src.utils.data_processing import normalize_report_signal_attribution
 
 
+_TRADE_PLAN_PLACEHOLDER_EXACT = {
+    "",
+    "n/a",
+    "na",
+    "none",
+    "null",
+    "tbd",
+    "unknown",
+    "unavailable",
+    "not available",
+    "data unavailable",
+    "待补充",
+    "暂无",
+    "未知",
+    "数据缺失",
+    "미정",
+    "알 수 없음",
+    "데이터 없음",
+    "cần bổ sung",
+    "không rõ",
+    "không có dữ liệu",
+}
+
+_TRADE_PLAN_PLACEHOLDER_HINTS = (
+    "cần bổ sung",
+    "không có dữ liệu",
+    "data unavailable",
+    "not available",
+    "待补充",
+    "数据缺失",
+    "데이터 없음",
+)
+
+
+def _is_missing_trade_plan_value(value: Any) -> bool:
+    """Return True when an entry/stop value cannot be acted on."""
+    if value is None or isinstance(value, (list, tuple, dict, set)):
+        return True
+    if isinstance(value, bool):
+        return True
+    if isinstance(value, (int, float)):
+        return not math.isfinite(float(value)) or float(value) <= 0
+    text = str(value).strip()
+    if not text:
+        return True
+    lowered = text.lower()
+    if lowered in _TRADE_PLAN_PLACEHOLDER_EXACT:
+        return True
+    tail = re.split(r"[:：]", lowered)[-1].strip()
+    if tail in _TRADE_PLAN_PLACEHOLDER_EXACT:
+        return True
+    numeric_tail = re.sub(r"(?:vnd|usd|cny|hkd|krw|twd|元|đồng|đ)", "", tail).strip()
+    try:
+        if numeric_tail and float(numeric_tail.replace(",", "")) <= 0:
+            return True
+    except ValueError:
+        pass
+    # A placeholder embedded in a label (for example "Stop loss: N/A") is
+    # still missing. Preserve mixed strings that contain an actual price.
+    has_digit = bool(re.search(r"\d", text))
+    return not has_digit and any(hint in lowered for hint in _TRADE_PLAN_PLACEHOLDER_HINTS)
+
+
 def check_content_integrity(
     result: "AnalysisResult",
     *,
@@ -329,15 +393,6 @@ def check_content_integrity(
     def _is_invalid_risk_alerts(value: Any) -> bool:
         return not isinstance(value, list)
 
-    def _is_invalid_stop_loss(value: Any) -> bool:
-        if value is None:
-            return True
-        if isinstance(value, (list, tuple, dict)):
-            return True
-        if isinstance(value, str):
-            return not value.strip()
-        return False
-
     if result.sentiment_score is None:
         missing.append("sentiment_score")
     advice = result.operation_advice
@@ -355,14 +410,20 @@ def check_content_integrity(
     intel = intel if isinstance(intel, dict) else None
     if intel is None or _is_invalid_risk_alerts(intel.get("risk_alerts")):
         missing.append("dashboard.intelligence.risk_alerts")
-    if result.decision_type in ("buy", "hold"):
+    integrity_decision_type = infer_decision_type_from_advice(
+        advice,
+        default=getattr(result, "decision_type", "hold") or "hold",
+    )
+    if integrity_decision_type == "buy":
         battle = dash.get("battle_plan")
         battle = battle if isinstance(battle, dict) else {}
         sp = battle.get("sniper_points")
         sp = sp if isinstance(sp, dict) else {}
         stop_loss = sp.get("stop_loss")
-        if _is_invalid_stop_loss(stop_loss):
+        if _is_missing_trade_plan_value(stop_loss):
             missing.append("dashboard.battle_plan.sniper_points.stop_loss")
+        if _is_missing_trade_plan_value(sp.get("ideal_buy")):
+            missing.append("dashboard.battle_plan.sniper_points.ideal_buy")
     if require_phase_decision:
         phase_decision = dash.get("phase_decision")
         phase_decision = phase_decision if isinstance(phase_decision, dict) else {}
@@ -395,15 +456,6 @@ def apply_placeholder_fill(result: "AnalysisResult", missing_fields: List[str]) 
 
     def _is_invalid_risk_alerts(value: Any) -> bool:
         return not isinstance(value, list)
-
-    def _is_invalid_stop_loss(value: Any) -> bool:
-        if value is None:
-            return True
-        if isinstance(value, (list, tuple, dict)):
-            return True
-        if isinstance(value, str):
-            return not value.strip()
-        return False
 
     report_language = normalize_report_language(getattr(result, "report_language", "zh"))
     placeholder = get_placeholder_text(report_language)
@@ -477,8 +529,21 @@ def apply_placeholder_fill(result: "AnalysisResult", missing_fields: List[str]) 
             if not isinstance(sniper_points, dict):
                 sniper_points = {}
                 battle_plan["sniper_points"] = sniper_points
-            if _is_invalid_stop_loss(sniper_points.get("stop_loss")):
+            if _is_missing_trade_plan_value(sniper_points.get("stop_loss")):
                 sniper_points["stop_loss"] = placeholder
+        elif field == "dashboard.battle_plan.sniper_points.ideal_buy":
+            if not result.dashboard:
+                result.dashboard = {}
+            battle_plan = result.dashboard.get("battle_plan")
+            if not isinstance(battle_plan, dict):
+                battle_plan = {}
+                result.dashboard["battle_plan"] = battle_plan
+            sniper_points = battle_plan.get("sniper_points")
+            if not isinstance(sniper_points, dict):
+                sniper_points = {}
+                battle_plan["sniper_points"] = sniper_points
+            if _is_missing_trade_plan_value(sniper_points.get("ideal_buy")):
+                sniper_points["ideal_buy"] = placeholder
         elif field.startswith("dashboard.phase_decision."):
             if not result.dashboard:
                 result.dashboard = {}
@@ -961,7 +1026,19 @@ def fill_chip_structure_if_needed(result: "AnalysisResult", chip_data: Any) -> N
         logger.warning("[chip_structure] Fill failed, skipping: %s", e)
 
 
-_PRICE_POS_KEYS = ("ma5", "ma10", "ma20", "bias_ma5", "bias_status", "current_price", "support_level", "resistance_level")
+_PRICE_POS_KEYS = (
+    "ma5",
+    "ma10",
+    "ma20",
+    "ma50",
+    "ma200",
+    "ma200_slope_pct",
+    "bias_ma5",
+    "bias_status",
+    "current_price",
+    "support_level",
+    "resistance_level",
+)
 
 
 def fill_price_position_if_needed(
@@ -988,6 +1065,9 @@ def fill_price_position_if_needed(
             computed["ma5"] = tr.get("ma5")
             computed["ma10"] = tr.get("ma10")
             computed["ma20"] = tr.get("ma20")
+            computed["ma50"] = tr.get("ma50")
+            computed["ma200"] = tr.get("ma200")
+            computed["ma200_slope_pct"] = tr.get("ma200_slope_pct")
             computed["bias_ma5"] = tr.get("bias_ma5")
             computed["current_price"] = tr.get("current_price")
             support_levels = tr.get("support_levels") or []
@@ -1054,6 +1134,69 @@ def fill_money_flow_indicators_if_needed(
         existing["cmf_20"] = round(cmf, 4)
     existing.setdefault("note", notes.get(language, notes["en"]))
     data_perspective["money_flow_indicators"] = existing
+
+
+def fill_vietnam_order_flow_if_needed(
+    result: "AnalysisResult",
+    fundamental_context: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Attach observed VN active/foreign/proprietary flow without calling it chip data."""
+    if not result or not is_vn_market_symbol(getattr(result, "code", "")):
+        return
+    if not isinstance(fundamental_context, dict):
+        return
+    block = fundamental_context.get("capital_flow")
+    if not isinstance(block, dict) or block.get("status") not in {"ok", "partial"}:
+        return
+    data = block.get("data") if isinstance(block.get("data"), dict) else block
+    stock_flow = data.get("stock_flow") if isinstance(data, dict) else None
+    if not isinstance(stock_flow, dict) or not stock_flow:
+        return
+
+    fields = (
+        "active_buy_volume",
+        "active_sell_volume",
+        "active_unknown_volume",
+        "active_net_volume",
+        "active_buy_ratio",
+        "active_sell_ratio",
+        "active_imbalance",
+        "foreign_buy_volume",
+        "foreign_sell_volume",
+        "foreign_net_volume",
+        "foreign_buy_value",
+        "foreign_sell_value",
+        "foreign_net_value",
+        "proprietary_buy_volume",
+        "proprietary_sell_volume",
+        "proprietary_net_volume",
+        "proprietary_buy_value",
+        "proprietary_sell_value",
+        "proprietary_net_value",
+    )
+    order_flow = {
+        key: _round_report_number(stock_flow.get(key), 6 if key.endswith(("ratio", "imbalance")) else 2)
+        for key in fields
+        if stock_flow.get(key) is not None
+    }
+    if not order_flow:
+        return
+    language = normalize_report_language(getattr(result, "report_language", "vi"))
+    notes = {
+        "vi": "Buy Up/Sell Down được suy ra từ chiều khớp lệnh; không phải dữ liệu phân bổ chip. Khối ngoại/tự doanh chỉ hiển thị khi nguồn vnstock_data được cấu hình.",
+        "zh": "主动买卖由逐笔成交方向推导，并非筹码分布；外资/自营仅在配置 vnstock_data 后展示。",
+        "en": "Buy Up/Sell Down is derived from trade direction, not chip distribution; foreign/proprietary flow appears only when vnstock_data is configured.",
+        "ko": "적극 매수/매도는 체결 방향에서 계산하며 매물대 데이터가 아닙니다. 외국인/자기매매는 vnstock_data 설정 시에만 표시됩니다.",
+    }
+    order_flow["note"] = notes.get(language, notes["en"])
+    order_flow["coverage"] = data.get("coverage", {}) if isinstance(data, dict) else {}
+    dashboard = result.dashboard if isinstance(result.dashboard, dict) else {}
+    result.dashboard = dashboard
+    data_perspective = dashboard.get("data_perspective")
+    if not isinstance(data_perspective, dict):
+        data_perspective = {}
+        dashboard["data_perspective"] = data_perspective
+    data_perspective["order_flow"] = order_flow
 
 
 def stabilize_decision_with_structure(
@@ -1351,6 +1494,11 @@ def _capital_flow_bias_with_status(
     stock_flow = data.get("stock_flow") if isinstance(data, dict) else None
     if not isinstance(stock_flow, dict) or not stock_flow:
         return "unavailable", "empty_stock_flow"
+    coverage = data.get("coverage") if isinstance(data, dict) else None
+    if isinstance(coverage, dict) and coverage and not any(
+        value == "ok" for value in coverage.values()
+    ):
+        return "unavailable", "flow_coverage_missing"
 
     def _flow_direction(value: Optional[float]) -> Optional[str]:
         if value is None or value == 0:
@@ -1362,6 +1510,12 @@ def _capital_flow_bias_with_status(
         _coerce_numeric_value(stock_flow.get("inflow_5d")),
         _coerce_numeric_value(stock_flow.get("inflow_10d")),
     ]
+    if all(value is None for value in numeric_values):
+        numeric_values = [
+            _coerce_numeric_value(stock_flow.get("foreign_net_value")),
+            _coerce_numeric_value(stock_flow.get("proprietary_net_value")),
+            _coerce_numeric_value(stock_flow.get("active_net_volume")),
+        ]
     if all(value is None for value in numeric_values):
         return "unavailable", "missing_or_na_flow_fields"
 
@@ -1707,6 +1861,264 @@ def _set_structural_hold_wording(
     logger.info("[decision_stability] Applied structural hold calibration: %s", reason_key)
 
 
+_REPORT_PRICE_KEYS = {
+    "current_price",
+    "ma5",
+    "ma10",
+    "ma20",
+    "ma50",
+    "ma60",
+    "ma200",
+    "support_level",
+    "resistance_level",
+}
+
+
+def _round_report_number(value: Any, decimals: int = 2) -> Any:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return value
+    number = float(value)
+    if not math.isfinite(number):
+        return value
+    return round(number, decimals)
+
+
+def _parse_structured_news(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    text = value.strip()
+    if not text or text[0] not in "[{":
+        return value
+    for parser in (json.loads, ast.literal_eval):
+        try:
+            parsed = parser(text)
+        except (TypeError, ValueError, SyntaxError, json.JSONDecodeError):
+            continue
+        if isinstance(parsed, (list, dict)):
+            return parsed
+    return value
+
+
+def _format_news_item(item: Any) -> str:
+    if not isinstance(item, dict):
+        return str(item or "").strip()
+
+    def first(*keys: str) -> str:
+        for key in keys:
+            raw = item.get(key)
+            if raw is not None and str(raw).strip():
+                return str(raw).strip()
+        return ""
+
+    date = first("date", "published_at", "published_date", "time")
+    title = first("title", "headline", "name")
+    source = first("source", "publisher", "provider")
+    summary = first("summary", "content", "description")
+    headline = title or summary
+    if summary == headline:
+        summary = ""
+    if source and headline:
+        headline = f"{headline} ({source})"
+    elif source:
+        headline = source
+    if date and headline:
+        headline = f"{date} — {headline}"
+    elif date:
+        headline = date
+    if summary:
+        headline = f"{headline}: {summary}" if headline else summary
+    if headline:
+        return headline
+    return "; ".join(
+        str(raw).strip()
+        for raw in item.values()
+        if raw is not None and str(raw).strip()
+    )
+
+
+def _format_latest_news(value: Any) -> Any:
+    parsed = _parse_structured_news(value)
+    if isinstance(parsed, dict):
+        return _format_news_item(parsed)
+    if isinstance(parsed, (list, tuple)):
+        items = [_format_news_item(item) for item in parsed]
+        return "; ".join(item for item in items if item)
+    return parsed
+
+
+def normalize_report_output_data(result: "AnalysisResult") -> None:
+    """Normalize deterministic display data before persistence or rendering."""
+    if not result:
+        return
+    for attr in ("current_price",):
+        setattr(result, attr, _round_report_number(getattr(result, attr, None)))
+
+    dashboard = result.dashboard if isinstance(result.dashboard, dict) else {}
+    result.dashboard = dashboard
+    data_perspective = dashboard.get("data_perspective")
+    if isinstance(data_perspective, dict):
+        price_position = data_perspective.get("price_position")
+        if isinstance(price_position, dict):
+            for key in _REPORT_PRICE_KEYS:
+                if key in price_position:
+                    price_position[key] = _round_report_number(price_position[key])
+            for key in ("bias_ma5", "bias_ma10", "bias_ma20", "ma200_slope_pct"):
+                if key in price_position:
+                    price_position[key] = _round_report_number(price_position[key])
+        chip_structure = data_perspective.get("chip_structure")
+        if isinstance(chip_structure, dict) and "avg_cost" in chip_structure:
+            chip_structure["avg_cost"] = _round_report_number(chip_structure["avg_cost"])
+
+    battle_plan = dashboard.get("battle_plan")
+    if isinstance(battle_plan, dict):
+        sniper_points = battle_plan.get("sniper_points")
+        if isinstance(sniper_points, dict):
+            for key in ("ideal_buy", "secondary_buy", "stop_loss", "take_profit"):
+                if key in sniper_points:
+                    sniper_points[key] = _round_report_number(sniper_points[key])
+
+    intelligence = dashboard.get("intelligence")
+    if isinstance(intelligence, dict) and "latest_news" in intelligence:
+        intelligence["latest_news"] = _format_latest_news(intelligence.get("latest_news"))
+
+
+def apply_long_term_trend_guardrail(
+    result: "AnalysisResult",
+    trend_result: Any = None,
+) -> bool:
+    """Expose deterministic MA50/MA200 context and warn on bear-market rallies."""
+    if not result:
+        return False
+    trend = _as_dict_for_decision_guard(trend_result)
+    dashboard = result.dashboard if isinstance(result.dashboard, dict) else {}
+    result.dashboard = dashboard
+    data_perspective = dashboard.get("data_perspective")
+    if not isinstance(data_perspective, dict):
+        data_perspective = {}
+        dashboard["data_perspective"] = data_perspective
+    price_position = data_perspective.get("price_position")
+    if not isinstance(price_position, dict):
+        price_position = {}
+        data_perspective["price_position"] = price_position
+    for key in ("ma50", "ma200", "ma200_slope_pct"):
+        value = trend.get(key)
+        if value is not None and not _is_value_placeholder(value):
+            price_position[key] = _round_report_number(value)
+
+    long_term_trend = str(trend.get("long_term_trend") or "").strip()
+    if long_term_trend:
+        data_perspective["long_term_trend"] = long_term_trend
+    if long_term_trend != "bear_market_rally":
+        return False
+
+    language = normalize_report_language(getattr(result, "report_language", "zh"))
+    warnings = {
+        "zh": "价格虽站上 MA20，但仍低于下行的 MA200；当前更可能是长期下降趋势中的技术性反弹。",
+        "en": "Price is above MA20 but remains below a falling MA200; treat this as a technical rebound within a long-term downtrend.",
+        "ko": "가격이 MA20 위에 있지만 하락 중인 MA200 아래에 있어 장기 하락 추세의 기술적 반등으로 봐야 합니다.",
+        "vi": "Giá đã vượt MA20 nhưng vẫn nằm dưới MA200 đang dốc xuống; đây có thể chỉ là nhịp hồi kỹ thuật trong xu hướng giảm dài hạn.",
+    }
+    warning = warnings.get(language, warnings["en"])
+    data_perspective["long_term_warning"] = warning
+    intelligence = dashboard.get("intelligence")
+    if not isinstance(intelligence, dict):
+        intelligence = {}
+        dashboard["intelligence"] = intelligence
+    risk_alerts = intelligence.get("risk_alerts")
+    if not isinstance(risk_alerts, list):
+        risk_alerts = []
+        intelligence["risk_alerts"] = risk_alerts
+    if warning not in risk_alerts:
+        risk_alerts.append(warning)
+    if warning not in str(result.risk_warning or ""):
+        sep = "; " if result.risk_warning else ""
+        result.risk_warning = f"{result.risk_warning or ''}{sep}{warning}"
+    return True
+
+
+def enforce_actionable_trade_plan(result: "AnalysisResult") -> List[str]:
+    """Downgrade buy calls that lack an actionable entry or stop-loss."""
+    if not result:
+        return []
+    decision_type = infer_decision_type_from_advice(
+        getattr(result, "operation_advice", ""),
+        default=getattr(result, "decision_type", "hold") or "hold",
+    )
+    if getattr(result, "decision_type", "") != "buy" and decision_type != "buy":
+        return []
+
+    dashboard = result.dashboard if isinstance(result.dashboard, dict) else {}
+    battle_plan = dashboard.get("battle_plan") if isinstance(dashboard, dict) else {}
+    battle_plan = battle_plan if isinstance(battle_plan, dict) else {}
+    sniper_points = battle_plan.get("sniper_points")
+    sniper_points = sniper_points if isinstance(sniper_points, dict) else {}
+    missing: List[str] = []
+    if _is_missing_trade_plan_value(sniper_points.get("ideal_buy")):
+        missing.append("missing_entry")
+    if _is_missing_trade_plan_value(sniper_points.get("stop_loss")):
+        missing.append("missing_stop_loss")
+    if not missing:
+        return []
+
+    language = normalize_report_language(getattr(result, "report_language", "zh"))
+    wording = {
+        "zh": {
+            "advice": "观望",
+            "reason": "买入计划缺少可执行的买入点或止损位，已自动降级为观望。",
+            "no_position": "暂不买入；补齐明确的入场价与止损价后再评估。",
+            "has_position": "不新增仓位；先依据已有风控规则管理持仓，并补齐止损位。",
+            "confidence": "低",
+        },
+        "en": {
+            "advice": "Watch",
+            "reason": "The buy plan lacks an actionable entry or stop-loss, so the call was downgraded to watch.",
+            "no_position": "Do not enter until a specific entry and stop-loss are available.",
+            "has_position": "Do not add; manage the position under existing risk rules and define a stop-loss.",
+            "confidence": "Low",
+        },
+        "ko": {
+            "advice": "관망",
+            "reason": "실행 가능한 진입가 또는 손절가가 없어 매수 의견을 관망으로 하향했습니다.",
+            "no_position": "명확한 진입가와 손절가가 마련될 때까지 신규 진입하지 마세요.",
+            "has_position": "추가 매수하지 말고 기존 위험관리 규칙에 따라 손절가를 확정하세요.",
+            "confidence": "낮음",
+        },
+        "vi": {
+            "advice": "Theo dõi",
+            "reason": "Kế hoạch mua thiếu điểm vào hoặc mức cắt lỗ có thể thực thi, nên tín hiệu đã tự động hạ xuống Theo dõi.",
+            "no_position": "Chưa mua cho đến khi có giá vào lệnh và mức cắt lỗ cụ thể.",
+            "has_position": "Không gia tăng tỷ trọng; quản trị vị thế theo quy tắc hiện có và bổ sung mức cắt lỗ.",
+            "confidence": "Thấp",
+        },
+    }
+    text = wording.get(language, wording["en"])
+    result.decision_type = "hold"
+    result.confidence_level = text["confidence"]
+    _bound_hold_watch_sentiment_score(result, reason=text["reason"], final_action="watch")
+    _apply_hold_watch_dashboard(
+        result,
+        language,
+        advice=text["advice"],
+        reason=text["reason"],
+        current_price=_first_numeric_value(getattr(result, "current_price", None)),
+        support=None,
+        resistance=None,
+        flow_bias="not_evaluated",
+        no_position=text["no_position"],
+        has_position=text["has_position"],
+    )
+    dashboard = result.dashboard if isinstance(result.dashboard, dict) else {}
+    dashboard["trade_plan_guardrail"] = {
+        "applied": True,
+        "reason": text["reason"],
+        "missing_fields": list(missing),
+    }
+    result.dashboard = dashboard
+    _sync_stability_dashboard_fields(result)
+    logger.info("[trade_plan_guardrail] Downgraded non-actionable buy: %s", missing)
+    return missing
+
+
 def get_stock_name_multi_source(
     stock_code: str,
     context: Optional[Dict] = None,
@@ -2027,6 +2439,9 @@ class GeminiAnalyzer:
                 "ma5": MA5数值,
                 "ma10": MA10数值,
                 "ma20": MA20数值,
+                "ma50": MA50数值或null,
+                "ma200": MA200数值或null,
+                "ma200_slope_pct": MA200近5个交易日斜率百分比或null,
                 "bias_ma5": 乖离率百分比数值,
                 "bias_status": "安全/警戒/危险",
                 "support_level": 支撑位价格,
@@ -2164,6 +2579,9 @@ class GeminiAnalyzer:
 - 操作建议必须同时参考价格位置（支撑/压力位）、量能/筹码、主力资金流向和风险事件。
 - 股价位于支撑与压力之间、资金流不明确时，优先输出“持有/震荡/观望/洗盘观察”等可执行的中性建议；`decision_type` 仍保持 `hold`。
 - 只有在接近支撑确认或有效突破压力，且资金流/量价配合时，才能给出买入；接近压力且资金流出时不得追买。
+- `decision_type=buy` 时 `ideal_buy` 与 `stop_loss` 必须是可执行价格，禁止填 N/A、待补充或数据缺失；无法给出时必须降级为 `hold/watch`。
+- MA50/MA200 有数据时必须纳入中长期趋势；若价格站上 MA20 但仍低于下行 MA200，必须提示长期下降趋势中的技术性反弹。数据不足时明确写不可用，不得用短周期均线冒充。
+- `latest_news` 必须输出干净的自然语言摘要，不得输出 JSON/Python 数组或字典的原始字符串。
 - 只有在跌破关键支撑、主力资金持续流出或风险显著放大时，才能给出卖出/减仓。
 - 必须输出 `dashboard.phase_decision` 七字段；盘中/午休/临近收盘要给出当前动作、观察条件和下一次检查点。
 - 建议输出可选展示字段 `dashboard.signal_attribution` 六字段；解释推荐理由的构成，包括技术指标、新闻舆情、基本面、市场环境的贡献度，以及最强看多/看空信号。
@@ -2215,6 +2633,9 @@ class GeminiAnalyzer:
                 "ma5": MA5数值,
                 "ma10": MA10数值,
                 "ma20": MA20数值,
+                "ma50": MA50数值或null,
+                "ma200": MA200数值或null,
+                "ma200_slope_pct": MA200近5个交易日斜率百分比或null,
                 "bias_ma5": 乖离率百分比数值,
                 "bias_status": "安全/警戒/危险",
                 "support_level": 支撑位价格,
@@ -2350,6 +2771,9 @@ class GeminiAnalyzer:
 - 操作建议必须同时参考价格位置（支撑/压力位）、量能/筹码、主力资金流向和风险事件。
 - 股价位于支撑与压力之间、资金流不明确时，优先输出“持有/震荡/观望/洗盘观察”等可执行的中性建议；`decision_type` 仍保持 `hold`。
 - 只有在接近支撑确认或有效突破压力，且资金流/量价配合时，才能给出买入；接近压力且资金流出时不得追买。
+- `decision_type=buy` 时 `ideal_buy` 与 `stop_loss` 必须是可执行价格，禁止填 N/A、待补充或数据缺失；无法给出时必须降级为 `hold/watch`。
+- MA50/MA200 有数据时必须纳入中长期趋势；若价格站上 MA20 但仍低于下行 MA200，必须提示长期下降趋势中的技术性反弹。数据不足时明确写不可用，不得用短周期均线冒充。
+- `latest_news` 必须输出干净的自然语言摘要，不得输出 JSON/Python 数组或字典的原始字符串。
 - 只有在跌破关键支撑、主力资金持续流出或风险显著放大时，才能给出卖出/减仓。
 - 必须输出 `dashboard.phase_decision` 七字段；盘中/午休/临近收盘要给出当前动作、观察条件和下一次检查点。
 - 建议输出可选展示字段 `dashboard.signal_attribution` 六字段；解释推荐理由的构成，包括技术指标、新闻舆情、基本面、市场环境的贡献度，以及最强看多/看空信号。
@@ -2371,6 +2795,10 @@ Use verified market data, technical indicators, positioning data, and current in
 numbers or facts. Treat stale, partial, missing, estimated, or fallback data as confidence limitations.
 Keep the JSON schema and enum values unchanged, include `dashboard.phase_decision`, and provide actionable
 levels only when the evidence supports them. Explain uncertainty and tool failures explicitly.
+Never return a buy action unless `ideal_buy` and `stop_loss` contain actionable prices; downgrade to hold/watch
+when either value is missing or a placeholder. Use MA50/MA200 when available, flag a rebound above MA20 but
+below a falling MA200 as a possible bear-market rally, and never substitute a short MA for missing MA200 data.
+Render `latest_news` as clean prose, never as a serialized JSON/Python list or dictionary.
 
 ## Output contract
 
@@ -4530,6 +4958,26 @@ Keep `decision_type` within `buy|hold|sell`.
     def _build_integrity_complement_prompt(self, missing_fields: List[str], report_language: str = "zh") -> str:
         """Build complement instruction for missing mandatory fields."""
         report_language = normalize_report_language(report_language)
+        if report_language == "vi":
+            labels = {
+                "sentiment_score": "sentiment_score: điểm tổng hợp từ 0 đến 100",
+                "operation_advice": "operation_advice: khuyến nghị hành động bằng tiếng Việt",
+                "analysis_summary": "analysis_summary: tóm tắt phân tích ngắn gọn",
+                "dashboard.core_conclusion.one_sentence": "dashboard.core_conclusion.one_sentence: quyết định một dòng",
+                "dashboard.intelligence.risk_alerts": "dashboard.intelligence.risk_alerts: danh sách cảnh báo rủi ro (có thể rỗng)",
+                "dashboard.battle_plan.sniper_points.ideal_buy": "dashboard.battle_plan.sniper_points.ideal_buy: giá mua có thể thực thi; không dùng N/A hoặc Cần bổ sung",
+                "dashboard.battle_plan.sniper_points.stop_loss": "dashboard.battle_plan.sniper_points.stop_loss: giá cắt lỗ có thể thực thi; không dùng N/A hoặc Cần bổ sung",
+                "dashboard.phase_decision.phase_context": "dashboard.phase_decision.phase_context: tóm tắt trạng thái phiên",
+                "dashboard.phase_decision.action_window": "dashboard.phase_decision.action_window: cửa sổ hành động theo phiên",
+                "dashboard.phase_decision.immediate_action": "dashboard.phase_decision.immediate_action: hành động hiện tại",
+                "dashboard.phase_decision.watch_conditions": "dashboard.phase_decision.watch_conditions: danh sách điều kiện theo dõi",
+                "dashboard.phase_decision.next_check_time": "dashboard.phase_decision.next_check_time: thời điểm kiểm tra tiếp theo",
+                "dashboard.phase_decision.confidence_reason": "dashboard.phase_decision.confidence_reason: lý do về độ tin cậy và giới hạn dữ liệu",
+                "dashboard.phase_decision.data_limitations": "dashboard.phase_decision.data_limitations: danh sách giới hạn dữ liệu",
+            }
+            lines = ["### Yêu cầu bổ sung: điền các trường bắt buộc còn thiếu và xuất lại toàn bộ JSON:"]
+            lines.extend(f"- {labels[field]}" for field in missing_fields if field in labels)
+            return "\n".join(lines)
         if report_language in ("en", "ko"):
             lines = ["### Completion requirements: fill the missing mandatory fields below and output the full JSON again:"]
             for f in missing_fields:
@@ -4545,6 +4993,8 @@ Keep `decision_type` within `buy|hold|sell`.
                     lines.append("- dashboard.intelligence.risk_alerts: risk alert list (can be empty)")
                 elif f == "dashboard.battle_plan.sniper_points.stop_loss":
                     lines.append("- dashboard.battle_plan.sniper_points.stop_loss: stop-loss level")
+                elif f == "dashboard.battle_plan.sniper_points.ideal_buy":
+                    lines.append("- dashboard.battle_plan.sniper_points.ideal_buy: actionable entry price")
                 elif f == "dashboard.phase_decision.phase_context":
                     lines.append("- dashboard.phase_decision.phase_context: public market phase summary subset")
                 elif f == "dashboard.phase_decision.action_window":
@@ -4575,6 +5025,8 @@ Keep `decision_type` within `buy|hold|sell`.
                 lines.append("- dashboard.intelligence.risk_alerts: 风险警报列表（可为空数组）")
             elif f == "dashboard.battle_plan.sniper_points.stop_loss":
                 lines.append("- dashboard.battle_plan.sniper_points.stop_loss: 止损价")
+            elif f == "dashboard.battle_plan.sniper_points.ideal_buy":
+                lines.append("- dashboard.battle_plan.sniper_points.ideal_buy: 可执行买入价")
             elif f == "dashboard.phase_decision.phase_context":
                 lines.append("- dashboard.phase_decision.phase_context: 公开低敏市场阶段摘要子集")
             elif f == "dashboard.phase_decision.action_window":
@@ -4601,7 +5053,10 @@ Keep `decision_type` within `buy|hold|sell`.
         """Build retry prompt using the previous response as the complement baseline."""
         complement = self._build_integrity_complement_prompt(missing_fields, report_language=report_language)
         previous_output = previous_response.strip()
-        if normalize_report_language(report_language) in ("en", "ko"):
+        normalized_language = normalize_report_language(report_language)
+        if normalized_language == "vi":
+            prefix = "### Đây là đầu ra trước đó. Hãy bổ sung các trường còn thiếu và xuất lại toàn bộ JSON, không bỏ các trường đã có:"
+        elif normalized_language in ("en", "ko"):
             prefix = "### The previous output is below. Complete the missing fields based on that output and return the full JSON again. Do not omit existing fields:"
         else:
             prefix = "### 上一次输出如下，请在该输出基础上补齐缺失字段，并重新输出完整 JSON。不要省略已有字段："

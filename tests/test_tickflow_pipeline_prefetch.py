@@ -76,7 +76,7 @@ class TestTickFlowPipelinePrefetch(unittest.TestCase):
 
         self.assertEqual(len(results), 5)
         self.assertEqual(events[0][0], "daily_prefetch")
-        self.assertEqual(events[0][2], 30)
+        self.assertEqual(events[0][2], 365)
         self.assertEqual(events[1][0], "realtime_prefetch")
         self.assertEqual(events[2][0], "name_prefetch")
         self.assertTrue(all(event[0] != "process" for event in events[:3]))

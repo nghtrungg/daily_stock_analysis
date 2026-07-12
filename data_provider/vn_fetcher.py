@@ -31,7 +31,14 @@ class VnFetcher(BaseFetcher):
     priority = 4
 
     def is_available_for_request(self, capability: str = "") -> bool:
-        return capability in {"", "daily_data", "realtime_quote", "stock_name", "ownership"}
+        return capability in {
+            "",
+            "daily_data",
+            "realtime_quote",
+            "stock_name",
+            "ownership",
+            "market_flow",
+        }
 
     def _fetch_raw_data(self, stock_code: str, start_date: str, end_date: str) -> pd.DataFrame:
         symbol = self._local_symbol(stock_code)
@@ -110,6 +117,19 @@ class VnFetcher(BaseFetcher):
         """Return disclosed ownership records; never label them as order flow."""
         symbol = self._local_symbol(stock_code)
         return vn_provider.get_vietnam_ownership_snapshot(symbol) if symbol else {}
+
+    def get_market_flow(self, stock_code: str) -> dict:
+        """Return active order flow and optional sponsor-backed investor flow."""
+        from src.config import get_config
+
+        symbol = self._local_symbol(stock_code)
+        if not symbol:
+            return {}
+        include_advanced = bool(getattr(get_config(), "enable_vn_advanced_flow", False))
+        return vn_provider.get_vietnam_market_flow_snapshot(
+            symbol,
+            include_advanced=include_advanced,
+        )
 
     @staticmethod
     def _local_symbol(stock_code: str) -> str:

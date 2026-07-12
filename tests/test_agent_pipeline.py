@@ -893,7 +893,8 @@ class TestAgentResultConversion(unittest.TestCase):
         )
 
         ok, missing = check_content_integrity(result)
-        self.assertTrue(ok, missing)
+        self.assertFalse(ok)
+        self.assertIn("dashboard.battle_plan.sniper_points.ideal_buy", missing)
         self.assertEqual(result.sentiment_score, 68)
         self.assertEqual(result.analysis_summary, "趋势结论：多头排列；操作建议：买入。")
         self.assertEqual(result.dashboard["sentiment_score"], 68)
@@ -1318,7 +1319,8 @@ class TestAgentResultConversion(unittest.TestCase):
         )
 
         ok, missing = check_content_integrity(result)
-        self.assertTrue(ok, missing)
+        self.assertFalse(ok)
+        self.assertIn("dashboard.battle_plan.sniper_points.ideal_buy", missing)
         self.assertEqual(result.dashboard["intelligence"]["risk_alerts"], ["涨幅过快", "回撤放大"])
 
     def test_convert_placeholder_dashboard_is_completed_from_local_context(self):
@@ -1361,7 +1363,9 @@ class TestAgentResultConversion(unittest.TestCase):
         )
 
         ok, missing = check_content_integrity(result)
-        self.assertTrue(ok, missing)
+        self.assertFalse(ok)
+        self.assertIn("dashboard.battle_plan.sniper_points.stop_loss", missing)
+        self.assertIn("dashboard.battle_plan.sniper_points.ideal_buy", missing)
         self.assertEqual(result.sentiment_score, 62)
         self.assertEqual(result.dashboard["sentiment_score"], 62)
         self.assertEqual(result.dashboard["core_conclusion"]["one_sentence"], result.analysis_summary)

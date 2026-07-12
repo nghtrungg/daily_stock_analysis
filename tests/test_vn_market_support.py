@@ -7,7 +7,12 @@ import pandas as pd
 
 from data_provider.base import BaseFetcher, DataFetchError, DataFetcherManager, normalize_stock_code
 from data_provider.vn_fetcher import VnFetcher
-from data_provider.vn_provider import _normalize_kline_frame, get_vietnam_ownership_snapshot
+from data_provider.vn_provider import (
+    _normalize_kline_frame,
+    _normalize_vnstock_data_flow,
+    get_vietnam_market_flow_snapshot,
+    get_vietnam_ownership_snapshot,
+)
 from src.core.trading_calendar import (
     MARKET_TIMEZONE,
     MarketPhase,
@@ -234,6 +239,98 @@ def test_vn_ownership_snapshot_preserves_disclosed_provider_records() -> None:
     assert snapshot["record_count"] == 1
     assert snapshot["records"][0]["shareholder_name"] == "Example Fund"
     assert snapshot["records"][0]["ownership_percent"] == 12.5
+
+
+def test_vn_market_flow_uses_trade_tape_for_active_buy_sell_pressure() -> None:
+    raw_trades = pd.DataFrame(
+        {
+            "time": ["2026-07-10 10:00:00", "2026-07-10 10:01:00", "2026-07-10 10:02:00"],
+            "price": [56.0, 56.1, 56.0],
+            "volume": [700, 200, 100],
+            "side": ["buy", "sell", "unknown"],
+        }
+    )
+
+    with patch("data_provider.vn_provider._fetch_intraday_trades", return_value=raw_trades), patch(
+        "data_provider.vn_provider._fetch_vnstock_data_market_flows",
+        return_value={},
+    ):
+        payload = get_vietnam_market_flow_snapshot("VNM", include_advanced=True)
+
+    flow = payload["stock_flow"]
+    assert flow["active_buy_volume"] == 700.0
+    assert flow["active_sell_volume"] == 200.0
+    assert flow["active_unknown_volume"] == 100.0
+    assert flow["active_net_volume"] == 500.0
+    assert flow["active_buy_ratio"] == 0.777778
+    assert flow["active_imbalance"] == 0.555556
+    assert payload["coverage"]["active_order_flow"] == "ok"
+    assert payload["coverage"]["foreign_flow"] == "not_configured"
+    assert payload["coverage"]["proprietary_flow"] == "not_configured"
+
+
+def test_vnstock_data_flow_normalizes_documented_foreign_columns() -> None:
+    frame = pd.DataFrame(
+        [
+            {
+                "time": "2026-07-09",
+                "buy_vol": 100,
+                "buy_val": 5_000,
+                "sell_vol": 80,
+                "sell_val": 4_000,
+                "net_vol": 20,
+                "net_val": 1_000,
+            },
+            {
+                "time": "2026-07-10",
+                "buy_vol": 300,
+                "buy_val": 16_000,
+                "sell_vol": 200,
+                "sell_val": 11_000,
+                "net_vol": 100,
+                "net_val": 5_000,
+            },
+        ]
+    )
+
+    normalized = _normalize_vnstock_data_flow(frame)
+
+    assert normalized["buy_volume"] == 300.0
+    assert normalized["sell_volume"] == 200.0
+    assert normalized["net_volume"] == 100.0
+    assert normalized["net_value"] == 5_000.0
+
+
+def test_vn_capital_flow_context_uses_vn_fetcher_market_flow() -> None:
+    class _FlowFetcher(_FakeFetcher):
+        def is_available_for_request(self, capability: str = "") -> bool:
+            return capability in {"", "market_flow"}
+
+        def get_market_flow(self, stock_code):
+            self.calls.append(stock_code)
+            return {
+                "source": "vnstock",
+                "as_of": "2026-07-10T15:00:00",
+                "coverage": {
+                    "active_order_flow": "ok",
+                    "foreign_flow": "not_configured",
+                    "proprietary_flow": "not_configured",
+                },
+                "stock_flow": {
+                    "active_buy_volume": 700.0,
+                    "active_sell_volume": 200.0,
+                    "active_net_volume": 500.0,
+                },
+            }
+
+    vn = _FlowFetcher("VnFetcher")
+    manager = DataFetcherManager(fetchers=[vn])
+
+    context = manager.get_capital_flow_context("VNM.VN", budget_seconds=1.0)
+
+    assert context["status"] == "ok"
+    assert context["data"]["stock_flow"]["active_net_volume"] == 500.0
+    assert vn.calls == ["VNM.VN"]
 
 
 def test_data_fetcher_manager_exposes_vn_ownership_separately_from_chip_data() -> None:
