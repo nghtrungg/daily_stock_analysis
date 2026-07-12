@@ -889,6 +889,79 @@ def format_wechat_markdown(content: str) -> str:
     return result.strip()
 
 
+def _flush_table_as_discord_fields(buffer: List[str], output: List[str]) -> None:
+    """Render one Markdown table as mobile-friendly Discord field rows."""
+
+    rows = []
+    for raw in buffer:
+        if _is_markdown_table_separator(raw):
+            continue
+        parsed = _parse_markdown_table_row(raw)
+        if parsed:
+            rows.append(parsed)
+
+    if len(rows) < 2:
+        return
+
+    header = [_strip_inline_markdown(cell) for cell in rows[0]]
+    for row_index, raw_row in enumerate(rows[1:]):
+        row = raw_row + [""] * max(0, len(header) - len(raw_row))
+        pairs = [
+            (key, _strip_inline_markdown(row[index]) if index < len(row) else "")
+            for index, key in enumerate(header)
+        ]
+        if len(header) == 2:
+            key, value = pairs[0][1], pairs[1][1]
+            if key:
+                output.append(f"• **{key}:** {value}".rstrip())
+            continue
+
+        for field_index, (key, value) in enumerate(pairs):
+            prefix = "• " if field_index == 0 else "  "
+            output.append(f"{prefix}**{key}:** {value}".rstrip())
+        if row_index < len(rows[1:]) - 1:
+            output.append("")
+
+
+def _format_discord_markdown_unprotected(content: str) -> str:
+    """Convert report Markdown to the subset rendered reliably by Discord."""
+
+    output: List[str] = []
+    table_buffer: List[str] = []
+
+    for raw_line in content.splitlines():
+        line = raw_line.rstrip()
+        if line.strip().startswith("|"):
+            table_buffer.append(line)
+            continue
+
+        if table_buffer:
+            _flush_table_as_discord_fields(table_buffer, output)
+            table_buffer = []
+
+        heading = re.match(r"^#{1,6}\s+(.+)$", line)
+        if heading:
+            line = f"**{heading.group(1).strip()}**"
+        elif re.match(r"^\s*---+\s*$", line):
+            line = "────────"
+
+        output.append(line)
+
+    if table_buffer:
+        _flush_table_as_discord_fields(table_buffer, output)
+
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(output)).strip()
+
+
+def format_discord_markdown(content: str) -> str:
+    """Render tables and sections cleanly within Discord's Markdown subset."""
+
+    return _transform_outside_fenced_code_blocks(
+        content,
+        _format_discord_markdown_unprotected,
+    ).strip()
+
+
 def _format_slack_mrkdwn_unprotected(content: str) -> str:
     """Convert common report Markdown to Slack mrkdwn."""
 

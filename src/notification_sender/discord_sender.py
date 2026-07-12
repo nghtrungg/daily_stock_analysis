@@ -12,7 +12,7 @@ from typing import Optional
 import requests
 
 from src.config import Config
-from src.formatters import MIN_MAX_WORDS, chunk_content_by_max_words
+from src.formatters import MIN_MAX_WORDS, chunk_content_by_max_words, format_discord_markdown
 
 
 logger = logging.getLogger(__name__)
@@ -67,8 +67,9 @@ class DiscordSender:
         Returns:
             是否发送成功
         """
-        # 分割内容，避免单条消息超过 Discord 限制
-        chunks = self._split_discord_content(content)
+        # Discord does not render GitHub-style pipe tables. Format the report
+        # before chunking so table rows and section headings remain readable.
+        chunks = self._split_discord_content(format_discord_markdown(content))
 
         # 优先使用 Webhook（配置简单，权限低）
         if self._discord_config['webhook_url']:
@@ -96,19 +97,23 @@ class DiscordSender:
         try:
             chunks = chunk_content_by_max_words(content, self._discord_max_words)
             if len(chunks) > 1:
+                # Reserve enough room for a leading page label. A prefix is
+                # easier to scan in Discord than the old marker after content.
                 chunks = chunk_content_by_max_words(
                     content,
-                    self._discord_max_words,
-                    add_page_marker=True,
+                    self._discord_max_words - 16,
                 )
+                total = len(chunks)
+                chunks = [f"📄 {index + 1}/{total}\n{chunk}" for index, chunk in enumerate(chunks)]
             return chunks
         except ValueError as e:
             logger.error("分割 Discord 消息失败: %s", e)
-            return chunk_content_by_max_words(
+            chunks = chunk_content_by_max_words(
                 content,
-                DISCORD_MAX_CONTENT_LENGTH,
-                add_page_marker=True,
+                DISCORD_MAX_CONTENT_LENGTH - 16,
             )
+            total = len(chunks)
+            return [f"📄 {index + 1}/{total}\n{chunk}" for index, chunk in enumerate(chunks)]
 
     def _send_discord_chunks(
         self,

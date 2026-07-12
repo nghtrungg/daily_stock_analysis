@@ -118,6 +118,26 @@ class TestDiscordSender(unittest.TestCase):
         self.assertIn("username", call_kw["json"])
 
     @mock.patch("src.notification_sender.discord_sender.requests.post")
+    def test_send_webhook_formats_report_tables_before_sending(self, mock_post):
+        mock_post.return_value = _response(204)
+        cfg = _config(discord_webhook_url="https://discord.com/webhook/1")
+        sender = DiscordSender(cfg)
+        report = (
+            "## Góc nhìn dữ liệu\n\n"
+            "| Chỉ báo | Giá |\n"
+            "| --- | --- |\n"
+            "| MA20 | 56.22 |"
+        )
+
+        result = sender.send_to_discord(report)
+
+        self.assertTrue(result)
+        payload = mock_post.call_args.kwargs["json"]["content"]
+        self.assertIn("**Góc nhìn dữ liệu**", payload)
+        self.assertIn("• **MA20:** 56.22", payload)
+        self.assertNotIn("| --- |", payload)
+
+    @mock.patch("src.notification_sender.discord_sender.requests.post")
     def test_send_webhook_http_error_returns_false(self, mock_post):
         mock_post.return_value = _response(400)
         cfg = _config(discord_webhook_url="https://discord.com/webhook/1")
@@ -150,6 +170,9 @@ class TestDiscordSender(unittest.TestCase):
         self.assertEqual(mock_sleep.call_count, mock_post.call_count - 1)
         payload_lengths = [len(call.kwargs["json"]["content"]) for call in mock_post.call_args_list]
         self.assertTrue(all(length <= 2000 for length in payload_lengths))
+        payloads = [call.kwargs["json"]["content"] for call in mock_post.call_args_list]
+        self.assertTrue(all(payload.startswith(f"📄 {index + 1}/") for index, payload in enumerate(payloads)))
+        self.assertTrue(all(not payload.rstrip().endswith(f"{index + 1}/{len(payloads)}") for index, payload in enumerate(payloads)))
 
     @mock.patch("src.notification_sender.discord_sender.time.sleep", return_value=None)
     @mock.patch("src.notification_sender.discord_sender.requests.post")

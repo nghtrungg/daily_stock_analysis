@@ -12,6 +12,7 @@ from src.formatters import (
     chunk_content_by_max_words,
     chunk_content_by_max_bytes,
     chunk_markdown_preserving_blocks,
+    format_discord_markdown,
     format_feishu_markdown,
     format_slack_mrkdwn,
     format_telegram_markdown,
@@ -433,6 +434,38 @@ class TestNotificationMarkdownFormatters(unittest.TestCase):
         self.assertIn("• 600519：强势", result)
         self.assertIn("<https://example.com/report|详情>", result)
 
+    def test_discord_formatter_renders_wide_tables_as_vertical_fields(self):
+        text = (
+            "## 📈 Ảnh chụp thị trường\n\n"
+            "| Đóng cửa | Mở cửa | Khối lượng |\n"
+            "| --- | --- | --- |\n"
+            "| 56.60 | 55.70 | 625.70 nghìn |"
+        )
+
+        result = format_discord_markdown(text)
+
+        self.assertIn("**📈 Ảnh chụp thị trường**", result)
+        self.assertIn("• **Đóng cửa:** 56.60", result)
+        self.assertIn("  **Mở cửa:** 55.70", result)
+        self.assertIn("  **Khối lượng:** 625.70 nghìn", result)
+        self.assertNotIn("| --- |", result)
+
+    def test_discord_formatter_compacts_two_column_metric_tables(self):
+        text = (
+            "| Chỉ báo giá | Giá |\n"
+            "| --- | --- |\n"
+            "| MA5 | 55.68 |\n"
+            "| Hỗ trợ | 55.68 |\n\n"
+            "---"
+        )
+
+        result = format_discord_markdown(text)
+
+        self.assertIn("• **MA5:** 55.68", result)
+        self.assertIn("• **Hỗ trợ:** 55.68", result)
+        self.assertIn("────────", result)
+        self.assertNotIn("| Chỉ báo giá |", result)
+
     def test_wechat_formatter_keeps_markdown_but_converts_tables(self):
         text = "## 日报\n\n| 股票 | 信号 |\n| --- | --- |\n| 600519 | 强势 |"
 
@@ -458,6 +491,7 @@ class TestNotificationMarkdownFormatters(unittest.TestCase):
         )
 
         for formatter in (
+            format_discord_markdown,
             format_telegram_markdown,
             format_wechat_markdown,
             format_slack_mrkdwn,
@@ -469,5 +503,8 @@ class TestNotificationMarkdownFormatters(unittest.TestCase):
                 self.assertIn("| 示例 | 不应转换 |", fenced)
                 self.assertIn("# not heading", fenced)
                 self.assertIn("[详情](https://example.com/raw)", fenced)
-                self.assertIn("600519：强势", result)
+                if formatter is format_discord_markdown:
+                    self.assertIn("**600519:** 强势", result)
+                else:
+                    self.assertIn("600519：强势", result)
                 self.assertNotIn("@@DSA_FENCED_CODE_BLOCK_", result)

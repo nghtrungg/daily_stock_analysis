@@ -578,19 +578,22 @@ Edit `.github/workflows/00-daily-analysis.yml`:
 
 ```yaml
 schedule:
-  # UTC time, Beijing time = UTC + 8
-  - cron: '0 10 * * 1-5'   # Monday to Friday 18:00 (Beijing Time)
+  # GitHub cron uses UTC; Vietnam time is UTC + 7 year-round.
+  - cron: '20 2 * * 1-5'   # Monday to Friday 09:20 Vietnam time
+  - cron: '50 7 * * 1-5'   # Monday to Friday 14:50 Vietnam time
 ```
 
-Common time reference:
+The default times are deliberately offset from the HOSE session boundaries. The 09:20 run sees the completed opening auction plus the first five minutes of continuous trading, while the 14:50 run sees the completed closing auction. GitHub Actions may start a scheduled workflow a few minutes late during periods of high load.
 
-| Beijing Time | UTC cron expression |
+Common Vietnam-time reference:
+
+| Vietnam Time | UTC cron expression |
 |---------|----------------|
-| 09:30 | `'30 1 * * 1-5'` |
-| 12:00 | `'0 4 * * 1-5'` |
-| 15:00 | `'0 7 * * 1-5'` |
-| 18:00 | `'0 10 * * 1-5'` |
-| 21:00 | `'0 13 * * 1-5'` |
+| 09:20 | `'20 2 * * 1-5'` |
+| 11:30 | `'30 4 * * 1-5'` |
+| 13:00 | `'0 6 * * 1-5'` |
+| 14:50 | `'50 7 * * 1-5'` |
+| 18:00 | `'0 11 * * 1-5'` |
 
 ### Local Scheduled Tasks
 

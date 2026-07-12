@@ -1,9 +1,12 @@
 name: Daily Stock Analysis
 
 on:
-  # Scheduled trigger - 18:00 Beijing time (10:00 UTC) every weekday.
+  # HOSE-aware weekday triggers (Vietnam time, UTC+7 with no daylight saving):
+  # - 09:20 ICT: after the 09:00-09:15 opening auction and five minutes of continuous trading.
+  # - 14:50 ICT: after the 14:30-14:45 closing auction has completed.
   schedule:
-    - cron: '0 10 * * 1-5'     # Monday-Friday, 10:00 UTC = 18:00 Beijing time.
+    - cron: '20 2 * * 1-5'     # Monday-Friday, 02:20 UTC = 09:20 Asia/Ho_Chi_Minh.
+    - cron: '50 7 * * 1-5'     # Monday-Friday, 07:50 UTC = 14:50 Asia/Ho_Chi_Minh.
   
   # Manual trigger.
   workflow_dispatch:
@@ -36,6 +39,8 @@ jobs:
     environment: STOCK_LIST
     # Add a timeout to prevent jobs from hanging.
     timeout-minutes: ${{ fromJSON(vars.ANALYSIS_TIMEOUT_MINUTES || '30') }}
+    env:
+      TZ: Asia/Ho_Chi_Minh
     
     steps:
       - name: Random delay (avoid fixed-time access)
@@ -434,7 +439,7 @@ jobs:
           echo "=========================================="
           echo "🚀 Daily Stock Analysis"
           echo "=========================================="
-          echo "⏰ Time: $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')"
+          echo "⏰ HOSE time: $(date '+%Y-%m-%d %H:%M:%S %Z')"
           echo "🎯 Run mode: $MODE"
           echo "📊 Watchlist: $STOCK_LIST"
           echo "📝 Report type: $REPORT_TYPE"
