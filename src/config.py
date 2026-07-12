@@ -1040,8 +1040,12 @@ class Config:
     enable_realtime_quote: bool = True
     # 盘中实时技术面：启用时用实时价计算 MA/多头排列（Issue #234）；关闭则用昨日收盘
     enable_realtime_technical_indicators: bool = True
+    # 技术指标历史窗口（日历日）；365 通常覆盖至少 200 个交易日
+    technical_lookback_days: int = 365
     # 筹码分布开关（该接口不稳定，云端部署建议关闭）
     enable_chip_distribution: bool = True
+    # 越南市场高级资金流（vnstock_data sponsor：外资/自营）；主动买卖仍使用免费逐笔数据
+    enable_vn_advanced_flow: bool = False
     # 东财接口补丁开关
     enable_eastmoney_patch: bool = False
     # 实时行情数据源优先级（逗号分隔）
@@ -2019,7 +2023,14 @@ class Config:
             enable_realtime_technical_indicators=os.getenv(
                 'ENABLE_REALTIME_TECHNICAL_INDICATORS', 'true'
             ).lower() == 'true',
+            technical_lookback_days=parse_env_int(
+                os.getenv('TECHNICAL_LOOKBACK_DAYS'),
+                365,
+                field_name='TECHNICAL_LOOKBACK_DAYS',
+                minimum=200,
+            ),
             enable_chip_distribution=os.getenv('ENABLE_CHIP_DISTRIBUTION', 'true').lower() == 'true',
+            enable_vn_advanced_flow=os.getenv('ENABLE_VN_ADVANCED_FLOW', 'false').lower() == 'true',
             # 东财接口补丁开关
             enable_eastmoney_patch=os.getenv('ENABLE_EASTMONEY_PATCH', 'false').lower() == 'true',
             # 实时行情数据源优先级：

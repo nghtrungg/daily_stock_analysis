@@ -34,6 +34,29 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
         self.assertFalse(config.market_review_enabled)
         self.assertFalse(config.daily_market_context_enabled)
 
+    @patch("src.config.setup_env")
+    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
+    @patch.object(Config, "_parse_stock_email_groups", return_value=[])
+    def test_technical_lookback_and_vn_advanced_flow_envs(
+        self,
+        _mock_parse_stock_email_groups,
+        _mock_parse_yaml,
+        _mock_setup_env,
+    ) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "STOCK_LIST": "VNM.VN",
+                "TECHNICAL_LOOKBACK_DAYS": "420",
+                "ENABLE_VN_ADVANCED_FLOW": "true",
+            },
+            clear=True,
+        ):
+            config = Config._load_from_env()
+
+        self.assertEqual(config.technical_lookback_days, 420)
+        self.assertTrue(config.enable_vn_advanced_flow)
+
     def test_enabled_markets_accepts_a_comma_separated_override(self) -> None:
         self.assertEqual(Config._parse_enabled_markets("vn,us"), ["us", "vn"])
 

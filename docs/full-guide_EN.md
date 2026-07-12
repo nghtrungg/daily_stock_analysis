@@ -301,8 +301,10 @@ For the notification baseline, diagnostics, and deployment notes, see [Notificat
 | `TUSHARE_TOKEN` | Tushare Pro Token | - | Optional |
 | `TICKFLOW_API_KEY` | TickFlow API key; CN market review indices prefer TickFlow when configured, and market breadth does so only when the plan supports universe queries | - | Optional |
 | `ENABLE_REALTIME_QUOTE` | Enable real-time quotes (if disabled, uses historical closing prices for analysis) | `true` | Optional |
-| `ENABLE_REALTIME_TECHNICAL_INDICATORS` | Intraday real-time technicals: Calculate MA5/MA10/MA20 and bull trends using real-time prices when enabled (Issue #234); uses yesterday's close if disabled. | `true` | Optional |
+| `ENABLE_REALTIME_TECHNICAL_INDICATORS` | Intraday real-time technicals: calculate moving averages and trend context using real-time prices when enabled; uses yesterday's close if disabled. | `true` | Optional |
+| `TECHNICAL_LOOKBACK_DAYS` | Calendar-day history window used by technical analysis. Keep at least `200`; the `365` default normally covers enough trading sessions for MA200. | `365` | Optional |
 | `ENABLE_CHIP_DISTRIBUTION` | Enable chip distribution analysis (this API is unstable, recommended to disable for cloud deployment). GitHub Actions users must set `ENABLE_CHIP_DISTRIBUTION=true` in Repository Variables to enable; disabled by default in workflows. | `true` | Optional |
+| `ENABLE_VN_ADVANCED_FLOW` | For Vietnam symbols, request foreign and proprietary flow through an installed and authorized `vnstock_data` package. Free trade-tape Buy Up/Sell Down remains available without this switch. | `false` | Optional |
 | `ENABLE_EASTMONEY_PATCH` | Eastmoney API patch: Recommended to set to `true` when Eastmoney APIs fail frequently (e.g., RemoteDisconnected, connection closed). Injects NID tokens and random User-Agents to reduce rate limiting probability. | `false` | Optional |
 | `REALTIME_SOURCE_PRIORITY` | Real-time quote source priority (comma-separated), e.g., `tencent,akshare_sina,efinance,akshare_em` | See .env.example | Optional |
 | `ENABLE_FUNDAMENTAL_PIPELINE` | Master switch for fundamental aggregation; when disabled, returns `not_supported` block only, without altering the original analysis pipeline. | `true` | Optional |
@@ -316,6 +318,8 @@ For the notification baseline, diagnostics, and deployment notes, see [Notificat
 > - **A-shares**: Returns aggregated capabilities by `valuation/growth/earnings/institution/capital_flow/dragon_tiger/boards`.
 > - **ETFs**: Returns available items, marks missing capabilities as `not_supported`, and does not affect the original flow overall.
 > - **US/HK stocks**: Returns `valuation/growth/earnings/belong_boards` (sourced from `info.sector`/`info.industry`) via the yfinance adapter; `institution/capital_flow/dragon_tiger/boards` stay `not_supported` because no offshore data feed exists today. Falls back to a full `not_supported` block if yfinance is unavailable or returns empty payloads. Still fail-open.
+> - **Vietnam stocks**: Active Buy Up/Sell Down pressure is calculated from classified intraday trades and is reported as order flow, never as chip distribution. Foreign/proprietary net flow is optional because the official endpoints belong to the sponsor `vnstock_data` package; when it is absent or disabled, coverage remains `not_configured` and the report does not infer flow from disclosed ownership.
+>   See the official [Vnstock Market Layer](https://vnstocks.com/docs/vnstock-data/market-layer-v3) and [Free vs Sponsor comparison](https://vnstocks.com/docs/vnstock/so-sanh-free-va-sponsor) for the endpoint boundary.
 > - Any exception uses fail-open logic, only logs errors without affecting the main technical/news/chip pipeline.
 > - **Field contracts**:
 >   - `fundamental_context.belong_boards` = related board list for the stock; A-shares are sourced from AkShare board membership, US/HK from yfinance `info.sector`/`info.industry`, `[]` when unavailable;
@@ -1098,9 +1102,12 @@ You can tune the behavior in `.env`:
 ## Decision Actionability
 
 Single-stock reports calibrate operation advice with support/resistance, volume/chip context, main-force capital flow, and risk events. This reduces direct buy/sell flips caused only by one-day price movement or score thresholds. When price is between support and resistance and capital flow is unclear, the report prefers neutral actionable wording such as hold, range-bound watch, or shakeout watch. Buy calls require support confirmation or a valid resistance breakout with volume/capital-flow confirmation; sell/reduce calls require support failure, sustained outflow, or clearly elevated risk.
-This post-processing update only adjusts advisory wording and stability logic and does not change the configured LLM model/provider routing semantics (including LiteLLM, providers, or API model settings).
-Compatibility check result: decision operability and runtime post-processing paths are changed, while model/provider/API configuration and persistence semantics remain unchanged; the compatibility boundary is now in analysis/pipeline/agent intent inference and stabilization mapping.
-Verification trail: the runtime behavior is implemented in `src/analyzer.py`, `src/core/pipeline.py`, `src/core/backtest_engine.py`, `src/report_language.py`, and `src/agent` decision-path modules (with corresponding tests in `tests/test_backtest_engine.py`, `tests/test_analyzer_news_prompt.py`, `tests/test_decision_stability.py`, and `tests/test_agent_pipeline.py`); it does not add/remove runtime config fields or config-cleanup logic in `src/config.py` or persistence code paths.
+
+A buy result must also contain an actionable `ideal_buy` and `stop_loss`. Empty values and localized placeholders such as `N/A`, `TBD`, `待补充`, or `Cần bổ sung` fail the contract. After retry exhaustion, the deterministic report guardrail changes the final action to hold/watch, lowers the score into the neutral band, and synchronizes the headline, one-line decision, position advice, and action fields. Targets and secondary entries remain optional.
+
+MA50 and MA200 are calculated only when enough real history exists. If price closes above MA20 while remaining below a falling MA200, the report adds a localized bear-market-rally warning. It never substitutes MA20/MA60 for missing MA200 data. `TECHNICAL_LOOKBACK_DAYS=365` is the default input window; newly listed stocks can still show long-term context as unavailable.
+
+This post-processing does not change LLM provider/model routing. It adds the technical lookback and optional Vietnam sponsor-flow switches described above, while report normalization is applied before persistence and again at rendering boundaries for older stored reports.
 
 ## Backtesting
 

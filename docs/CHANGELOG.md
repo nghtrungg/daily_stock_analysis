@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [fix] Downgrade non-actionable buy reports to watch when entry or stop-loss values are missing, normalize report price precision and structured news, and keep Vietnamese report conclusions consistent.
+- [improvement] Add MA50/MA200 long-term context, Vietnam active Buy Up/Sell Down order flow, and optional vnstock_data foreign/proprietary flow ingestion.
+
 - [docs] Translate repository-facing documentation and prompt copy to English while retaining Vietnamese report output.
 
 - [improvement] Add Vietnam-first analysis defaults, VN market data routing, Vietnamese report localization, and GitHub Actions configuration guidance.

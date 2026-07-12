@@ -160,7 +160,7 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
         self.assertEqual(context["yesterday"]["close"], 2810.0)
         self.assertEqual(context["price_change_ratio"], -0.59)
         self.assertEqual(context["ma_status"], "短期向好")
-        pipeline.fetcher_manager.get_daily_data.assert_called_once_with("7203.T", days=60)
+        pipeline.fetcher_manager.get_daily_data.assert_called_once_with("7203.T", days=365)
         pipeline.db.save_daily_data.assert_called_once_with(daily_df, "7203.T", "YfinanceFetcher")
 
     def test_process_single_stock_propagates_current_time_to_analyze_stock(self):

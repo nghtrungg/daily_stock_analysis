@@ -2206,6 +2206,26 @@ class DataFetcherManager:
                 return payload
         return {}
 
+    def get_vietnam_market_flow(self, stock_code: str) -> Dict[str, Any]:
+        """Return VN trade-tape pressure and optional investor net flow."""
+        normalized = normalize_stock_code(stock_code)
+        if _market_tag(normalized) != "vn":
+            return {}
+        for fetcher in self._get_fetchers_snapshot():
+            if not self._is_fetcher_available(fetcher, capability="market_flow"):
+                continue
+            method = getattr(fetcher, "get_market_flow", None)
+            if not callable(method):
+                continue
+            try:
+                payload = method(normalized)
+            except Exception as exc:
+                logger.warning("[vn_market_flow] %s failed for %s: %s", type(fetcher).__name__, normalized, exc)
+                continue
+            if isinstance(payload, dict) and isinstance(payload.get("stock_flow"), dict):
+                return payload
+        return {}
+
     def get_chip_distribution(self, stock_code: str):
         """
         获取筹码分布数据（带熔断和多数据源降级）
@@ -3511,7 +3531,45 @@ class DataFetcherManager:
         config = get_config()
         stock_code = normalize_stock_code(stock_code)
         timeout = float(budget_seconds if budget_seconds is not None else config.fundamental_fetch_timeout_seconds)
-        if _market_tag(stock_code) != "cn" or _is_etf_code(stock_code):
+        market = _market_tag(stock_code)
+        if market == "vn" and not _is_etf_code(stock_code):
+            if timeout <= 0:
+                return self._build_fundamental_block(
+                    "failed",
+                    {},
+                    [{"provider": "vn_market_flow", "result": "failed", "duration_ms": 0}],
+                    ["fundamental stage timeout"],
+                )
+            payload, err, cost_ms = self._run_with_retry(
+                lambda: self.get_vietnam_market_flow(stock_code),
+                timeout,
+                "vn_market_flow",
+            )
+            if not isinstance(payload, dict) or not isinstance(payload.get("stock_flow"), dict):
+                return self._build_fundamental_block(
+                    "not_supported" if not err else "failed",
+                    {},
+                    [{"provider": "vn_market_flow", "result": "not_supported" if not err else "failed", "duration_ms": cost_ms}],
+                    [err or "Vietnam market flow unavailable"],
+                )
+            stock_flow = payload.get("stock_flow", {})
+            coverage = payload.get("coverage", {})
+            has_flow = isinstance(coverage, dict) and any(
+                value == "ok" for value in coverage.values()
+            )
+            status = "ok" if has_flow else "partial"
+            return self._build_fundamental_block(
+                status,
+                {
+                    "stock_flow": stock_flow,
+                    "coverage": coverage,
+                    "as_of": payload.get("as_of"),
+                    "source": payload.get("source"),
+                },
+                [{"provider": payload.get("source", "vn_market_flow"), "result": status, "duration_ms": cost_ms}],
+                list(payload.get("errors", [])) + ([err] if err else []),
+            )
+        if market != "cn" or _is_etf_code(stock_code):
             return self._build_fundamental_block(
                 "not_supported",
                 {},

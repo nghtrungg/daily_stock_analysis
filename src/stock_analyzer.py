@@ -18,7 +18,7 @@
 
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from enum import Enum
 
 import pandas as pd
@@ -94,7 +94,12 @@ class TrendAnalysisResult:
     ma5: float = 0.0
     ma10: float = 0.0
     ma20: float = 0.0
+    ma50: Optional[float] = None
     ma60: float = 0.0
+    ma200: Optional[float] = None
+    ma200_slope_pct: Optional[float] = None
+    long_term_trend: str = "unavailable"
+    long_term_warning: str = ""
     current_price: float = 0.0
     
     # 乖离率（与 MA5 的偏离度）
@@ -152,7 +157,12 @@ class TrendAnalysisResult:
             'ma5': self.ma5,
             'ma10': self.ma10,
             'ma20': self.ma20,
+            'ma50': self.ma50,
             'ma60': self.ma60,
+            'ma200': self.ma200,
+            'ma200_slope_pct': self.ma200_slope_pct,
+            'long_term_trend': self.long_term_trend,
+            'long_term_warning': self.long_term_warning,
             'current_price': self.current_price,
             'bias_ma5': self.bias_ma5,
             'bias_ma10': self.bias_ma10,
@@ -255,13 +265,18 @@ class StockTrendAnalyzer:
         result.ma5 = float(latest['MA5'])
         result.ma10 = float(latest['MA10'])
         result.ma20 = float(latest['MA20'])
+        result.ma50 = float(latest['MA50']) if pd.notna(latest.get('MA50')) else None
         result.ma60 = float(latest.get('MA60', 0))
+        result.ma200 = float(latest['MA200']) if pd.notna(latest.get('MA200')) else None
 
         # 1. 趋势判断
         self._analyze_trend(df, result)
 
         # 2. 乖离率计算
         self._calculate_bias(result)
+
+        # 2.5. 中长期趋势（数据不足时保持 unavailable，不使用短周期替代）
+        self._analyze_long_term_trend(df, result)
 
         # 3. 量能分析
         self._analyze_volume(df, result)
@@ -289,6 +304,8 @@ class StockTrendAnalyzer:
         df['MA5'] = df['close'].rolling(window=5).mean()
         df['MA10'] = df['close'].rolling(window=10).mean()
         df['MA20'] = df['close'].rolling(window=20).mean()
+        df['MA50'] = df['close'].rolling(window=50).mean()
+        df['MA200'] = df['close'].rolling(window=200).mean()
         if len(df) >= 60:
             df['MA60'] = df['close'].rolling(window=60).mean()
         else:
@@ -469,6 +486,44 @@ class StockTrendAnalyzer:
             result.bias_ma20 = (price - result.ma20) / result.ma20 * 100
             result.price_above_ma20 = price >= result.ma20
             result.ma20_role = "support" if result.price_above_ma20 else "resistance"
+
+    def _analyze_long_term_trend(self, df: pd.DataFrame, result: TrendAnalysisResult) -> None:
+        """Classify MA50/MA200 context without fabricating unavailable history."""
+        result.long_term_trend = "unavailable"
+        result.long_term_warning = ""
+        if result.ma50 is None:
+            return
+        if result.ma200 is None or result.ma200 <= 0:
+            result.long_term_trend = "ma50_only"
+            return
+
+        valid_ma200 = pd.to_numeric(df.get('MA200'), errors='coerce').dropna()
+        if len(valid_ma200) >= 2:
+            lookback = min(6, len(valid_ma200))
+            previous = float(valid_ma200.iloc[-lookback])
+            if previous > 0:
+                result.ma200_slope_pct = (result.ma200 - previous) / previous * 100
+
+        slope = result.ma200_slope_pct
+        price = result.current_price
+        if (
+            result.price_above_ma20
+            and price < result.ma200
+            and slope is not None
+            and slope < 0
+        ):
+            result.long_term_trend = "bear_market_rally"
+            result.long_term_warning = (
+                "价格虽站上 MA20，但仍低于下行的 MA200；当前更可能是长期下降趋势中的技术性反弹。"
+            )
+            if result.long_term_warning not in result.risk_factors:
+                result.risk_factors.append(result.long_term_warning)
+        elif price >= result.ma200 and slope is not None and slope >= 0:
+            result.long_term_trend = "long_term_uptrend"
+        elif price < result.ma200 and slope is not None and slope < 0:
+            result.long_term_trend = "long_term_downtrend"
+        else:
+            result.long_term_trend = "mixed"
     
     def _analyze_volume(self, df: pd.DataFrame, result: TrendAnalysisResult) -> None:
         """

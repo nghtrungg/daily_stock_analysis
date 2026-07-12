@@ -1139,6 +1139,10 @@ class NotificationService(
         Returns:
             Markdown 格式的决策仪表盘日报
         """
+        from src.analyzer import normalize_report_output_data
+
+        for result in results:
+            normalize_report_output_data(result)
         config = get_config()
         report_language = self._get_report_language(results)
         labels = get_report_labels(report_language)
@@ -1299,6 +1303,7 @@ class NotificationService(
                     vol_data = data_persp.get('volume_analysis', {})
                     chip_data = data_persp.get('chip_structure', {})
                     money_flow_data = data_persp.get('money_flow_indicators', {})
+                    order_flow = data_persp.get('order_flow', {})
 
                     report_lines.extend([
                         f"### 📊 {labels['data_perspective_heading']}",
@@ -1327,6 +1332,14 @@ class NotificationService(
                             f"| {labels['ma5_label']} | {price_data.get('ma5', 'N/A')} |",
                             f"| {labels['ma10_label']} | {price_data.get('ma10', 'N/A')} |",
                             f"| {labels['ma20_label']} | {price_data.get('ma20', 'N/A')} |",
+                            *(
+                                [f"| {labels['ma50_label']} | {price_data.get('ma50')} |"]
+                                if price_data.get('ma50') is not None else []
+                            ),
+                            *(
+                                [f"| {labels['ma200_label']} | {price_data.get('ma200')} |"]
+                                if price_data.get('ma200') is not None else []
+                            ),
                             f"| {labels['bias_ma5_label']} | {price_data.get('bias_ma5', 'N/A')}% {bias_status} |",
                             f"| {labels['support_level_label']} | {price_data.get('support_level', 'N/A')} |",
                             f"| {labels['resistance_level_label']} | {price_data.get('resistance_level', 'N/A')} |",
@@ -1340,10 +1353,32 @@ class NotificationService(
                             f"💡 *{vol_data.get('volume_meaning', '')}*",
                             "",
                         ])
+                    if data_persp.get('long_term_warning'):
+                        report_lines.extend([
+                            f"**⚠️ {labels['long_term_warning_label']}**: {data_persp['long_term_warning']}",
+                            "",
+                        ])
                     if money_flow_data:
                         report_lines.extend([
                             f"**MFI(14) / CMF(20)**: {money_flow_data.get('mfi_14', 'N/A')} / {money_flow_data.get('cmf_20', 'N/A')}",
                             f"💡 *{money_flow_data.get('note', '')}*",
+                            "",
+                        ])
+                    if isinstance(order_flow, dict) and order_flow:
+                        report_lines.extend([
+                            f"**{labels['order_flow_label']}**: "
+                            f"{labels['active_buy_label']} {order_flow.get('active_buy_volume', 'N/A')} | "
+                            f"{labels['active_sell_label']} {order_flow.get('active_sell_volume', 'N/A')} | "
+                            f"{labels['active_imbalance_label']} {order_flow.get('active_imbalance', 'N/A')}",
+                            *(
+                                [f"- {labels['foreign_net_label']}: {order_flow['foreign_net_value']}"]
+                                if order_flow.get('foreign_net_value') is not None else []
+                            ),
+                            *(
+                                [f"- {labels['proprietary_net_label']}: {order_flow['proprietary_net_value']}"]
+                                if order_flow.get('proprietary_net_value') is not None else []
+                            ),
+                            *([f"💡 *{order_flow['note']}*"] if order_flow.get('note') else []),
                             "",
                         ])
                     # 筹码结构
@@ -1809,6 +1844,9 @@ class NotificationService(
         Returns:
             Markdown 格式的单股报告
         """
+        from src.analyzer import normalize_report_output_data
+
+        normalize_report_output_data(result)
         report_date = datetime.now().strftime('%Y-%m-%d %H:%M')
         report_language = self._get_report_language(result)
         labels = get_report_labels(report_language)

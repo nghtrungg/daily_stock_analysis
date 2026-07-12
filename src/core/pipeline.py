@@ -31,9 +31,13 @@ from data_provider.realtime_types import ChipDistribution
 from src.analyzer import (
     GeminiAnalyzer,
     AnalysisResult,
+    apply_long_term_trend_guardrail,
+    enforce_actionable_trade_plan,
     fill_money_flow_indicators_if_needed,
     fill_price_position_if_needed,
+    fill_vietnam_order_flow_if_needed,
     normalize_chip_structure_availability,
+    normalize_report_output_data,
     populate_decision_action_fields,
     stabilize_decision_with_structure,
 )
@@ -98,6 +102,16 @@ def _effective_report_language_for_stock(report_language: Any, stock_code: str =
     if is_vn_market_symbol(stock_code):
         return "vi"
     return normalize_report_language(report_language)
+
+
+def _technical_lookback_days(config: Any) -> int:
+    raw = getattr(config, "technical_lookback_days", 365) if config is not None else 365
+    if isinstance(raw, bool) or not isinstance(raw, (int, float, str)):
+        return 365
+    try:
+        return max(200, int(raw))
+    except (TypeError, ValueError):
+        return 365
 
 # 防御性 guard：当实例绕过 __init__（如测试中 __new__）构造时，
 # double-check 初始化 _single_stock_notify_lock 仍然线程安全。
@@ -349,7 +363,10 @@ class StockAnalysisPipeline:
 
             # 从数据源获取数据
             logger.info(f"{stock_name}({code}) 开始从数据源获取数据...")
-            df, source_name = self.fetcher_manager.get_daily_data(code, days=30)
+            df, source_name = self.fetcher_manager.get_daily_data(
+                code,
+                days=_technical_lookback_days(getattr(self, "config", None)),
+            )
 
             if df is None or df.empty:
                 return False, "获取数据为空"
@@ -547,7 +564,9 @@ class StockAnalysisPipeline:
                 _mkt = get_market_for_stock(normalize_stock_code(code))
                 frozen = get_frozen_target_date()
                 end_date = frozen if frozen else get_market_now(_mkt).date()
-                start_date = end_date - timedelta(days=89)  # ~60 trading days for MA60
+                start_date = end_date - timedelta(
+                    days=_technical_lookback_days(getattr(self, "config", None))
+                )
                 historical_bars = self.db.get_data_range(code, start_date, end_date)
                 if historical_bars:
                     df = pd.DataFrame([bar.to_dict() for bar in historical_bars])
@@ -778,6 +797,7 @@ class StockAnalysisPipeline:
             if result:
                 fill_price_position_if_needed(result, trend_result, realtime_quote)
                 fill_money_flow_indicators_if_needed(result, trend_result)
+                fill_vietnam_order_flow_if_needed(result, fundamental_context)
                 action_source_advice = getattr(result, "operation_advice", None)
                 stabilize_decision_with_structure(result, trend_result, fundamental_context)
                 adjustments = apply_phase_decision_guardrails(
@@ -800,6 +820,15 @@ class StockAnalysisPipeline:
                         "[daily_market_context_guardrail] Applied adjustments for %s: %s",
                         code,
                         market_context_adjustments,
+                    )
+                apply_long_term_trend_guardrail(result, trend_result)
+                normalize_report_output_data(result)
+                trade_plan_adjustments = enforce_actionable_trade_plan(result)
+                if trade_plan_adjustments:
+                    logger.info(
+                        "[trade_plan_guardrail] Applied adjustments for %s: %s",
+                        code,
+                        trade_plan_adjustments,
                     )
                 if isinstance(fundamental_context, dict):
                     result.fundamental_context = fundamental_context
@@ -1418,6 +1447,7 @@ class StockAnalysisPipeline:
             if result:
                 fill_price_position_if_needed(result, trend_result, realtime_quote)
                 fill_money_flow_indicators_if_needed(result, trend_result)
+                fill_vietnam_order_flow_if_needed(result, fundamental_context)
                 realtime_data = initial_context.get("realtime_quote", {})
                 if isinstance(realtime_data, dict):
                     result.current_price = realtime_data.get("price")
@@ -1444,6 +1474,15 @@ class StockAnalysisPipeline:
                         "[daily_market_context_guardrail] Applied agent adjustments for %s: %s",
                         code,
                         market_context_adjustments,
+                    )
+                apply_long_term_trend_guardrail(result, trend_result)
+                normalize_report_output_data(result)
+                trade_plan_adjustments = enforce_actionable_trade_plan(result)
+                if trade_plan_adjustments:
+                    logger.info(
+                        "[trade_plan_guardrail] Applied agent adjustments for %s: %s",
+                        code,
+                        trade_plan_adjustments,
                     )
                 if isinstance(fundamental_context, dict):
                     result.fundamental_context = fundamental_context
@@ -1582,7 +1621,10 @@ class StockAnalysisPipeline:
             return context
 
         try:
-            df, source_name = self.fetcher_manager.get_daily_data(code, days=60)
+            df, source_name = self.fetcher_manager.get_daily_data(
+                code,
+                days=_technical_lookback_days(getattr(self, "config", None)),
+            )
         except Exception as exc:
             logger.warning("[%s] offshore daily fallback fetch failed: %s", code, exc)
             return context
@@ -2936,7 +2978,10 @@ class StockAnalysisPipeline:
         # === 批量预取实时行情（优化：避免每只股票都触发全量拉取）===
         # 只有股票数量 >= 5 时才进行预取，少量股票直接逐个查询更高效
         if len(stock_codes) >= 5:
-            daily_prefetch_count = self.fetcher_manager.prefetch_daily_klines(stock_codes, days=30)
+            daily_prefetch_count = self.fetcher_manager.prefetch_daily_klines(
+                stock_codes,
+                days=_technical_lookback_days(getattr(self, "config", None)),
+            )
             if daily_prefetch_count > 0:
                 logger.info(
                     "[prefetch] component=daily_kline_prefetch action=complete "

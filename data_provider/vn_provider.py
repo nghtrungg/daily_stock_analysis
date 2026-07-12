@@ -258,6 +258,81 @@ def get_vietnam_intraday_snapshot(ticker: str) -> dict:
     return snapshot
 
 
+def get_vietnam_market_flow_snapshot(
+    ticker: str,
+    *,
+    include_advanced: bool = False,
+) -> dict:
+    """Return VN active order flow plus optional foreign/proprietary flow.
+
+    Active buy/sell pressure is derived from the free intraday trade tape.
+    Foreign and proprietary flow are only requested from ``vnstock_data``
+    when explicitly enabled; the free ``vnstock`` package does not expose
+    those endpoints.
+    """
+    symbol = _normalize_ticker(ticker)
+    if not symbol:
+        return {}
+
+    errors: List[str] = []
+    try:
+        trades = _normalize_intraday_trades(_fetch_intraday_trades(symbol))
+    except Exception as exc:
+        trades = pd.DataFrame(columns=["time", "price", "volume", "side"])
+        errors.append(f"active_order_flow: {_short_error(exc)}")
+
+    buy_volume = _safe_float(trades.loc[trades["side"] == "buy", "volume"].sum()) or 0.0
+    sell_volume = _safe_float(trades.loc[trades["side"] == "sell", "volume"].sum()) or 0.0
+    unknown_volume = _safe_float(
+        trades.loc[~trades["side"].isin(["buy", "sell"]), "volume"].sum()
+    ) or 0.0
+    classified_volume = buy_volume + sell_volume
+    stock_flow: Dict[str, Any] = {
+        "active_buy_volume": buy_volume,
+        "active_sell_volume": sell_volume,
+        "active_unknown_volume": unknown_volume,
+        "active_net_volume": buy_volume - sell_volume,
+    }
+    if classified_volume > 0:
+        stock_flow["active_buy_ratio"] = round(buy_volume / classified_volume, 6)
+        stock_flow["active_sell_ratio"] = round(sell_volume / classified_volume, 6)
+        stock_flow["active_imbalance"] = round(
+            (buy_volume - sell_volume) / classified_volume,
+            6,
+        )
+
+    advanced: Dict[str, Any] = {}
+    if include_advanced:
+        try:
+            advanced = _fetch_vnstock_data_market_flows(symbol)
+        except Exception as exc:
+            errors.append(f"advanced_flow: {_short_error(exc)}")
+    for flow_name in ("foreign_flow", "proprietary_flow"):
+        flow = advanced.get(flow_name)
+        if isinstance(flow, dict):
+            prefix = "foreign" if flow_name == "foreign_flow" else "proprietary"
+            for key, value in flow.items():
+                if key not in {"time", "date"} and value is not None:
+                    stock_flow[f"{prefix}_{key}"] = value
+
+    coverage = {
+        "active_order_flow": "ok" if classified_volume > 0 else "missing",
+        "foreign_flow": "ok" if isinstance(advanced.get("foreign_flow"), dict) else "not_configured",
+        "proprietary_flow": "ok" if isinstance(advanced.get("proprietary_flow"), dict) else "not_configured",
+    }
+    payload: Dict[str, Any] = {
+        "ticker": symbol,
+        "market": "VN",
+        "source": "vnstock_data+vnstock" if advanced else "vnstock",
+        "as_of": datetime.now().isoformat(timespec="seconds"),
+        "stock_flow": stock_flow,
+        "coverage": coverage,
+    }
+    if errors:
+        payload["errors"] = errors
+    return payload
+
+
 def get_vietnam_company_profile(ticker: str) -> dict:
     """Return company profile and key valuation metrics for a VN ticker.
 
@@ -393,6 +468,70 @@ def _fetch_intraday_trades(symbol: str) -> pd.DataFrame:
         ("stock_intraday_data", lambda: _call_legacy_intraday_data(symbol)),
     ]
     return _first_non_empty_dataframe(attempts, "intraday trades")
+
+
+def _fetch_vnstock_data_market_flows(symbol: str) -> Dict[str, Any]:
+    """Fetch sponsor-only VN flows through the documented Unified UI."""
+    try:
+        from vnstock_data import Market
+    except ImportError:
+        return {}
+
+    equity = Market().equity(symbol)
+    result: Dict[str, Any] = {}
+    for key, method_name in (
+        ("foreign_flow", "foreign_flow"),
+        ("proprietary_flow", "proprietary_flow"),
+    ):
+        method = getattr(equity, method_name, None)
+        if not callable(method):
+            continue
+        try:
+            normalized = _normalize_vnstock_data_flow(method())
+        except Exception as exc:
+            logger.warning("vnstock_data %s failed for %s: %s", method_name, symbol, _short_error(exc))
+            continue
+        if normalized:
+            result[key] = normalized
+    return result
+
+
+def _normalize_vnstock_data_flow(data: Any) -> Dict[str, Any]:
+    """Normalize the documented buy/sell/net volume and value columns."""
+    frame = _to_dataframe(data)
+    if frame.empty:
+        return {}
+    normalized_columns = {_normalize_key(column): column for column in frame.columns}
+    time_column = _resolve_column(
+        normalized_columns,
+        ("time", "date", "trading_date", "tradingdate"),
+    )
+    if time_column is not None:
+        frame = frame.assign(
+            __flow_time=pd.to_datetime(frame[time_column], errors="coerce")
+        ).sort_values("__flow_time", na_position="first")
+    row = frame.iloc[-1]
+    aliases = {
+        "buy_volume": ("buy_vol", "buy_volume"),
+        "buy_value": ("buy_val", "buy_value"),
+        "sell_volume": ("sell_vol", "sell_volume"),
+        "sell_value": ("sell_val", "sell_value"),
+        "net_volume": ("net_vol", "net_volume"),
+        "net_value": ("net_val", "net_value"),
+    }
+    result: Dict[str, Any] = {}
+    if time_column is not None:
+        raw_time = row.get(time_column)
+        if raw_time is not None and not pd.isna(raw_time):
+            result["date"] = str(raw_time)
+    for target, field_aliases in aliases.items():
+        source = _resolve_column(normalized_columns, field_aliases)
+        if source is None:
+            continue
+        value = _safe_float(row.get(source))
+        if value is not None:
+            result[target] = value
+    return result
 
 
 def _fetch_realtime_quote(symbol: str) -> pd.DataFrame:
