@@ -21,6 +21,8 @@ from api.v1.schemas.decision_signals import (
     DecisionSignalOutcomeRunRequest,
     DecisionSignalOutcomeRunResponse,
     DecisionSignalOutcomeStatsResponse,
+    DecisionSignalMarket,
+    DecisionSignalSourceType,
     DecisionSignalReassessRequest,
     DecisionSignalReassessResponse,
     DecisionSignalStatusUpdateRequest,
@@ -291,6 +293,12 @@ def get_outcome_stats(
     horizons: Optional[List[str]] = Query(None),
     engine_version: Optional[str] = Query(None),
     statuses: Optional[List[str]] = Query(None),
+    action: Optional[str] = Query(None, max_length=16),
+    market: Optional[DecisionSignalMarket] = Query(None),
+    market_phase: Optional[str] = Query(None, max_length=24),
+    source_type: Optional[DecisionSignalSourceType] = Query(None),
+    data_quality_level: Optional[str] = Query(None, max_length=24),
+    source_agent: Optional[str] = Query(None, max_length=64),
 ) -> DecisionSignalOutcomeStatsResponse:
     service = DecisionSignalOutcomeService()
     try:
@@ -299,6 +307,12 @@ def get_outcome_stats(
                 horizons=horizons,
                 engine_version=engine_version,
                 statuses=statuses,
+                action=action,
+                market=market,
+                market_phase=market_phase,
+                source_type=source_type,
+                data_quality_level=data_quality_level,
+                source_agent=source_agent,
             )
         )
     except ValueError as exc:

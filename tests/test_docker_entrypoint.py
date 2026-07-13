@@ -26,6 +26,45 @@ def test_dockerfile_uses_entrypoint_to_drop_privileges() -> None:
     assert "USER dsa" not in dockerfile
 
 
+def test_docker_runtime_uses_vietnam_timezone() -> None:
+    dockerfile = (REPO_ROOT / "docker" / "Dockerfile").read_text(encoding="utf-8")
+    compose = yaml.safe_load(
+        (REPO_ROOT / "docker" / "docker-compose.yml").read_text(encoding="utf-8")
+    )
+
+    assert "ENV TZ=Asia/Ho_Chi_Minh" in dockerfile
+    assert "Asia/Shanghai" not in dockerfile
+    assert "ENV DATABASE_PATH=/app/data/stock_analysis_vn.db" in dockerfile
+    assert "TZ=Asia/Ho_Chi_Minh" in compose["x-common"]["environment"]
+
+
+def test_local_vietnam_environment_example_is_safe_by_default() -> None:
+    defaults = {}
+    for raw_line in (REPO_ROOT / ".env.example").read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        defaults[key] = value.split("#", 1)[0].strip()
+
+    assert defaults["STOCK_LIST"] == "VNM.VN,MBB.VN"
+    assert defaults["ENABLED_MARKETS"] == "vn"
+    assert defaults["REPORT_LANGUAGE"] == "vi"
+    assert defaults["REPORT_TYPE"] == "full"
+    assert defaults["SCHEDULE_TIME"] == "15:10"
+    assert defaults["SCHEDULE_TIMES"] == "09:20,15:10"
+    assert defaults["SCHEDULE_TIMEZONE"] == "Asia/Ho_Chi_Minh"
+    assert defaults["SCHEDULE_RUN_IMMEDIATELY"] == "false"
+    assert defaults["TRADING_DAY_CHECK_ENABLED"] == "true"
+    assert defaults["MARKET_REVIEW_ENABLED"] == "false"
+    assert defaults["DAILY_MARKET_CONTEXT_ENABLED"] == "false"
+    assert defaults["STOCK_INDEX_REMOTE_UPDATE_ENABLED"] == "false"
+    assert defaults["NOTIFICATION_TIMEZONE"] == "Asia/Ho_Chi_Minh"
+    assert defaults["MAX_WORKERS"] == "1"
+    assert defaults["ENABLE_VN_ADVANCED_FLOW"] == "false"
+    assert defaults["DATABASE_PATH"] == "./data/stock_analysis_vn.db"
+
+
 def test_dockerfile_bundles_default_alphasift_adapter() -> None:
     dockerfile = (REPO_ROOT / "docker" / "Dockerfile").read_text(encoding="utf-8")
     requirements = (REPO_ROOT / "requirements.txt").read_text(encoding="utf-8")

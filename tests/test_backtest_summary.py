@@ -46,6 +46,14 @@ class BacktestSummaryTestCase(unittest.TestCase):
 
         # ambiguous_rate denominator should be 2 (any target applicable)
         self.assertEqual(summary["ambiguous_rate"], 0.0)
+        self.assertEqual(summary["completion_rate_pct"], 100.0)
+        self.assertEqual(summary["metric_sample_counts"]["direction_accuracy"], 2)
+        self.assertEqual(summary["metric_sample_counts"]["stop_loss_hit_rate"], 1)
+        self.assertEqual(summary["metric_sample_counts"]["take_profit_hit_rate"], 1)
+        self.assertEqual(summary["metric_sample_counts"]["ambiguous_first_hit_rate"], 2)
+        self.assertEqual(summary["headline_horizon_days"], 5)
+        self.assertFalse(summary["is_headline_horizon"])
+        self.assertEqual(summary["metric_availability"]["buy_side_precision"]["status"], "unavailable")
 
 
 if __name__ == "__main__":

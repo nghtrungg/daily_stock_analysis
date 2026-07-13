@@ -25,6 +25,12 @@ const REQUEST_PHASE_LABELS: Record<ReportLanguage, Record<AnalysisPhase, string>
     intraday: '장중',
     postmarket: '장 마감 후',
   },
+  vi: {
+    auto: 'Tự động',
+    premarket: 'Trước giờ mở cửa',
+    intraday: 'Trong phiên',
+    postmarket: 'Sau giờ đóng cửa',
+  },
 };
 
 const MARKET_PHASE_LABELS: Record<ReportLanguage, Record<MarketPhaseValue, string>> = {
@@ -55,6 +61,15 @@ const MARKET_PHASE_LABELS: Record<ReportLanguage, Record<MarketPhaseValue, strin
     non_trading: '비거래일',
     unknown: '단계 불명',
   },
+  vi: {
+    premarket: 'Trước giờ mở cửa',
+    intraday: 'Trong phiên',
+    lunch_break: 'Nghỉ trưa',
+    closing_auction: 'Sắp đóng cửa',
+    postmarket: 'Sau giờ đóng cửa',
+    non_trading: 'Ngoài ngày giao dịch',
+    unknown: 'Không xác định',
+  },
 };
 
 const TEXT = {
@@ -72,6 +87,11 @@ const TEXT = {
     requestPrefix: '요청 단계',
     finalPrefix: '시장 단계',
     partialBar: '일봉 미완성',
+  },
+  vi: {
+    requestPrefix: 'Giai đoạn yêu cầu',
+    finalPrefix: 'Giai đoạn thị trường',
+    partialBar: 'Nến ngày chưa hoàn tất',
   },
 } as const;
 

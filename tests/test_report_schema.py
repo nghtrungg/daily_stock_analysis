@@ -130,6 +130,7 @@ class TestAnalyzerSchemaFallback(unittest.TestCase):
     def test_parse_response_continues_when_schema_fails(self) -> None:
         """When schema validation fails, analyzer continues with raw dict."""
         analyzer = GeminiAnalyzer()
+        analyzer._config_override = SimpleNamespace(report_language="zh")
         response = json.dumps({
             "stock_name": "贵州茅台",
             "sentiment_score": 150,  # invalid for schema
@@ -188,6 +189,7 @@ class TestAnalyzerSchemaFallback(unittest.TestCase):
 
     def test_parse_response_keeps_unknown_dashboard_fields(self) -> None:
         analyzer = GeminiAnalyzer()
+        analyzer._config_override = SimpleNamespace(report_language="zh")
         response = json.dumps({
             "stock_name": "贵州茅台",
             "sentiment_score": 72,
@@ -212,6 +214,7 @@ class TestAnalyzerSchemaFallback(unittest.TestCase):
 
     def test_parse_response_repairs_single_json_candidate(self) -> None:
         analyzer = GeminiAnalyzer()
+        analyzer._config_override = SimpleNamespace(report_language="zh")
         response = """```json
 {
   "stock_name": "贵州茅台",
@@ -229,6 +232,7 @@ class TestAnalyzerSchemaFallback(unittest.TestCase):
 
     def test_parse_response_accepts_single_generic_json_fence(self) -> None:
         analyzer = GeminiAnalyzer()
+        analyzer._config_override = SimpleNamespace(report_language="zh")
         response = """```
 {
   "stock_name": "贵州茅台",
@@ -247,6 +251,7 @@ class TestAnalyzerSchemaFallback(unittest.TestCase):
 
     def test_parse_response_repairs_nested_single_json_candidate(self) -> None:
         analyzer = GeminiAnalyzer()
+        analyzer._config_override = SimpleNamespace(report_language="zh")
         response = """```json
 {
   "stock_name": "贵州茅台",
@@ -360,6 +365,172 @@ class TestAnalyzerSchemaFallback(unittest.TestCase):
             }))
 
         self.assertEqual(getattr(context.exception, "details", {}).get("reason"), "parser_contract_failed")
+
+    def test_validate_json_response_rejects_han_leak_in_vietnamese_report(self) -> None:
+        analyzer = GeminiAnalyzer.__new__(GeminiAnalyzer)
+        analyzer._config_override = SimpleNamespace(generation_backend="litellm")
+
+        with self.assertRaises(Exception) as context:
+            analyzer._validate_json_response(
+                json.dumps({
+                    "sentiment_score": 70,
+                    "trend_prediction": "Tích cực",
+                    "operation_advice": "Nắm giữ",
+                    "analysis_summary": "Lợi好 chưa được dịch đầy đủ",
+                }, ensure_ascii=False),
+                report_language="vi",
+            )
+
+        self.assertEqual(
+            getattr(context.exception, "details", {}).get("reason"),
+            "report_language_mismatch",
+        )
+
+    def test_validate_json_response_accepts_clean_vietnamese_report(self) -> None:
+        analyzer = GeminiAnalyzer.__new__(GeminiAnalyzer)
+        analyzer._config_override = SimpleNamespace(generation_backend="litellm")
+
+        analyzer._validate_json_response(
+            json.dumps({
+                "stock_name": "Vinamilk",
+                "sentiment_score": 70,
+                "trend_prediction": "Tích cực",
+                "operation_advice": "Nắm giữ",
+                "decision_type": "hold",
+                "confidence_level": "Trung bình",
+                "dashboard": {
+                    "core_conclusion": {
+                        "one_sentence": "Tiếp tục theo dõi vùng hỗ trợ.",
+                        "signal_type": "Nắm giữ",
+                        "time_sensitivity": "Đánh giá sau phiên.",
+                        "position_advice": {
+                            "no_position": "Chờ tín hiệu xác nhận.",
+                            "has_position": "Duy trì tỷ trọng thận trọng.",
+                        },
+                    },
+                    "data_perspective": {},
+                    "intelligence": {
+                        "latest_news": "Chưa có tin mới đáng tin cậy.",
+                        "risk_alerts": [],
+                        "positive_catalysts": [],
+                        "earnings_outlook": "Cần theo dõi thêm.",
+                        "sentiment_summary": "Tâm lý trung lập.",
+                    },
+                    "battle_plan": {
+                        "sniper_points": {
+                            "ideal_buy": "Không áp dụng",
+                            "secondary_buy": "Không áp dụng",
+                            "stop_loss": "Không áp dụng",
+                            "take_profit": "Không áp dụng",
+                        },
+                        "position_strategy": {
+                            "suggested_position": "Tỷ trọng thấp",
+                            "entry_plan": "Chờ xác nhận.",
+                            "risk_control": "Tuân thủ điểm vô hiệu.",
+                        },
+                        "action_checklist": [],
+                    },
+                    "phase_decision": {
+                        "phase_context": {"phase": "postmarket"},
+                        "action_window": "Sau phiên",
+                        "immediate_action": "Theo dõi",
+                        "watch_conditions": [],
+                        "next_check_time": "Phiên kế tiếp",
+                        "confidence_reason": "Dữ liệu còn hạn chế.",
+                        "data_limitations": [],
+                    },
+                },
+                "analysis_summary": "Lợi nhuận tăng trưởng ổn định.",
+            }, ensure_ascii=False),
+            report_language="vi",
+        )
+
+    def test_validate_json_response_rejects_incomplete_vietnamese_dashboard(self) -> None:
+        analyzer = GeminiAnalyzer.__new__(GeminiAnalyzer)
+        analyzer._config_override = SimpleNamespace(generation_backend="litellm")
+
+        with self.assertRaises(Exception) as context:
+            analyzer._validate_json_response(
+                json.dumps({
+                    "sentiment_score": 70,
+                    "trend_prediction": "Tích cực",
+                    "operation_advice": "Nắm giữ",
+                    "analysis_summary": "Tóm tắt hợp lệ.",
+                    "dashboard": {},
+                }, ensure_ascii=False),
+                report_language="vi",
+            )
+
+        self.assertEqual(
+            getattr(context.exception, "details", {}).get("reason"),
+            "report_incomplete",
+        )
+        self.assertIn(
+            "dashboard.core_conclusion",
+            getattr(context.exception, "details", {}).get("message", ""),
+        )
+
+    def test_validate_json_response_rejects_structural_mismatch_in_vietnamese_report(self) -> None:
+        analyzer = GeminiAnalyzer.__new__(GeminiAnalyzer)
+        analyzer._config_override = SimpleNamespace(generation_backend="litellm")
+
+        with self.assertRaises(Exception) as context:
+            analyzer._validate_json_response(
+                json.dumps({
+                    "sentiment_score": 70,
+                    "trend_prediction": "Tích cực",
+                    "operation_advice": "Nắm giữ",
+                    "analysis_summary": "Tóm tắt hợp lệ.",
+                    "dashboard": {"core_conclusion": "Không đúng kiểu đối tượng"},
+                }, ensure_ascii=False),
+                report_language="vi",
+            )
+
+        self.assertEqual(
+            getattr(context.exception, "details", {}).get("reason"),
+            "report_schema_mismatch",
+        )
+
+    def test_vietnam_prompt_is_han_free_and_marks_prices_as_actual_vnd(self) -> None:
+        analyzer = GeminiAnalyzer.__new__(GeminiAnalyzer)
+        prompt = analyzer._format_vietnam_prompt(
+            {
+                "code": "VNM.VN",
+                "date": "2026-07-13",
+                "today": {"close": 56600.0, "ma_status": "弱势多头"},
+                "trend_analysis": {"signal_score": 68, "buy_signal": "买入"},
+            },
+            "Vinamilk",
+            news_context="2026-07-12: Lợi nhuận phục hồi\n风险标签",
+        )
+
+        self.assertIn("actual VND", prompt)
+        self.assertIn("56600.0", prompt)
+        self.assertNotRegex(prompt, r"[\u3400-\u9fff]")
+
+    def test_vietnam_prompt_drops_zero_relevance_news_before_han_sanitization(self) -> None:
+        analyzer = GeminiAnalyzer.__new__(GeminiAnalyzer)
+        news = """【VNM results】
+
+  1. Unrelated foreign-company lawsuit [2026-07-12]
+     Unrelated macro snippet.
+     关联度: macro_market_news; score=0; 依据: no direct identity match
+  2. Vinamilk earnings outlook (VNM) [2026-07-11]
+     Direct company evidence.
+     关联度: direct_company_news; score=100; 依据: ticker match
+"""
+
+        prompt = analyzer._format_vietnam_prompt(
+            {"code": "VNM.VN", "date": "2026-07-13", "today": {"close": 56600.0}},
+            "Vinamilk",
+            news_context=news,
+        )
+
+        self.assertNotIn("Unrelated foreign-company lawsuit", prompt)
+        self.assertIn("Vinamilk earnings outlook", prompt)
+        self.assertIn("Direct company evidence", prompt)
+        self.assertNotIn("score=0", prompt)
+        self.assertNotRegex(prompt, r"[\u3400-\u9fff]")
 
     def test_parse_response_falls_back_when_parser_contract_fails(self) -> None:
         analyzer = GeminiAnalyzer()

@@ -64,7 +64,7 @@ class TestStockIndexLoader(unittest.TestCase):
                 self.assertEqual(stock_index_loader.get_index_stock_name("700.HK"), "腾讯控股")
                 self.assertEqual(stock_index_loader.get_index_stock_name("aapl"), "苹果")
 
-    def test_default_candidate_paths_prefer_remote_cache(self):
+    def test_default_candidate_paths_use_bundled_vietnam_index(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             remote_cache = Path(temp_dir) / "data" / "cache" / "stocks.index.json"
             with patch.object(
@@ -74,9 +74,22 @@ class TestStockIndexLoader(unittest.TestCase):
             ):
                 paths = stock_index_loader.get_stock_index_candidate_paths()
 
+            self.assertNotIn(remote_cache, paths)
+            self.assertTrue(paths[0].as_posix().endswith("apps/dsa-web/public/stocks.index.json"))
+            self.assertTrue(paths[1].as_posix().endswith("static/stocks.index.json"))
+
+    def test_candidate_paths_include_remote_cache_when_explicitly_enabled(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            remote_cache = Path(temp_dir) / "data" / "cache" / "stocks.index.json"
+            config = type("ConfigStub", (), {"stock_index_remote_update_enabled": True})()
+            with patch.object(
+                stock_index_loader,
+                "get_remote_stock_index_cache_path",
+                return_value=remote_cache,
+            ), patch("src.config.get_config", return_value=config):
+                paths = stock_index_loader.get_stock_index_candidate_paths()
+
             self.assertEqual(paths[0], remote_cache)
-            self.assertTrue(paths[1].as_posix().endswith("apps/dsa-web/public/stocks.index.json"))
-            self.assertTrue(paths[2].as_posix().endswith("static/stocks.index.json"))
 
     def test_get_stock_name_index_map_is_cached_after_first_load(self):
         with tempfile.TemporaryDirectory() as temp_dir:

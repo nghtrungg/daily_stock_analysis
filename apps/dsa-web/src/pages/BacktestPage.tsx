@@ -179,6 +179,17 @@ function phaseBreakdownText(metrics: PerformanceMetrics, language: UiLanguage): 
   return parts;
 }
 
+function performanceMetricText(
+  metrics: PerformanceMetrics,
+  key: string,
+  value: number | null | undefined,
+): string {
+  if (metrics.metricAvailability?.[key]?.status === 'unavailable') {
+    return '-- · n=--';
+  }
+  return `${pct(value)} · n=${metrics.metricSampleCounts?.[key] ?? 0}`;
+}
+
 // ============ Performance Card ============
 
 const PerformanceCard: React.FC<{ metrics: PerformanceMetrics; title: string; language: UiLanguage }> = ({ metrics, title, language }) => {
@@ -189,12 +200,12 @@ const PerformanceCard: React.FC<{ metrics: PerformanceMetrics; title: string; la
       <div className="mb-3">
         <span className="label-uppercase">{title}</span>
       </div>
-      <MetricRow label={text.directionAccuracy} value={pct(metrics.directionAccuracyPct)} accent />
-      <MetricRow label={text.winRate} value={pct(metrics.winRatePct)} accent />
-      <MetricRow label={text.avgSimulatedReturn} value={pct(metrics.avgSimulatedReturnPct)} />
-      <MetricRow label={text.avgStockReturn} value={pct(metrics.avgStockReturnPct)} />
-      <MetricRow label={text.stopLossTriggerRate} value={pct(metrics.stopLossTriggerRate)} />
-      <MetricRow label={text.takeProfitTriggerRate} value={pct(metrics.takeProfitTriggerRate)} />
+      <MetricRow label={text.directionAccuracy} value={performanceMetricText(metrics, 'directionAccuracy', metrics.directionAccuracyPct)} accent />
+      <MetricRow label={text.winRate} value={performanceMetricText(metrics, 'winRate', metrics.winRatePct)} accent />
+      <MetricRow label={text.avgSimulatedReturn} value={performanceMetricText(metrics, 'averageSimulatedReturn', metrics.avgSimulatedReturnPct)} />
+      <MetricRow label={text.avgStockReturn} value={performanceMetricText(metrics, 'averageUnderlyingReturn', metrics.avgStockReturnPct)} />
+      <MetricRow label={text.stopLossTriggerRate} value={performanceMetricText(metrics, 'stopLossHitRate', metrics.stopLossTriggerRate)} />
+      <MetricRow label={text.takeProfitTriggerRate} value={performanceMetricText(metrics, 'takeProfitHitRate', metrics.takeProfitTriggerRate)} />
       <MetricRow label={text.avgDaysToFirstHit} value={metrics.avgDaysToFirstHit != null ? metrics.avgDaysToFirstHit.toFixed(1) : '--'} />
       <div className="backtest-metric-footer">
         <span className="text-xs text-muted-text">{text.evaluationCount}</span>

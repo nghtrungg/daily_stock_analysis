@@ -226,9 +226,12 @@ export const SettingsField: React.FC<SettingsFieldProps> = ({
   const helpContent = getSettingsHelpContent(schema?.helpKey, schema?.description, language);
   const localizationKey = schema?.key ?? item.key;
   const fallbackTitle = schema?.title ?? item.key;
+  const fallbackTitleContainsHan = /[\u3400-\u9fff]/u.test(fallbackTitle);
   const title = language === 'zh'
     ? getFieldTitleZh(localizationKey, getFieldTitleZh(item.key, fallbackTitle))
-    : fallbackTitle;
+    : fallbackTitleContainsHan
+      ? helpContent?.title ?? fallbackTitle
+      : fallbackTitle;
   const description = language === 'en'
     ? helpContent?.summary ?? schema?.description ?? ''
     : getFieldDescriptionZh(localizationKey, getFieldDescriptionZh(item.key, schema?.description));

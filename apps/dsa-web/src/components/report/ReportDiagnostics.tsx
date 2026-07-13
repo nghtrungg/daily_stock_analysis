@@ -123,6 +123,36 @@ const TEXT = {
       skipped: '건너뜀',
     },
   },
+  vi: {
+    eyebrow: 'CHẨN ĐOÁN VẬN HÀNH',
+    title: 'Trạng thái vận hành',
+    loading: 'Đang tải chẩn đoán...',
+    unavailable: 'Không có chẩn đoán vận hành',
+    noComponents: 'Không có chẩn đoán thành phần',
+    components: 'Luồng chính',
+    advanced: 'Trường nâng cao',
+    copy: 'Sao chép chẩn đoán',
+    copied: 'Đã sao chép',
+    scope: 'Luồng lấy dữ liệu / LLM / lưu / thông báo',
+    trace: 'Trace',
+    task: 'Task',
+    query: 'Query',
+    trigger: 'Nguồn kích hoạt',
+    overall: {
+      normal: 'Bình thường',
+      degraded: 'Suy giảm',
+      failed: 'Thất bại',
+      unknown: 'Không xác định',
+    },
+    component: {
+      ok: 'Bình thường',
+      degraded: 'Lỗi gần đây',
+      failed: 'Thất bại',
+      unknown: 'Không xác định',
+      not_configured: 'Chưa cấu hình',
+      skipped: 'Đã bỏ qua',
+    },
+  },
 } as const;
 
 const OVERALL_STATUS_STYLE: Record<RunDiagnosticStatus, { variant: BadgeVariant; tone: StatusTone }> = {
@@ -170,7 +200,7 @@ export const ReportDiagnostics: React.FC<ReportDiagnosticsProps> = ({
 }) => {
   const reportLanguage = normalizeReportLanguage(language);
   const text = TEXT[reportLanguage];
-  const runFlowText = UI_TEXT[reportLanguage === 'ko' ? 'en' : reportLanguage];
+  const runFlowText = UI_TEXT[reportLanguage === 'zh' ? 'zh' : 'en'];
   const [fetchState, setFetchState] = useState<{
     recordId?: number;
     summary: RunDiagnosticSummary | null;

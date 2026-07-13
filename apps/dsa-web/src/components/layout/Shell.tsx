@@ -6,7 +6,6 @@ import { Drawer } from '../common/Drawer';
 import { SidebarNav } from './SidebarNav';
 import { cn } from '../../utils/cn';
 import { ThemeToggle } from '../theme/ThemeToggle';
-import { UiLanguageToggle } from '../i18n/UiLanguageToggle';
 import { useUiLanguage } from '../../contexts/UiLanguageContext';
 
 type ShellProps = {
@@ -47,7 +46,6 @@ export const Shell: React.FC<ShellProps> = ({ children }) => {
           <Menu className="h-5 w-5" />
         </button>
         <div className="pointer-events-auto flex items-center gap-2">
-          <UiLanguageToggle />
           <ThemeToggle />
         </div>
       </div>

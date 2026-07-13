@@ -129,6 +129,22 @@ describe('AnalysisContextSummary', () => {
     expect(screen.getByText(/fundamentals: Fetch failed/)).toBeInTheDocument();
   });
 
+  it('localizes analysis input status for Vietnamese reports', () => {
+    render(<AnalysisContextSummary overview={overview} language="vi" />);
+
+    const panel = screen.getByTestId('analysis-context-summary');
+    expect(within(panel).getAllByText('Khối dữ liệu đầu vào')[0]).toBeVisible();
+    expect(within(panel).getAllByText('Có sẵn 1')[0]).toBeVisible();
+    expect(within(panel).getAllByText('Thiếu 1')[0]).toBeVisible();
+    expect(within(panel).getAllByText('Tải thất bại 1')[0]).toBeVisible();
+    expect(within(panel).getAllByText('Chất lượng 82/100 Khả dụng')[0]).toBeVisible();
+
+    fireEvent.click(within(panel).getAllByText('Khối dữ liệu đầu vào')[0]);
+
+    expect(screen.getByText('Hạn chế dữ liệu:')).toBeInTheDocument();
+    expect(screen.getByText(/cơ bản: Tải thất bại/)).toBeInTheDocument();
+  });
+
   it('surfaces degraded non-zero states in the collapsed summary', () => {
     const degradedOverview: AnalysisContextPackOverview = {
       ...overview,

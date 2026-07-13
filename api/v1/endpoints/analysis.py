@@ -75,6 +75,7 @@ from src.market_phase_summary import (
     rebuild_market_phase_summary_for_stock_code,
 )
 from src.services.stock_code_utils import is_code_like, resolve_index_stock_code_for_analysis
+from src.services.market_symbol_utils import is_vn_market_symbol
 from src.report_language import get_localized_stock_name, normalize_report_language
 from src.schemas.decision_action import build_action_fields
 from src.services.name_to_code_resolver import resolve_name_to_code
@@ -206,7 +207,27 @@ def _extract_guardrail_reason(raw_result: Any) -> Optional[str]:
 
 
 def _invalid_analysis_input_error() -> HTTPException:
-    return api_error(400, "validation_error", "请输入有效的股票代码或股票名称")
+    return api_error(400, "validation_error", "Enter a valid Vietnam stock code or company name")
+
+
+def _enforce_enabled_market_scope(stock_codes: list[str], config: Config) -> None:
+    """Reject foreign-market inputs before queueing or network access."""
+    enabled = {
+        str(market).strip().lower()
+        for market in (getattr(config, "enabled_markets", None) or [])
+        if str(market).strip()
+    }
+    if enabled != {"vn"}:
+        return
+
+    rejected = [code for code in stock_codes if not is_vn_market_symbol(code)]
+    if rejected:
+        raise api_error(
+            400,
+            "market_not_enabled",
+            "This local installation accepts Vietnam symbols only. Use an explicit .VN ticker.",
+            detail={"rejected_stock_codes": rejected, "enabled_markets": ["vn"]},
+        )
 
 
 def _is_obviously_invalid_analysis_input(text: str) -> bool:
@@ -324,11 +345,12 @@ def trigger_analysis(
             unique_codes.append(code)
     
     stock_codes = unique_codes
+    _enforce_enabled_market_scope(stock_codes, config)
 
     # Limit the number of stocks in a single request to prevent DoS
     MAX_BATCH_SIZE = 50
     if len(stock_codes) > MAX_BATCH_SIZE:
-        raise api_error(400, "validation_error", f"单次分析请求最多支持 {MAX_BATCH_SIZE} 只股票")
+        raise api_error(400, "validation_error", f"A single analysis request supports at most {MAX_BATCH_SIZE} stocks")
 
     if not stock_codes:
         raise api_error(400, "validation_error", "股票代码不能为空或仅包含空白字符")
@@ -531,6 +553,18 @@ def trigger_market_review(
     config: Config = Depends(get_config_dep),
 ) -> MarketReviewAccepted:
     """Trigger market review from Web/API without blocking the request."""
+    enabled_markets = {
+        str(market).strip().lower()
+        for market in (getattr(config, "enabled_markets", None) or [])
+        if str(market).strip()
+    }
+    if enabled_markets == {"vn"}:
+        raise api_error(
+            501,
+            "vietnam_market_review_not_supported",
+            "Vietnam market review is disabled because the legacy implementation uses non-Vietnam indices.",
+        )
+
     request = request or MarketReviewRequest()
 
     runtime_config = _with_request_report_language(

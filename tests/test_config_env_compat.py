@@ -310,6 +310,7 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
                 "STOCK_LIST": "600519",
                 "SCHEDULE_TIME": "18:00",
                 "SCHEDULE_TIMES": "15:10,09:20,15:10",
+                "SCHEDULE_TIMEZONE": "Asia/Ho_Chi_Minh",
             },
             clear=True,
         ):
@@ -317,6 +318,7 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
 
         self.assertEqual(config.schedule_time, "18:00")
         self.assertEqual(config.schedule_times, ["09:20", "15:10"])
+        self.assertEqual(config.schedule_timezone, "Asia/Ho_Chi_Minh")
 
         with patch.dict(
             os.environ,

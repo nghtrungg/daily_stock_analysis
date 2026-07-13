@@ -25,10 +25,13 @@ function resolveWindowBackgroundColor() {
 const isWindows = process.platform === 'win32';
 const isMac = process.platform === 'darwin';
 const appRootDev = path.resolve(__dirname, '..', '..');
-const GITHUB_OWNER = 'ZhuLinsen';
-const GITHUB_REPO = 'daily_stock_analysis';
-const RELEASES_PAGE_URL = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases`;
-const LATEST_RELEASE_API_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
+const LOCAL_PRODUCT_NAME = 'Daily Stock Analysis Vietnam';
+const DESKTOP_UPDATES_ENABLED = false;
+const DESKTOP_UPDATE_DISABLED_MESSAGE = 'Desktop updates are disabled for this local Vietnam build.';
+const GITHUB_OWNER = '';
+const GITHUB_REPO = '';
+const RELEASES_PAGE_URL = '';
+const LATEST_RELEASE_API_URL = '';
 const DEFAULT_REQUEST_TIMEOUT_MS = 5000;
 const DESKTOP_UPDATE_BACKUP_DIR = '.dsa-desktop-update-backup';
 const DESKTOP_UPDATE_BACKUP_MANIFEST_FILE = 'runtime-state.json';
@@ -49,9 +52,9 @@ const MAC_DESKTOP_SYSTEM_PATH_ENTRIES = Object.freeze([
 const DESKTOP_BACKEND_PATH_DELIMITER = isWindows ? ';' : ':';
 const DESKTOP_UPDATE_RUNTIME_RELATIVE_FILES = Object.freeze([
   '.env',
-  path.join('data', 'stock_analysis.db'),
-  path.join('data', 'stock_analysis.db-wal'),
-  path.join('data', 'stock_analysis.db-shm'),
+  path.join('data', 'stock_analysis_vn.db'),
+  path.join('data', 'stock_analysis_vn.db-wal'),
+  path.join('data', 'stock_analysis_vn.db-shm'),
   path.join('data', 'alphasift', 'hotspots.json'),
   path.join('data', 'alphasift', 'hotspot.history.jsonl'),
   path.join('data', 'alphasift', 'hotspot_details'),
@@ -1342,27 +1345,16 @@ function isWindowsNsisInstalledApp() {
   }
 
   const appDir = path.dirname(app.getPath('exe'));
-  return fs.existsSync(path.join(appDir, 'Uninstall Daily Stock Analysis.exe'));
+  return fs.existsSync(path.join(appDir, `Uninstall ${LOCAL_PRODUCT_NAME}.exe`));
 }
 
 function getElectronAutoUpdater() {
-  if (electronAutoUpdater !== undefined) {
-    return electronAutoUpdater;
-  }
-
-  if (!isWindowsNsisInstalledApp()) {
+  if (!DESKTOP_UPDATES_ENABLED) {
     electronAutoUpdater = null;
-    return electronAutoUpdater;
+    return null;
   }
 
-  try {
-    electronAutoUpdater = require('electron-updater').autoUpdater;
-  } catch (error) {
-    electronAutoUpdater = null;
-    logLine(`[update] electron-updater unavailable: ${error instanceof Error ? error.message : String(error)}`);
-  }
-
-  return electronAutoUpdater;
+  return null;
 }
 
 function canUseElectronAutoUpdater() {
@@ -1397,6 +1389,9 @@ function buildElectronUpdaterState(status, updateInfo = {}, extraState = {}) {
 }
 
 function sanitizeReleaseUrl(candidateUrl) {
+  if (!DESKTOP_UPDATES_ENABLED) {
+    return '';
+  }
   if (typeof candidateUrl !== 'string' || !candidateUrl.trim()) {
     return RELEASES_PAGE_URL;
   }
@@ -1463,6 +1458,9 @@ async function maybePromptDesktopUpdate(state) {
 }
 
 async function installDownloadedUpdate() {
+  if (!DESKTOP_UPDATES_ENABLED) {
+    throw new Error(DESKTOP_UPDATE_DISABLED_MESSAGE);
+  }
   const updater = getElectronAutoUpdater();
   if (!updater) {
     throw new Error('当前运行模式不支持自动安装更新。');
@@ -1690,6 +1688,16 @@ async function performElectronUpdaterCheck({ manual = false } = {}) {
 }
 
 async function performDesktopUpdateCheck({ manual = false, notify = false } = {}) {
+  if (!DESKTOP_UPDATES_ENABLED) {
+    return setDesktopUpdateState({
+      status: UPDATE_STATUS.IDLE,
+      updateMode: UPDATE_MODE.MANUAL,
+      currentVersion: resolveDesktopVersion(),
+      checkedAt: new Date().toISOString(),
+      message: DESKTOP_UPDATE_DISABLED_MESSAGE,
+    });
+  }
+
   if (canUseElectronAutoUpdater()) {
     return performElectronUpdaterCheck({ manual, notify });
   }
@@ -1737,7 +1745,14 @@ ipcMain.handle('desktop:get-update-state', () => desktopUpdateState);
 ipcMain.handle('desktop:check-for-updates', () => performDesktopUpdateCheck({ manual: true }));
 ipcMain.handle('desktop:install-downloaded-update', () => installDownloadedUpdate());
 ipcMain.handle('desktop:open-release-page', async (_event, releaseUrl) => {
-  await shell.openExternal(sanitizeReleaseUrl(releaseUrl));
+  if (!DESKTOP_UPDATES_ENABLED) {
+    return false;
+  }
+  const safeReleaseUrl = sanitizeReleaseUrl(releaseUrl);
+  if (!safeReleaseUrl) {
+    return false;
+  }
+  await shell.openExternal(safeReleaseUrl);
   return true;
 });
 
@@ -1764,8 +1779,8 @@ async function createWindow() {
   setDesktopUpdateState({
     status: restoreFailed ? UPDATE_STATUS.ERROR : UPDATE_STATUS.IDLE,
     currentVersion: resolveDesktopVersion(),
-    updateMode: restoreFailed ? UPDATE_MODE.MANUAL : UPDATE_MODE.AUTO,
-    message: restoreErrorMessage,
+    updateMode: UPDATE_MODE.MANUAL,
+    message: restoreErrorMessage || DESKTOP_UPDATE_DISABLED_MESSAGE,
   });
   const startupStartedAt = Date.now();
   const logStartup = (message) => {
@@ -1843,7 +1858,7 @@ async function createWindow() {
   logStartup(`Using port ${port} (selected in ${Date.now() - portFindStartedAt}ms)`);
   logStartup(`App directory=${appDir}`);
 
-  const dbPath = path.join(appDir, 'data', 'stock_analysis.db');
+  const dbPath = path.join(appDir, 'data', 'stock_analysis_vn.db');
   const logDir = path.join(appDir, 'logs');
 
   try {
@@ -1928,7 +1943,7 @@ async function createWindow() {
     await mainWindow.loadURL(mainPageUrl);
     logStartup(`Main page loadURL resolved in ${Date.now() - mainPageStartedAt}ms url=${mainPageUrl}`);
     logStartup(`Main UI loaded in ${Date.now() - startupStartedAt}ms`);
-    if (!restoreFailed) {
+    if (!restoreFailed && DESKTOP_UPDATES_ENABLED) {
       void performDesktopUpdateCheck({ notify: true });
     }
   } catch (error) {
@@ -1959,6 +1974,9 @@ app.on('before-quit', () => {
 
 module.exports = {
   DEFAULT_REQUEST_TIMEOUT_MS,
+  DESKTOP_UPDATES_ENABLED,
+  DESKTOP_UPDATE_DISABLED_MESSAGE,
+  LOCAL_PRODUCT_NAME,
   GITHUB_OWNER,
   GITHUB_REPO,
   LATEST_RELEASE_API_URL,

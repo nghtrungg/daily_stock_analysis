@@ -33,6 +33,8 @@ from src.utils.sanitize import sanitize_decision_signal_text
 logger = logging.getLogger(__name__)
 
 DECISION_SIGNAL_OUTCOME_ENGINE_VERSION = "decision-signal-v1"
+PREDICTION_MEASUREMENT_CONTRACT_VERSION = "prediction-measurement-v1"
+HEADLINE_OUTCOME_HORIZON = "5d"
 SUPPORTED_OUTCOME_HORIZONS = {
     "1d": 1,
     "3d": 3,
@@ -302,6 +304,12 @@ class DecisionSignalOutcomeService:
         horizons: Optional[List[str]] = None,
         engine_version: Optional[str] = None,
         statuses: Optional[List[str]] = None,
+        action: Optional[str] = None,
+        market: Optional[str] = None,
+        market_phase: Optional[str] = None,
+        source_type: Optional[str] = None,
+        data_quality_level: Optional[str] = None,
+        source_agent: Optional[str] = None,
     ) -> Dict[str, Any]:
         engine_version_norm = str(engine_version or DECISION_SIGNAL_OUTCOME_ENGINE_VERSION).strip()
         horizons_norm = self._normalize_horizons(horizons)
@@ -310,12 +318,30 @@ class DecisionSignalOutcomeService:
             if statuses
             else list(DEFAULT_STATS_STATUSES)
         )
+        action_norm = DecisionSignalService._normalize_optional_action(action)
+        market_norm = DecisionSignalService._normalize_optional_market(market)
+        market_phase_norm = self._optional_filter_text(market_phase, "market_phase", max_length=24)
+        source_type_norm = self._normalize_optional_enum(source_type, SOURCE_TYPES, "source_type")
+        data_quality_norm = self._optional_filter_text(
+            data_quality_level,
+            "data_quality_level",
+            max_length=24,
+            lowercase=True,
+        )
+        source_agent_norm = self._optional_filter_text(source_agent, "source_agent", max_length=64)
         rows = self.repo.list_stats_rows(
             engine_version=engine_version_norm,
             horizons=horizons_norm,
             statuses=statuses_norm,
+            action=action_norm,
+            market=market_norm,
+            market_phase=market_phase_norm,
+            source_type=source_type_norm,
+            data_quality_level=data_quality_norm,
+            source_agent=source_agent_norm,
         )
         dimensions = (
+            "horizon",
             "action",
             "market",
             "market_phase",
@@ -329,12 +355,49 @@ class DecisionSignalOutcomeService:
             dimension: self._breakdown(rows, dimension)
             for dimension in dimensions
         }
+        generation_source_available = self._dimension_available(rows, "source_agent")
+        breakdowns["generation_source"] = (
+            self._breakdown(rows, "source_agent", public_dimension="generation_source")
+            if generation_source_available
+            else []
+        )
+        breakdowns["model"] = []
+        breakdown_availability = {
+            dimension: self._breakdown_availability(rows, dimension)
+            for dimension in dimensions
+        }
+        breakdown_availability["generation_source"] = self._breakdown_availability(rows, "source_agent")
+        breakdown_availability["model"] = {
+            "status": "unavailable",
+            "reason": "historical_outcomes_do_not_store_model",
+        }
+        filters = {
+            "action": action_norm,
+            "market": market_norm,
+            "market_phase": market_phase_norm,
+            "source_type": source_type_norm,
+            "data_quality_level": data_quality_norm,
+            "source_agent": source_agent_norm,
+        }
         return {
             **self._aggregate(rows),
             "engine_version": engine_version_norm,
+            "headline_horizon": HEADLINE_OUTCOME_HORIZON,
             "horizons": horizons_norm,
             "statuses": statuses_norm,
+            "filters": filters,
             "breakdowns": breakdowns,
+            "breakdown_availability": breakdown_availability,
+            "version_context": {
+                "measurement_contract_version": PREDICTION_MEASUREMENT_CONTRACT_VERSION,
+                "outcome_engine_version": engine_version_norm,
+                "predictor_version": None,
+                "predictor_version_status": "unavailable",
+                "predictor_version_reason": (
+                    "historical_outcomes_do_not_store_the_complete_predictor_contract"
+                ),
+                "generation_source_dimension": "source_agent",
+            },
         }
 
     def get_feedback(self, signal_id: int) -> Dict[str, Any]:
@@ -628,6 +691,23 @@ class DecisionSignalOutcomeService:
         return text
 
     @staticmethod
+    def _optional_filter_text(
+        value: Any,
+        field_name: str,
+        *,
+        max_length: int,
+        lowercase: bool = False,
+    ) -> Optional[str]:
+        if value in (None, ""):
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        if len(text) > max_length:
+            raise ValueError(f"{field_name} must be at most {max_length} characters")
+        return text.lower() if lowercase else text
+
+    @staticmethod
     def _serialize_outcome(row: DecisionSignalOutcomeRecord) -> Dict[str, Any]:
         return {
             "id": row.id,
@@ -670,7 +750,13 @@ class DecisionSignalOutcomeService:
             "updated_at": row.updated_at.isoformat() if row.updated_at else None,
         }
 
-    def _breakdown(self, rows: List[DecisionSignalOutcomeRecord], dimension: str) -> List[Dict[str, Any]]:
+    def _breakdown(
+        self,
+        rows: List[DecisionSignalOutcomeRecord],
+        dimension: str,
+        *,
+        public_dimension: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
         grouped: Dict[str, List[DecisionSignalOutcomeRecord]] = defaultdict(list)
         for row in rows:
             value = getattr(row, dimension, None)
@@ -678,37 +764,175 @@ class DecisionSignalOutcomeService:
             grouped[key].append(row)
         buckets = [
             {
-                "dimension": dimension,
+                "dimension": public_dimension or dimension,
                 "value": value,
                 **self._aggregate(bucket_rows),
             }
             for value, bucket_rows in grouped.items()
         ]
+        if dimension == "horizon":
+            horizon_order = {"5d": 0, "1d": 1, "3d": 2, "10d": 3}
+            return sorted(
+                buckets,
+                key=lambda item: (horizon_order.get(str(item["value"]), 99), str(item["value"])),
+            )
         return sorted(buckets, key=lambda item: (-int(item["total"]), str(item["value"])))
 
     @staticmethod
-    def _aggregate(rows: List[DecisionSignalOutcomeRecord]) -> Dict[str, Any]:
+    def _dimension_available(rows: List[DecisionSignalOutcomeRecord], dimension: str) -> bool:
+        return any(getattr(row, dimension, None) not in (None, "", "unknown") for row in rows)
+
+    @classmethod
+    def _breakdown_availability(
+        cls,
+        rows: List[DecisionSignalOutcomeRecord],
+        dimension: str,
+    ) -> Dict[str, Optional[str]]:
+        if not rows:
+            return {"status": "unavailable", "reason": "no_outcome_rows"}
+        if not cls._dimension_available(rows, dimension):
+            return {"status": "unavailable", "reason": "dimension_not_recorded"}
+        return {"status": "available", "reason": None}
+
+    @staticmethod
+    def _available_metric(
+        value: float,
+        *,
+        unit: str,
+        numerator: Optional[float],
+        denominator: Optional[int],
+        sample_count: int,
+    ) -> Dict[str, Any]:
+        return {
+            "status": "available",
+            "value": value,
+            "unit": unit,
+            "numerator": numerator,
+            "denominator": denominator,
+            "sample_count": sample_count,
+            "unavailable_reason": None,
+        }
+
+    @staticmethod
+    def _unavailable_metric(*, unit: str, reason: str, sample_count: int = 0) -> Dict[str, Any]:
+        return {
+            "status": "unavailable",
+            "value": None,
+            "unit": unit,
+            "numerator": None,
+            "denominator": 0,
+            "sample_count": sample_count,
+            "unavailable_reason": reason,
+        }
+
+    @classmethod
+    def _rate_metric(cls, numerator: int, denominator: int) -> Dict[str, Any]:
+        if denominator <= 0:
+            return cls._unavailable_metric(unit="percent", reason="zero_denominator")
+        value = round(numerator / denominator * 100, 2)
+        return cls._available_metric(
+            value,
+            unit="percent",
+            numerator=numerator,
+            denominator=denominator,
+            sample_count=denominator,
+        )
+
+    @classmethod
+    def _aggregate(cls, rows: List[DecisionSignalOutcomeRecord]) -> Dict[str, Any]:
         total = len(rows)
-        completed = [row for row in rows if row.eval_status == "completed"]
+        eligible = [
+            row
+            for row in rows
+            if cls._direction_for_action(row.action) is not None
+            and row.horizon in SUPPORTED_OUTCOME_HORIZONS
+        ]
+        completed = [row for row in eligible if row.eval_status == "completed"]
         unable = [row for row in rows if row.eval_status == "unable"]
+        unable_eligible = [row for row in eligible if row.eval_status == "unable"]
+        non_directional = sum(1 for row in rows if row.unable_reason == "non_directional_action")
         hit = sum(1 for row in completed if row.outcome == "hit")
         miss = sum(1 for row in completed if row.outcome == "miss")
         neutral = sum(1 for row in completed if row.outcome == "neutral")
         denominator = hit + miss
+        buy_rows = [row for row in completed if row.action in {"buy", "add"}]
+        sell_rows = [row for row in completed if row.action in {"reduce", "sell", "avoid"}]
+        buy_hit = sum(1 for row in buy_rows if row.outcome == "hit")
+        buy_miss = sum(1 for row in buy_rows if row.outcome == "miss")
+        sell_hit = sum(1 for row in sell_rows if row.outcome == "hit")
+        sell_miss = sum(1 for row in sell_rows if row.outcome == "miss")
         returns = [
             float(row.stock_return_pct)
             for row in completed
             if row.stock_return_pct is not None
         ]
         unable_reasons = Counter(row.unable_reason or "unknown" for row in unable)
+        actionable_coverage = cls._rate_metric(len(eligible), total)
+        completion_rate = cls._rate_metric(len(completed), len(eligible))
+        directional_accuracy = cls._rate_metric(hit, denominator)
+        buy_precision = cls._rate_metric(buy_hit, buy_hit + buy_miss)
+        sell_precision = cls._rate_metric(sell_hit, sell_hit + sell_miss)
+        neutral_rate = cls._rate_metric(neutral, len(completed))
+        if returns:
+            return_sum = round(sum(returns), 4)
+            avg_return = cls._available_metric(
+                round(return_sum / len(returns), 4),
+                unit="percent",
+                numerator=return_sum,
+                denominator=len(returns),
+                sample_count=len(returns),
+            )
+        else:
+            avg_return = cls._unavailable_metric(unit="percent", reason="no_completed_returns")
+        metrics = {
+            "total_eligible_predictions": cls._available_metric(
+                len(eligible), unit="count", numerator=len(eligible), denominator=total, sample_count=total
+            ),
+            "completed_evaluations": cls._available_metric(
+                len(completed), unit="count", numerator=len(completed), denominator=len(eligible), sample_count=len(eligible)
+            ),
+            "unable_evaluations": cls._available_metric(
+                len(unable_eligible), unit="count", numerator=len(unable_eligible), denominator=len(eligible), sample_count=len(eligible)
+            ),
+            "actionable_coverage": actionable_coverage,
+            "completion_rate": completion_rate,
+            "directional_accuracy": directional_accuracy,
+            "buy_precision": buy_precision,
+            "sell_precision": sell_precision,
+            "win_rate": directional_accuracy,
+            "neutral_rate": neutral_rate,
+            "average_underlying_return": avg_return,
+            "average_simulated_return": cls._unavailable_metric(
+                unit="percent", reason="decision_signal_outcomes_do_not_store_simulated_returns"
+            ),
+            "stop_loss_hit_rate": cls._unavailable_metric(
+                unit="percent", reason="decision_signal_outcomes_do_not_store_target_hits"
+            ),
+            "take_profit_hit_rate": cls._unavailable_metric(
+                unit="percent", reason="decision_signal_outcomes_do_not_store_target_hits"
+            ),
+            "ambiguous_first_hit_rate": cls._unavailable_metric(
+                unit="percent", reason="decision_signal_outcomes_do_not_store_first_hit_order"
+            ),
+        }
         return {
             "total": total,
+            "eligible": len(eligible),
             "completed": len(completed),
             "unable": len(unable),
+            "unable_eligible": len(unable_eligible),
+            "non_directional": non_directional,
             "hit": hit,
             "miss": miss,
             "neutral": neutral,
-            "hit_rate_pct": round(hit / denominator * 100, 2) if denominator else None,
-            "avg_stock_return_pct": round(sum(returns) / len(returns), 4) if returns else None,
+            "hit_rate_pct": directional_accuracy["value"],
+            "actionable_coverage_pct": actionable_coverage["value"],
+            "completion_rate_pct": completion_rate["value"],
+            "directional_accuracy_pct": directional_accuracy["value"],
+            "buy_precision_pct": buy_precision["value"],
+            "sell_precision_pct": sell_precision["value"],
+            "neutral_rate_pct": neutral_rate["value"],
+            "avg_stock_return_pct": avg_return["value"],
             "unable_reasons": dict(sorted(unable_reasons.items())),
+            "metrics": metrics,
         }

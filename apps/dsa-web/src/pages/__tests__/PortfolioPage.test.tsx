@@ -97,7 +97,7 @@ vi.mock('recharts', () => ({
 type AccountItem = {
   id: number;
   name: string;
-  market?: 'cn' | 'hk' | 'us' | 'jp' | 'kr' | 'tw';
+  market?: 'vn' | 'cn' | 'hk' | 'us' | 'jp' | 'kr' | 'tw';
   baseCurrency?: string;
 };
 
@@ -354,6 +354,32 @@ describe('PortfolioPage FX refresh', () => {
     expect(getRisk).toHaveBeenCalledWith({ accountId: undefined, costMethod: 'fifo', includeRealtime: false });
   });
 
+  it('defaults new local accounts to the Vietnam market and VND', async () => {
+    render(<PortfolioPage />);
+
+    await waitForInitialLoad();
+    fireEvent.click(screen.getByRole('button', { name: '新建账户' }));
+
+    const baseCurrencyInput = screen.getByPlaceholderText('Base currency (VND)');
+    const vietnamOption = screen.getByRole('option', { name: 'Vietnam market (vn)' });
+    expect(baseCurrencyInput).toHaveValue('VND');
+    expect(vietnamOption).toHaveProperty('selected', true);
+
+    fireEvent.change(screen.getByPlaceholderText('Account name (required)'), {
+      target: { value: 'Vietnam Local' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+
+    await waitFor(() => {
+      expect(createAccount).toHaveBeenCalledWith({
+        name: 'Vietnam Local',
+        broker: 'Demo',
+        market: 'vn',
+        baseCurrency: 'VND',
+      });
+    });
+  });
+
   it('renders stale FX status with a manual refresh button', async () => {
     render(<PortfolioPage />);
 
@@ -374,8 +400,8 @@ describe('PortfolioPage FX refresh', () => {
     await waitForInitialLoad();
 
     expect(await screen.findByText('组合估值限制')).toBeInTheDocument();
-    expect(screen.getByText(/实时行情为尽力获取/)).toBeInTheDocument();
-    expect(screen.getByText(/汇率与成本基础为部分口径/)).toBeInTheDocument();
+    expect(screen.getByText(/Realtime quotes are best-effort/)).toBeInTheDocument();
+    expect(screen.getByText(/FX and cost basis are partial/)).toBeInTheDocument();
   });
 
   it('renders portfolio risk drawdown labels in English UI mode', async () => {
@@ -867,7 +893,7 @@ describe('PortfolioPage FX refresh', () => {
         force: false,
       });
     });
-    expect(await screen.findByText('已提交 HK00700 分析任务：task-portfolio-1')).toBeInTheDocument();
+    expect(await screen.findByText('Analysis submitted for HK00700: task-portfolio-1')).toBeInTheDocument();
   });
 
   it('prefers disabled feedback over empty-pair feedback when refresh is disabled', async () => {

@@ -36,7 +36,7 @@ export class SystemConfigValidationError extends Error {
     this.name = 'SystemConfigValidationError';
     this.issues = issues;
     this.parsedError = parsedError ?? createParsedApiError({
-      title: '配置校验失败',
+      title: 'Configuration validation failed',
       message,
       rawMessage: message,
       status: 400,
@@ -54,7 +54,7 @@ export class SystemConfigConflictError extends Error {
     this.name = 'SystemConfigConflictError';
     this.currentConfigVersion = currentConfigVersion;
     this.parsedError = parsedError ?? createParsedApiError({
-      title: '配置版本冲突',
+      title: 'Configuration version conflict',
       message,
       rawMessage: message,
       status: 409,
@@ -117,8 +117,8 @@ function toSnakeNotificationTestPayload(payload: TestNotificationChannelRequest)
       value: item.value,
     })),
     mask_token: payload.maskToken ?? '******',
-    title: payload.title ?? 'DSA 通知测试',
-    content: payload.content ?? '这是一条来自 DSA Web 设置页的通知测试消息。',
+    title: payload.title ?? 'DSA notification test',
+    content: payload.content ?? 'This is a test notification from the DSA Web settings page.',
     timeout_seconds: payload.timeoutSeconds ?? 20,
   };
 }
@@ -289,7 +289,7 @@ export const systemConfigApi = {
         if (status === 400) {
           const validationError = toCamelCase<SystemConfigValidationErrorResponse>(payloadData ?? {});
           throw new SystemConfigValidationError(
-            parsed.message || validationError.message || '配置校验失败',
+            parsed.message || validationError.message || 'Configuration validation failed',
             validationError.issues || [],
             parsed,
           );
@@ -298,7 +298,7 @@ export const systemConfigApi = {
         if (status === 409) {
           const conflict = toCamelCase<SystemConfigConflictResponse>(payloadData ?? {});
           throw new SystemConfigConflictError(
-            parsed.message || conflict.message || '配置版本冲突',
+            parsed.message || conflict.message || 'Configuration version conflict',
             conflict.currentConfigVersion,
             parsed,
           );
@@ -310,7 +310,7 @@ export const systemConfigApi = {
   },
 
   /**
-   * 获取自选队列股票代码列表
+   * Get the watchlist stock codes.
    */
   getWatchlist: async (): Promise<string[]> => {
     const response = await apiClient.get<Record<string, unknown>>('/api/v1/stocks/watchlist');
@@ -319,7 +319,7 @@ export const systemConfigApi = {
   },
 
   /**
-   * 添加股票到自选队列
+   * Add a stock to the watchlist.
    */
   addToWatchlist: async (stockCode: string): Promise<string[]> => {
     const response = await apiClient.post<Record<string, unknown>>('/api/v1/stocks/watchlist/add', {
@@ -330,7 +330,7 @@ export const systemConfigApi = {
   },
 
   /**
-   * 从自选队列移除股票
+   * Remove a stock from the watchlist.
    */
   removeFromWatchlist: async (stockCode: string): Promise<string[]> => {
     const response = await apiClient.post<Record<string, unknown>>('/api/v1/stocks/watchlist/remove', {

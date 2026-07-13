@@ -108,7 +108,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-const MARKET_OPTIONS: DecisionSignalMarket[] = ['cn', 'hk', 'us', 'jp', 'kr', 'tw'];
+const MARKET_OPTIONS: DecisionSignalMarket[] = ['vn'];
 const ACTION_OPTIONS: DecisionAction[] = ['buy', 'add', 'hold', 'reduce', 'sell', 'watch', 'avoid', 'alert'];
 const PHASE_OPTIONS: MarketPhaseValue[] = ['premarket', 'intraday', 'lunch_break', 'closing_auction', 'postmarket', 'non_trading', 'unknown'];
 const SOURCE_OPTIONS: DecisionSignalSourceType[] = ['analysis', 'agent', 'alert', 'market_review', 'manual'];
@@ -220,6 +220,7 @@ function refreshTimelineSelection(
 function normalizeDecisionSignalMarket(value: unknown): DecisionSignalMarket | undefined {
   const market = String(value ?? '').trim().toUpperCase();
   if (!market || market === 'INDEX' || market === 'ETF' || market === 'UNKNOWN') return undefined;
+  if (market === 'VN') return 'vn';
   if (market === 'CN' || market === 'BSE') return 'cn';
   if (market === 'HK') return 'hk';
   if (market === 'US') return 'us';
@@ -307,9 +308,12 @@ function buildNextTimelineFilters(
   if (isSameStockContext(previousContext, nextContext)) {
     return { filters: currentFilters, marketSource };
   }
-  if (nextContext.market) {
+  const localMarket = nextContext.market && MARKET_OPTIONS.includes(nextContext.market)
+    ? nextContext.market
+    : undefined;
+  if (localMarket) {
     return {
-      filters: { ...currentFilters, market: nextContext.market },
+      filters: { ...currentFilters, market: localMarket },
       marketSource: 'context',
     };
   }
@@ -338,6 +342,14 @@ function formatStatNumber(value: number | null | undefined): string {
 function formatStatPercent(value: number | null | undefined): string {
   const formatted = formatStatNumber(value);
   return formatted === '-' ? formatted : `${formatted}%`;
+}
+
+function formatMetricWithSample(
+  metric: DecisionSignalOutcomeStatsResponse['metrics'][string] | undefined,
+  fallbackValue?: number | null,
+): string {
+  const value = metric?.value ?? fallbackValue;
+  return `${formatStatPercent(value)} · n=${metric?.sampleCount ?? 0}`;
 }
 
 const DecisionSignalsPage: React.FC = () => {
@@ -480,7 +492,7 @@ const DecisionSignalsPage: React.FC = () => {
     statsRequestIdRef.current = requestId;
     setStatsLoading(true);
     try {
-      const response = await decisionSignalsApi.getOutcomeStats();
+      const response = await decisionSignalsApi.getOutcomeStats({ horizons: ['5d'] });
       if (statsRequestIdRef.current !== requestId) return;
       setOutcomeStats(response);
       setStatsError(null);
@@ -1155,28 +1167,64 @@ const DecisionSignalsPage: React.FC = () => {
           ) : statsLoading ? (
             <p className="text-sm text-secondary-text">{t('common.loading')}...</p>
           ) : outcomeStats && outcomeStats.total > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-xl border border-border/60 bg-elevated/40 px-3 py-3">
-                <p className="text-xs text-secondary-text">{t('decisionSignals.statsTotal')}</p>
-                <p className="mt-1 text-2xl font-semibold text-foreground">{outcomeStats.total}</p>
+                <p className="text-xs text-secondary-text">{t('decisionSignals.statsEligible')}</p>
+                <p className="mt-1 text-2xl font-semibold text-foreground">{outcomeStats.eligible}</p>
+                <p className="mt-1 text-xs text-muted-text">{t('decisionSignals.statsFiveDayHeadline')}</p>
               </div>
               <div className="rounded-xl border border-border/60 bg-elevated/40 px-3 py-3">
-                <p className="text-xs text-secondary-text">{t('decisionSignals.statsHitRate')}</p>
-                <p className="mt-1 text-2xl font-semibold text-success">{formatStatPercent(outcomeStats.hitRatePct)}</p>
+                <p className="text-xs text-secondary-text">{t('decisionSignals.statsCompletionRate')}</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">
+                  {formatMetricWithSample(outcomeStats.metrics.completionRate, outcomeStats.completionRatePct)}
+                </p>
               </div>
               <div className="rounded-xl border border-border/60 bg-elevated/40 px-3 py-3">
-                <p className="text-xs text-secondary-text">{t('decisionSignals.outcome.hit')}</p>
-                <p className="mt-1 text-2xl font-semibold text-success">{outcomeStats.hit}</p>
+                <p className="text-xs text-secondary-text">{t('decisionSignals.statsDirectionalAccuracy')}</p>
+                <p className="mt-1 text-lg font-semibold text-success">
+                  {formatMetricWithSample(outcomeStats.metrics.directionalAccuracy, outcomeStats.directionalAccuracyPct)}
+                </p>
               </div>
               <div className="rounded-xl border border-border/60 bg-elevated/40 px-3 py-3">
-                <p className="text-xs text-secondary-text">{t('decisionSignals.outcome.miss')}</p>
-                <p className="mt-1 text-2xl font-semibold text-danger">{outcomeStats.miss}</p>
+                <p className="text-xs text-secondary-text">{t('decisionSignals.statsBuyPrecision')}</p>
+                <p className="mt-1 text-lg font-semibold text-success">
+                  {formatMetricWithSample(outcomeStats.metrics.buyPrecision, outcomeStats.buyPrecisionPct)}
+                </p>
               </div>
               <div className="rounded-xl border border-border/60 bg-elevated/40 px-3 py-3">
-                <p className="text-xs text-secondary-text">{t('decisionSignals.outcome.unable')}</p>
-                <p className="mt-1 text-2xl font-semibold text-warning">{outcomeStats.unable}</p>
+                <p className="text-xs text-secondary-text">{t('decisionSignals.statsSellPrecision')}</p>
+                <p className="mt-1 text-lg font-semibold text-success">
+                  {formatMetricWithSample(outcomeStats.metrics.sellPrecision, outcomeStats.sellPrecisionPct)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-elevated/40 px-3 py-3">
+                <p className="text-xs text-secondary-text">{t('decisionSignals.statsNeutralRate')}</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">
+                  {formatMetricWithSample(outcomeStats.metrics.neutralRate, outcomeStats.neutralRatePct)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-elevated/40 px-3 py-3">
+                <p className="text-xs text-secondary-text">{t('decisionSignals.statsAverageReturn')}</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">
+                  {formatMetricWithSample(outcomeStats.metrics.averageUnderlyingReturn, outcomeStats.avgStockReturnPct)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-elevated/40 px-3 py-3">
+                <p className="text-xs text-secondary-text">{t('decisionSignals.statsNotEvaluated')}</p>
+                <p className="mt-1 text-2xl font-semibold text-warning">{outcomeStats.unableEligible}</p>
+                <p className="mt-1 text-xs text-muted-text">{t('decisionSignals.statsNotIncorrect')}</p>
               </div>
             </div>
+            {(outcomeStats.metrics.directionalAccuracy?.sampleCount ?? 0) < 30 ? (
+              <p className="mt-3 text-xs text-warning">{t('decisionSignals.statsSmallSampleWarning')}</p>
+            ) : null}
+            {outcomeStats.nonDirectional > 0 ? (
+              <p className="mt-2 text-xs text-muted-text">
+                {t('decisionSignals.statsNonDirectionalExcluded', { count: outcomeStats.nonDirectional })}
+              </p>
+            ) : null}
+            </>
           ) : (
             <EmptyState
               className="border-none bg-transparent py-6 shadow-none"

@@ -177,6 +177,12 @@ export const AlertRuleForm: React.FC<AlertRuleFormProps> = ({ onSubmit, isSubmit
   }, [targetScope, text.accountLoadFailed]);
 
   const alertTypeOptions = useMemo(() => optionsForScope(targetScope, language), [language, targetScope]);
+  const targetScopeOptions = useMemo(
+    () => (language === 'zh'
+      ? TARGET_SCOPE_OPTIONS
+      : ALERT_TARGET_SCOPE_OPTIONS[language].filter((option) => option.value !== 'market')),
+    [language],
+  );
   const portfolioTargetOptions = useMemo(() => [
     { value: 'all', label: text.allAccounts },
     ...accounts.map((account) => ({
@@ -428,7 +434,7 @@ export const AlertRuleForm: React.FC<AlertRuleFormProps> = ({ onSubmit, isSubmit
           label={text.targetCode}
           value={target}
           onChange={(event) => setTarget(event.target.value)}
-          placeholder="600519 / AAPL / hk00700"
+          placeholder="VNM.VN / FPT.VN / MBB.VN"
           disabled={isSubmitting}
         />
       );
@@ -482,7 +488,7 @@ export const AlertRuleForm: React.FC<AlertRuleFormProps> = ({ onSubmit, isSubmit
           <Select
             label={text.targetScope}
             value={targetScope}
-            options={language === 'zh' ? TARGET_SCOPE_OPTIONS : ALERT_TARGET_SCOPE_OPTIONS[language]}
+            options={targetScopeOptions}
             disabled={isSubmitting}
             onChange={handleScopeChange}
           />

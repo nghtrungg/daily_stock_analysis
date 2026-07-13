@@ -27,6 +27,7 @@ function loadMainModule(t, options = {}) {
   };
   const fakeShell = {
     openExternal: async () => true,
+    ...(options.shell || {}),
   };
   const fakeIpcMain = {
     handle: (channel, handler) => {
@@ -587,18 +588,13 @@ test('checkForDesktopUpdates delegates to release fetcher', async (t) => {
   assert.equal(state.releaseUrl, mainModule.RELEASES_PAGE_URL);
 });
 
-test('sanitizeReleaseUrl falls back for non-release links', (t) => {
+test('sanitizeReleaseUrl rejects all release links in the local build', (t) => {
   const mainModule = loadMainModule(t);
 
+  assert.equal(mainModule.sanitizeReleaseUrl('https://example.com/not-allowed'), '');
   assert.equal(
-    mainModule.sanitizeReleaseUrl('https://example.com/not-allowed'),
-    mainModule.RELEASES_PAGE_URL
-  );
-  assert.equal(
-    mainModule.sanitizeReleaseUrl(
-      `https://github.com/${mainModule.GITHUB_OWNER}/${mainModule.GITHUB_REPO}/releases/tag/v3.13.0`
-    ),
-    `https://github.com/${mainModule.GITHUB_OWNER}/${mainModule.GITHUB_REPO}/releases/tag/v3.13.0`
+    mainModule.sanitizeReleaseUrl('https://github.com/example/local/releases/tag/v3.13.0'),
+    ''
   );
 });
 
@@ -638,126 +634,62 @@ test('fetchLatestReleaseJson rejects when response stream errors', async (t) => 
   assert.equal(destroyed, true);
 });
 
-test('auto download prompt falls back to error when install path fails', async (t) => {
-  const updaterEvents = {};
-  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dsa desktop updater '));
-  const exeDir = path.join(tempRoot, 'app');
-  const userDataDir = path.join(tempRoot, 'userData');
-  const exePath = path.join(exeDir, 'Daily Stock Analysis.exe');
-  const uninstallPath = path.join(exeDir, 'Uninstall Daily Stock Analysis.exe');
-  const envFile = path.join(exeDir, '.env');
-  const backupRoot = path.join(userDataDir, '.dsa-desktop-update-backup');
-  const originalRemove = fs.rmSync;
-  let quitAndInstallArgs = null;
-  const fakeUpdater = {
-    autoDownload: true,
-    autoInstallOnAppQuit: false,
-    on: (event, handler) => {
-      updaterEvents[event] = handler;
-    },
-    checkForUpdates: async () => {
-      if (typeof updaterEvents['update-downloaded'] === 'function') {
-        await updaterEvents['update-downloaded']({
-          version: 'v3.13.0',
-          releaseDate: '2026-04-25T01:00:00Z',
-          releaseName: 'v3.13.0',
-        });
-      }
-    },
-    quitAndInstall: (...args) => {
-      quitAndInstallArgs = args;
-      throw new Error('安装进程启动失败');
-    },
-  };
-
+test('local desktop build keeps update IPC disabled without network or updater calls', async (t) => {
+  let updaterCheckCount = 0;
+  const openedUrls = [];
   const mainModule = loadMainModule(t, {
-    dialog: {
-      showMessageBox: async () => ({ response: 1 }),
-    },
-    electronUpdater: fakeUpdater,
     platform: 'win32',
     app: {
       isPackaged: true,
-      getPath: (name) => {
-        if (name === 'exe') {
-          return exePath;
-        }
-        return userDataDir;
+      getPath: () => 'C:\\LocalApps\\Daily Stock Analysis Vietnam',
+    },
+    electronUpdater: {
+      on: () => undefined,
+      checkForUpdates: async () => {
+        updaterCheckCount += 1;
+      },
+    },
+    shell: {
+      openExternal: async (url) => {
+        openedUrls.push(url);
+        return true;
       },
     },
   });
 
-  fs.mkdirSync(exeDir, { recursive: true });
-  fs.mkdirSync(userDataDir, { recursive: true });
-  fs.writeFileSync(envFile, 'RUN_MODE=desktop\n');
-  fs.writeFileSync(uninstallPath, '');
+  assert.equal(mainModule.DESKTOP_UPDATES_ENABLED, false);
+  const state = await mainModule.__getIpcMainHandler('desktop:check-for-updates')();
+  assert.equal(state.status, mainModule.UPDATE_STATUS.IDLE);
+  assert.equal(state.updateMode, mainModule.UPDATE_MODE.MANUAL);
+  assert.match(state.message, /disabled/i);
+  assert.equal(updaterCheckCount, 0);
 
-  mainModule.__setMainWindowForTest({
-    isDestroyed: () => false,
-    webContents: {
-      send: () => undefined,
-    },
-  });
-
-  await mainModule.__getIpcMainHandler('desktop:check-for-updates')();
-  let state = await mainModule.__getIpcMainHandler('desktop:get-update-state')();
-  for (let idx = 0; idx < 12 && state.status !== mainModule.UPDATE_STATUS.ERROR; idx += 1) {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 30);
-    });
-    state = await mainModule.__getIpcMainHandler('desktop:get-update-state')();
-  }
-
-  assert.equal(state.status, mainModule.UPDATE_STATUS.ERROR);
-  assert.match(state.message, /更新安装失败/);
-  assert.equal(state.updateMode, mainModule.UPDATE_MODE.AUTO);
-  assert.deepEqual(quitAndInstallArgs, [true, true]);
-  assert.equal(fakeUpdater.installDirectory, exeDir);
-  assert.equal(fs.existsSync(backupRoot), false);
-  assert.equal(fs.existsSync(path.join(backupRoot, 'runtime-state.json')), false);
-
-  t.after(() => {
-    originalRemove(tempRoot, { recursive: true, force: true });
-  });
+  await assert.rejects(
+    mainModule.__getIpcMainHandler('desktop:install-downloaded-update')(),
+    /disabled/i
+  );
+  assert.equal(
+    await mainModule.__getIpcMainHandler('desktop:open-release-page')(
+      null,
+      'https://github.com/ZhuLinsen/daily_stock_analysis/releases/latest'
+    ),
+    false
+  );
+  assert.deepEqual(openedUrls, []);
 });
 
-test('auto update backup copies AlphaSift hotspot detail directories recursively', async (t) => {
-  const updaterEvents = {};
+test('desktop update backup helper copies AlphaSift hotspot detail directories recursively', (t) => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dsa desktop updater details '));
   const exeDir = path.join(tempRoot, 'app');
   const userDataDir = path.join(tempRoot, 'userData');
-  const exePath = path.join(exeDir, 'Daily Stock Analysis.exe');
-  const uninstallPath = path.join(exeDir, 'Uninstall Daily Stock Analysis.exe');
+  const exePath = path.join(exeDir, 'Daily Stock Analysis Vietnam.exe');
+  const uninstallPath = path.join(exeDir, 'Uninstall Daily Stock Analysis Vietnam.exe');
   const detailRelativePath = path.join('data', 'alphasift', 'hotspot_details');
   const detailFileRelativePath = path.join(detailRelativePath, 'ai-compute.json');
   const detailFile = path.join(exeDir, detailFileRelativePath);
   const backupRoot = path.join(userDataDir, '.dsa-desktop-update-backup');
-  let quitAndInstallArgs = null;
-  const fakeUpdater = {
-    autoDownload: true,
-    autoInstallOnAppQuit: false,
-    on: (event, handler) => {
-      updaterEvents[event] = handler;
-    },
-    checkForUpdates: async () => {
-      if (typeof updaterEvents['update-downloaded'] === 'function') {
-        updaterEvents['update-downloaded']({
-          version: 'v3.13.0',
-          releaseDate: '2026-04-25T01:00:00Z',
-          releaseName: 'v3.13.0',
-        });
-      }
-    },
-    quitAndInstall: (...args) => {
-      quitAndInstallArgs = args;
-    },
-  };
 
   const mainModule = loadMainModule(t, {
-    dialog: {
-      showMessageBox: async () => ({ response: 1 }),
-    },
-    electronUpdater: fakeUpdater,
     platform: 'win32',
     app: {
       isPackaged: true,
@@ -775,21 +707,8 @@ test('auto update backup copies AlphaSift hotspot detail directories recursively
   fs.writeFileSync(uninstallPath, '');
   fs.writeFileSync(detailFile, '{"topic":"AI算力"}\n', 'utf-8');
 
-  mainModule.__setMainWindowForTest({
-    isDestroyed: () => false,
-    webContents: {
-      send: () => undefined,
-    },
-  });
+  mainModule.backupPackagedRuntimeState();
 
-  await mainModule.__getIpcMainHandler('desktop:check-for-updates')();
-  for (let idx = 0; idx < 12 && !quitAndInstallArgs; idx += 1) {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 30);
-    });
-  }
-
-  assert.deepEqual(quitAndInstallArgs, [true, true]);
   assert.equal(fs.readFileSync(path.join(backupRoot, detailFileRelativePath), 'utf-8'), '{"topic":"AI算力"}\n');
   assert.ok(JSON.parse(fs.readFileSync(path.join(backupRoot, 'runtime-state.json'), 'utf-8')).files.includes(detailRelativePath));
 
@@ -802,9 +721,9 @@ test('desktop update backup list includes WAL and SHM artifacts', (t) => {
   const mainModule = loadMainModule(t);
   const files = mainModule.DESKTOP_UPDATE_RUNTIME_RELATIVE_FILES || [];
   assert.equal(Array.isArray(files), true);
-  assert.ok(files.includes(path.join('data', 'stock_analysis.db')));
-  assert.ok(files.includes(path.join('data', 'stock_analysis.db-wal')));
-  assert.ok(files.includes(path.join('data', 'stock_analysis.db-shm')));
+  assert.ok(files.includes(path.join('data', 'stock_analysis_vn.db')));
+  assert.ok(files.includes(path.join('data', 'stock_analysis_vn.db-wal')));
+  assert.ok(files.includes(path.join('data', 'stock_analysis_vn.db-shm')));
   assert.ok(files.includes(path.join('logs', 'desktop.log')));
 });
 
@@ -834,7 +753,7 @@ test('desktop update backup and restore preserve generation backend env keys', (
 
   fs.mkdirSync(appDir, { recursive: true });
   fs.mkdirSync(userDataDir, { recursive: true });
-  fs.writeFileSync(path.join(appDir, 'Uninstall Daily Stock Analysis.exe'), '');
+  fs.writeFileSync(path.join(appDir, 'Uninstall Daily Stock Analysis Vietnam.exe'), '');
   fs.writeFileSync(envPath, envContent, 'utf-8');
 
   const mainModule = loadMainModule(t, {
@@ -843,7 +762,7 @@ test('desktop update backup and restore preserve generation backend env keys', (
       isPackaged: true,
       getPath: (name) => {
         if (name === 'exe') {
-          return path.join(appDir, 'Daily Stock Analysis.exe');
+          return path.join(appDir, 'Daily Stock Analysis Vietnam.exe');
         }
         return userDataDir;
       },
@@ -881,7 +800,7 @@ test('desktop update backup and restore preserve AlphaSift detail directories re
 
   fs.mkdirSync(path.dirname(nestedDetailPath), { recursive: true });
   fs.mkdirSync(userDataDir, { recursive: true });
-  fs.writeFileSync(path.join(appDir, 'Uninstall Daily Stock Analysis.exe'), '');
+  fs.writeFileSync(path.join(appDir, 'Uninstall Daily Stock Analysis Vietnam.exe'), '');
   fs.writeFileSync(topicDetailPath, '{"topic":"AI算力"}\n', 'utf-8');
   fs.writeFileSync(nestedDetailPath, '{"events":1}\n', 'utf-8');
 
@@ -891,7 +810,7 @@ test('desktop update backup and restore preserve AlphaSift detail directories re
       isPackaged: true,
       getPath: (name) => {
         if (name === 'exe') {
-          return path.join(appDir, 'Daily Stock Analysis.exe');
+          return path.join(appDir, 'Daily Stock Analysis Vietnam.exe');
         }
         return userDataDir;
       },
@@ -923,10 +842,10 @@ test('desktop update backup and restore preserve AlphaSift detail directories re
 
 test('macOS packaged runtime state uses userData and migrates old app bundle files', (t) => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dsa-desktop-macos-migrate-'));
-  const oldAppDir = path.join(tempRoot, 'Daily Stock Analysis.app', 'Contents', 'MacOS');
+  const oldAppDir = path.join(tempRoot, 'Daily Stock Analysis Vietnam.app', 'Contents', 'MacOS');
   const userDataDir = path.join(tempRoot, 'userData');
-  const exePath = path.join(oldAppDir, 'Daily Stock Analysis');
-  const oldDbPath = path.join(oldAppDir, 'data', 'stock_analysis.db');
+  const exePath = path.join(oldAppDir, 'Daily Stock Analysis Vietnam');
+  const oldDbPath = path.join(oldAppDir, 'data', 'stock_analysis_vn.db');
   const oldLogPath = path.join(oldAppDir, 'logs', 'desktop.log');
   const oldHotspotDetailPath = path.join(oldAppDir, 'data', 'alphasift', 'hotspot_details', 'AI算力', 'detail.json');
 
@@ -964,13 +883,13 @@ test('macOS packaged runtime state uses userData and migrates old app bundle fil
     [...migrationResult.migrated].sort(),
     [
       '.env',
-      path.join('data', 'stock_analysis.db'),
+      path.join('data', 'stock_analysis_vn.db'),
       path.join('data', 'alphasift', 'hotspot_details'),
       path.join('logs', 'desktop.log'),
     ].sort()
   );
   assert.equal(fs.readFileSync(path.join(userDataDir, '.env'), 'utf-8'), 'OPENAI_API_KEY=old-key\n');
-  assert.equal(fs.readFileSync(path.join(userDataDir, 'data', 'stock_analysis.db'), 'utf-8'), 'old-db');
+  assert.equal(fs.readFileSync(path.join(userDataDir, 'data', 'stock_analysis_vn.db'), 'utf-8'), 'old-db');
   assert.equal(
     fs.readFileSync(path.join(userDataDir, 'data', 'alphasift', 'hotspot_details', 'AI算力', 'detail.json'), 'utf-8'),
     '{"topic":"AI算力"}\n'
@@ -980,9 +899,9 @@ test('macOS packaged runtime state uses userData and migrates old app bundle fil
 
 test('macOS runtime migration does not overwrite existing userData files', (t) => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dsa-desktop-macos-skip-'));
-  const oldAppDir = path.join(tempRoot, 'Daily Stock Analysis.app', 'Contents', 'MacOS');
+  const oldAppDir = path.join(tempRoot, 'Daily Stock Analysis Vietnam.app', 'Contents', 'MacOS');
   const userDataDir = path.join(tempRoot, 'userData');
-  const exePath = path.join(oldAppDir, 'Daily Stock Analysis');
+  const exePath = path.join(oldAppDir, 'Daily Stock Analysis Vietnam');
 
   fs.mkdirSync(oldAppDir, { recursive: true });
   fs.mkdirSync(userDataDir, { recursive: true });
@@ -1019,14 +938,14 @@ test('restorePackagedRuntimeStateFromBackup keeps backup when copy fails', (t) =
   const appDir = path.join(tempRoot, 'app');
   const userDataDir = path.join(tempRoot, 'userData');
   const backupRoot = path.join(userDataDir, '.dsa-desktop-update-backup');
-  const backupDbPath = path.join(backupRoot, 'data', 'stock_analysis.db');
+  const backupDbPath = path.join(backupRoot, 'data', 'stock_analysis_vn.db');
   fs.mkdirSync(path.dirname(backupDbPath), { recursive: true });
   fs.mkdirSync(appDir, { recursive: true });
-  fs.writeFileSync(path.join(appDir, 'Uninstall Daily Stock Analysis.exe'), '');
+  fs.writeFileSync(path.join(appDir, 'Uninstall Daily Stock Analysis Vietnam.exe'), '');
   fs.writeFileSync(backupDbPath, 'backup-db');
   fs.writeFileSync(
     path.join(backupRoot, 'runtime-state.json'),
-    JSON.stringify({ files: [path.join('data', 'stock_analysis.db')] }),
+    JSON.stringify({ files: [path.join('data', 'stock_analysis_vn.db')] }),
     'utf-8'
   );
 
@@ -1036,7 +955,7 @@ test('restorePackagedRuntimeStateFromBackup keeps backup when copy fails', (t) =
       isPackaged: true,
       getPath: (name) => {
         if (name === 'exe') {
-          return path.join(appDir, 'Daily Stock Analysis.exe');
+          return path.join(appDir, 'Daily Stock Analysis Vietnam.exe');
         }
         return userDataDir;
       },
@@ -1073,14 +992,14 @@ test('restorePackagedRuntimeStateFromBackup removes restored files from pending 
   const userDataDir = path.join(tempRoot, 'userData');
   const backupRoot = path.join(userDataDir, '.dsa-desktop-update-backup');
   const backupEnvPath = path.join(backupRoot, '.env');
-  const backupDbPath = path.join(backupRoot, 'data', 'stock_analysis.db');
+  const backupDbPath = path.join(backupRoot, 'data', 'stock_analysis_vn.db');
   const targetEnvPath = path.join(appDir, '.env');
   const manifestPath = path.join(backupRoot, 'runtime-state.json');
-  const dbRelativePath = path.join('data', 'stock_analysis.db');
+  const dbRelativePath = path.join('data', 'stock_analysis_vn.db');
 
   fs.mkdirSync(path.dirname(backupDbPath), { recursive: true });
   fs.mkdirSync(appDir, { recursive: true });
-  fs.writeFileSync(path.join(appDir, 'Uninstall Daily Stock Analysis.exe'), '');
+  fs.writeFileSync(path.join(appDir, 'Uninstall Daily Stock Analysis Vietnam.exe'), '');
   fs.writeFileSync(backupEnvPath, 'backup-env\n', 'utf-8');
   fs.writeFileSync(backupDbPath, 'backup-db');
   fs.writeFileSync(targetEnvPath, 'current-env\n', 'utf-8');
@@ -1096,7 +1015,7 @@ test('restorePackagedRuntimeStateFromBackup removes restored files from pending 
       isPackaged: true,
       getPath: (name) => {
         if (name === 'exe') {
-          return path.join(appDir, 'Daily Stock Analysis.exe');
+          return path.join(appDir, 'Daily Stock Analysis Vietnam.exe');
         }
         return userDataDir;
       },
@@ -1141,7 +1060,7 @@ test('restorePackagedRuntimeStateFromBackup skips backup when app version did no
 
   fs.mkdirSync(backupRoot, { recursive: true });
   fs.mkdirSync(appDir, { recursive: true });
-  fs.writeFileSync(path.join(appDir, 'Uninstall Daily Stock Analysis.exe'), '');
+  fs.writeFileSync(path.join(appDir, 'Uninstall Daily Stock Analysis Vietnam.exe'), '');
   fs.writeFileSync(backupEnvPath, 'pre-update-env\n', 'utf-8');
   fs.writeFileSync(targetEnvPath, 'user-change-after-aborted-install\n', 'utf-8');
   fs.writeFileSync(
@@ -1156,7 +1075,7 @@ test('restorePackagedRuntimeStateFromBackup skips backup when app version did no
       isPackaged: true,
       getPath: (name) => {
         if (name === 'exe') {
-          return path.join(appDir, 'Daily Stock Analysis.exe');
+          return path.join(appDir, 'Daily Stock Analysis Vietnam.exe');
         }
         return userDataDir;
       },
@@ -1181,8 +1100,8 @@ test('createWindow startup path does not throw ReferenceError after restore resu
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dsa-desktop-startup-'));
   const appDir = path.join(tempRoot, 'app');
   const userDataDir = path.join(tempRoot, 'userData');
-  const exePath = path.join(appDir, 'Daily Stock Analysis.exe');
-  const uninstallPath = path.join(appDir, 'Uninstall Daily Stock Analysis.exe');
+  const exePath = path.join(appDir, 'Daily Stock Analysis Vietnam.exe');
+  const uninstallPath = path.join(appDir, 'Uninstall Daily Stock Analysis Vietnam.exe');
   const loadedFiles = [];
   const loadedUrls = [];
   let startupError;
@@ -1328,12 +1247,13 @@ test('createWindow startup path does not throw ReferenceError after restore resu
     loadedUrls[0],
     /^http:\/\/127\.0\.0\.1:\d+\/\?desktop_version=3\.12\.0&cache_bust=\d+$/
   );
-  assert.equal(updateCheckRequested, true);
+  assert.equal(updateCheckRequested, false);
   assert.equal(startupError, undefined);
   assert.equal(fs.existsSync(backupRoot), false);
   const updateState = await mainModule.__getIpcMainHandler('desktop:get-update-state')();
   assert.notEqual(updateState.status, mainModule.UPDATE_STATUS.ERROR);
-  assert.equal(updateState.updateMode, mainModule.UPDATE_MODE.AUTO);
+  assert.equal(updateState.updateMode, mainModule.UPDATE_MODE.MANUAL);
+  assert.match(updateState.message, /disabled/i);
 
   t.after(() => {
     if (originalResourcesPathDescriptor) {

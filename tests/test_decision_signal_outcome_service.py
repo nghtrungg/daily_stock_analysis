@@ -42,6 +42,7 @@ def _add_signal(
     horizon: str = "3d",
     session_date: str = "2024-01-02",
     status: str = "active",
+    source_agent: str | None = None,
 ) -> int:
     with db.session_scope() as session:
         row = DecisionSignalRecord(
@@ -49,6 +50,7 @@ def _add_signal(
             stock_name="贵州茅台",
             market=market,
             source_type="analysis",
+            source_agent=source_agent,
             source_report_id=1001,
             trace_id=f"trace-{market}-{code}-{action}-{horizon}-{session_date}",
             market_phase="postmarket",
@@ -130,8 +132,84 @@ def test_run_outcomes_evaluates_supported_horizons_and_stats(isolated_db) -> Non
     stats = service.get_stats(horizons=["1d", "3d", "5d", "10d"])
     assert stats["total"] == 4
     assert stats["hit"] == 4
+    assert stats["headline_horizon"] == "5d"
+    assert stats["eligible"] == 4
+    assert stats["completed"] == 4
+    assert stats["completion_rate_pct"] == 100.0
+    assert stats["directional_accuracy_pct"] == 100.0
+    assert stats["metrics"]["directional_accuracy"] == {
+        "status": "available",
+        "value": 100.0,
+        "unit": "percent",
+        "numerator": 4,
+        "denominator": 4,
+        "sample_count": 4,
+        "unavailable_reason": None,
+    }
+    assert stats["breakdowns"]["horizon"][0]["value"] == "5d"
     assert stats["breakdowns"]["action"][0]["value"] == "buy"
     assert stats["breakdowns"]["holding_state"][0]["value"] == "holding"
+    assert stats["breakdown_availability"]["generation_source"]["status"] == "unavailable"
+    assert stats["version_context"]["outcome_engine_version"] == "decision-signal-v1"
+    assert stats["version_context"]["predictor_version_status"] == "unavailable"
+
+
+def test_baseline_stats_keep_unavailable_and_neutral_out_of_loss_denominators(isolated_db) -> None:
+    cases = [
+        ("600519", "buy", [103, 104, 105, 105, 105]),
+        ("000001", "buy", [100, 100, 101, 101, 101]),
+        ("000002", "sell", [99, 98, 97, 96, 95]),
+        ("000003", "sell", [101, 102, 103, 104, 105]),
+    ]
+    service = DecisionSignalOutcomeService(db_manager=isolated_db)
+    for code, action, closes in cases:
+        signal_id = _add_signal(isolated_db, code=code, action=action, horizon="5d")
+        _seed_bars(isolated_db, code=code, closes=closes)
+        service.run_outcomes(signal_id=signal_id, horizons=["5d"])
+
+    insufficient_id = _add_signal(isolated_db, code="000004", action="buy", horizon="5d")
+    _seed_bars(isolated_db, code="000004", closes=[101, 102])
+    service.run_outcomes(signal_id=insufficient_id, horizons=["5d"])
+    watch_id = _add_signal(isolated_db, code="000005", action="watch", horizon="5d")
+    _seed_bars(isolated_db, code="000005", closes=[100, 100, 100, 100, 100])
+    service.run_outcomes(signal_id=watch_id, horizons=["5d"])
+
+    stats = service.get_stats(horizons=["5d"])
+
+    assert stats["total"] == 6
+    assert stats["eligible"] == 5
+    assert stats["completed"] == 4
+    assert stats["unable"] == 2
+    assert stats["non_directional"] == 1
+    assert stats["actionable_coverage_pct"] == 83.33
+    assert stats["completion_rate_pct"] == 80.0
+    assert stats["hit"] == 2
+    assert stats["miss"] == 1
+    assert stats["neutral"] == 1
+    assert stats["directional_accuracy_pct"] == 66.67
+    assert stats["buy_precision_pct"] == 100.0
+    assert stats["sell_precision_pct"] == 50.0
+    assert stats["neutral_rate_pct"] == 25.0
+    assert stats["metrics"]["directional_accuracy"]["denominator"] == 3
+    assert stats["metrics"]["neutral_rate"]["denominator"] == 4
+    assert stats["metrics"]["average_simulated_return"]["status"] == "unavailable"
+    assert stats["metrics"]["stop_loss_hit_rate"]["status"] == "unavailable"
+
+    buy_stats = service.get_stats(horizons=["5d"], action="buy")
+    assert buy_stats["total"] == 3
+    assert buy_stats["eligible"] == 3
+    assert buy_stats["completed"] == 2
+    assert buy_stats["buy_precision_pct"] == 100.0
+    assert buy_stats["filters"]["action"] == "buy"
+    segmented_stats = service.get_stats(
+        horizons=["5d"],
+        market="cn",
+        market_phase="postmarket",
+        source_type="analysis",
+        data_quality_level="good",
+    )
+    assert segmented_stats["total"] == 6
+    assert segmented_stats["filters"]["data_quality_level"] == "good"
 
 
 def test_stats_default_statuses_exclude_archived(isolated_db) -> None:
@@ -155,6 +233,20 @@ def test_stats_default_statuses_exclude_archived(isolated_db) -> None:
     assert default_stats["hit"] == 4
     assert archived_stats["statuses"] == ["archived"]
     assert archived_stats["total"] == 1
+
+
+def test_stats_empty_dataset_has_explicit_unavailable_rates(isolated_db) -> None:
+    stats = DecisionSignalOutcomeService(db_manager=isolated_db).get_stats(horizons=["5d"])
+
+    assert stats["total"] == 0
+    assert stats["eligible"] == 0
+    assert stats["completed"] == 0
+    assert stats["directional_accuracy_pct"] is None
+    assert stats["metrics"]["directional_accuracy"]["status"] == "unavailable"
+    assert stats["breakdown_availability"]["horizon"] == {
+        "status": "unavailable",
+        "reason": "no_outcome_rows",
+    }
 
 
 def test_stock_code_filter_uses_hk_aliases_without_widening_market_filter(isolated_db) -> None:

@@ -47,8 +47,6 @@ ensure_desktop_dependencies() {
     reason="package-lock marker missing"
   elif [[ "$(tr -d '[:space:]' < "${marker}")" != "$(package_lock_hash)" ]]; then
     reason="package-lock.json changed"
-  elif [[ ! -d node_modules/electron-updater ]]; then
-    reason="electron-updater missing"
   fi
 
   if [[ -n "${reason}" ]]; then

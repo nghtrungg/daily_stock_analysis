@@ -11,6 +11,7 @@ Covers:
 """
 
 import pytest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from src.services.name_to_code_resolver import (
@@ -19,6 +20,16 @@ from src.services.name_to_code_resolver import (
     _normalize_code,
     _build_reverse_map_no_duplicates,
 )
+
+
+@pytest.fixture(autouse=True)
+def _enable_legacy_markets_for_legacy_resolver_tests():
+    """Keep historical multi-market cases independent from the local .env."""
+    with patch(
+        "src.config.get_config",
+        return_value=SimpleNamespace(enabled_markets=["cn", "hk", "us", "jp", "kr", "tw", "vn"]),
+    ):
+        yield
 
 
 # ---------------------------------------------------------------------------
@@ -112,6 +123,13 @@ class TestBuildReverseMapNoDuplicates:
 # ---------------------------------------------------------------------------
 
 class TestResolveNameToCode:
+    def test_vietnam_index_english_name_resolves_without_legacy_fallback(self):
+        with patch(
+            "src.config.get_config",
+            return_value=SimpleNamespace(enabled_markets=["vn"], stock_index_remote_update_enabled=False),
+        ):
+            assert resolve_name_to_code("Vietnam Dairy Products Joint Stock Company") == "VNM.VN"
+
     def test_code_like_input_returned_normalized(self):
         assert resolve_name_to_code("600519") == "600519"
         assert resolve_name_to_code("600519.SH") == "600519"

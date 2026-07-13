@@ -99,6 +99,7 @@ export interface PerformanceMetrics {
   directionAccuracyPct?: number;
   winRatePct?: number;
   neutralRatePct?: number;
+  completionRatePct?: number;
   avgStockReturnPct?: number;
   avgSimulatedReturnPct?: number;
 
@@ -106,6 +107,10 @@ export interface PerformanceMetrics {
   takeProfitTriggerRate?: number;
   ambiguousRate?: number;
   avgDaysToFirstHit?: number;
+  headlineHorizonDays?: number;
+  isHeadlineHorizon?: boolean;
+  metricSampleCounts?: Record<string, number>;
+  metricAvailability?: Record<string, { status?: string; reason?: string }>;
 
   adviceBreakdown: Record<string, unknown>;
   diagnostics: Record<string, unknown>;

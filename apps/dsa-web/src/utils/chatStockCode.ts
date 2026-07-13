@@ -1,17 +1,18 @@
 import { validateStockCode } from './validation';
 import { normalizeStockCode } from './stockCode';
 
-const EXCHANGE_PREFIXES = new Set(['SH', 'SZ', 'BJ', 'HK', 'US', 'SS']);
-const LOWERCASE_TICKER_CONTEXT_RE = /换成|改看|分析|看看|研究|诊断|比较|对比|\bvs\b|和[^，。,.!?！？]{0,40}比|差异(?!化)|区别|不同|相比|对照|比一比|哪个|哪只|哪一个|谁更|更值得|更适合|怎么选|选哪|二选一/i;
+const EXCHANGE_PREFIXES = new Set(['VN']);
+// Han terms remain for backward-compatible parsing of stored conversations.
+const LOWERCASE_TICKER_CONTEXT_RE = /换成|改看|分析|看看|研究|诊断|比较|对比|\b(?:switch to|analy[sz]e|review|research|diagnose|compare|versus|vs|difference|different|which|better|choose|pick)\b|和[^，。,.!?！？]{0,40}比|差异(?!化)|区别|不同|相比|对照|比一比|哪个|哪只|哪一个|谁更|更值得|更适合|怎么选|选哪|二选一/i;
 const CONTEXTUAL_INDICATOR_TOKENS = new Set(['MA']);
-const INDICATOR_CONTEXT_RE = /指标|均线|移动平均|排列|多头|空头|金叉|死叉|支撑|压力|MA\d|SMA|EMA/i;
+const INDICATOR_CONTEXT_RE = /指标|均线|移动平均|排列|多头|空头|金叉|死叉|支撑|压力|indicator|moving average|bullish|bearish|cross|support|resistance|MA\d|SMA|EMA/i;
 
 // Mirrors backend _COMMON_WORDS for #1596 free-text extraction only.
 // Explicit validation via validateStockCode() intentionally keeps its original contract.
 const FREE_TEXT_TICKER_DENYLIST = new Set([
   'AM', 'AS', 'AT', 'BE', 'BY', 'DO', 'GO', 'HE', 'IF', 'IN',
   'IS', 'IT', 'ME', 'MY', 'NO', 'OF', 'ON', 'OR', 'SO', 'TO',
-  'UP', 'US', 'WE',
+  'UP', 'US', 'WE', 'VND',
   'THE', 'AND', 'FOR', 'ARE', 'BUT', 'NOT', 'YOU', 'ALL',
   'CAN', 'HAD', 'HER', 'WAS', 'ONE', 'OUR', 'OUT', 'HAS',
   'HIS', 'HOW', 'ITS', 'LET', 'MAY', 'NEW', 'NOW', 'OLD',

@@ -4,6 +4,7 @@
 from unittest.mock import patch
 
 import pandas as pd
+import pytest
 
 from data_provider.base import BaseFetcher, DataFetchError, DataFetcherManager, normalize_stock_code
 from data_provider.vn_fetcher import VnFetcher
@@ -60,10 +61,10 @@ def _daily_frame() -> pd.DataFrame:
     return pd.DataFrame(
         {
             "date": [pd.Timestamp("2026-07-07"), pd.Timestamp("2026-07-08")],
-            "open": [95.0, 100.0],
-            "high": [101.0, 103.0],
-            "low": [94.0, 98.0],
-            "close": [100.0, 102.0],
+            "open": [95000.0, 100000.0],
+            "high": [101000.0, 103000.0],
+            "low": [94000.0, 98000.0],
+            "close": [100000.0, 102000.0],
             "volume": [1000, 1100],
         }
     )
@@ -151,21 +152,29 @@ def test_vn_fetcher_strips_suffix_and_merges_active_intraday_bar_before_indicato
     assert kline.call_args.kwargs["days"] == 9
     intraday.assert_called_once_with("FPT")
     assert list(pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d"))[-1] == "2026-07-09"
-    assert float(df.iloc[-1]["close"]) == 110.0
+    assert float(df.iloc[-1]["close"]) == 110000.0
     assert float(df.iloc[-1]["volume"]) == 1500.0
-    assert float(df.iloc[-1]["amount"]) == 165000.0
+    assert float(df.iloc[-1]["amount"]) == 165000000.0
     assert "ma5" in df.columns
 
 
-def test_vn_fetcher_normalizes_vnd_daily_bars_to_live_quote_unit() -> None:
-    daily = _daily_frame()
-    daily[["open", "high", "low", "close"]] *= 1000
+def test_vn_fetcher_normalizes_thousand_vnd_intraday_price_to_actual_vnd() -> None:
+    daily = pd.DataFrame(
+        {
+            "date": [pd.Timestamp("2026-07-07"), pd.Timestamp("2026-07-08")],
+            "open": [55000.0, 55500.0],
+            "high": [56000.0, 56500.0],
+            "low": [54500.0, 55000.0],
+            "close": [55500.0, 56000.0],
+            "volume": [1000, 1100],
+        }
+    )
     snapshot = {
         "ticker": "VNM",
         "trading_date": "2026-07-09",
-        "latest_price": 102.0,
+        "latest_price": 56.6,
         "total_volume": 1500,
-        "quote": {"reference_price": 100.0},
+        "quote": {"reference_price": 56.0},
     }
 
     with patch("data_provider.vn_fetcher.vn_provider.get_vietnam_kline", return_value=daily), patch(
@@ -173,10 +182,41 @@ def test_vn_fetcher_normalizes_vnd_daily_bars_to_live_quote_unit() -> None:
     ):
         df = VnFetcher().get_daily_data("VNM.VN", start_date="2026-07-01", end_date="2026-07-09")
 
-    assert float(df.iloc[0]["open"]) == 95.0
-    assert float(df.iloc[-2]["close"]) == 102.0
-    assert float(df.iloc[-1]["open"]) == 102.0
-    assert float(df.iloc[-1]["pct_chg"]) == 0.0
+    assert float(df.iloc[0]["open"]) == 55000.0
+    assert float(df.iloc[-2]["close"]) == 56000.0
+    assert float(df.iloc[-1]["open"]) == 56000.0
+    assert float(df.iloc[-1]["close"]) == pytest.approx(56600.0)
+    assert float(df.iloc[-1]["amount"]) == pytest.approx(56600.0 * 1500)
+    assert float(df.iloc[-1]["pct_chg"]) == pytest.approx((56600.0 - 56000.0) / 56000.0 * 100)
+
+
+def test_vn_fetcher_normalizes_when_daily_and_live_are_both_thousand_vnd() -> None:
+    daily = pd.DataFrame(
+        {
+            "date": [pd.Timestamp("2026-07-08")],
+            "open": [55.5],
+            "high": [56.5],
+            "low": [55.0],
+            "close": [56.0],
+            "volume": [1100],
+        }
+    )
+    snapshot = {
+        "ticker": "VNM",
+        "trading_date": "2026-07-09",
+        "latest_price": 56.6,
+        "total_volume": 1500,
+        "quote": {"reference_price": 56.0},
+    }
+
+    with patch("data_provider.vn_fetcher.vn_provider.get_vietnam_kline", return_value=daily), patch(
+        "data_provider.vn_fetcher.vn_provider.get_vietnam_intraday_snapshot", return_value=snapshot
+    ):
+        df = VnFetcher().get_daily_data("VNM.VN", start_date="2026-07-01", end_date="2026-07-09")
+
+    assert float(df.iloc[0]["close"]) == pytest.approx(56000.0)
+    assert float(df.iloc[-1]["close"]) == pytest.approx(56600.0)
+    assert float(df.iloc[-1]["amount"]) == pytest.approx(56600.0 * 1500)
 
 
 def test_vn_kline_normalization_uses_date_column_without_ambiguous_index() -> None:
@@ -202,18 +242,27 @@ def test_vn_fetcher_accepts_date_as_both_column_and_index_from_provider() -> Non
 
 
 def test_vn_realtime_quote_uses_stripped_symbol() -> None:
+    daily = pd.DataFrame(
+        {
+            "date": [pd.Timestamp("2026-07-08")],
+            "open": [55500.0],
+            "high": [56500.0],
+            "low": [55000.0],
+            "close": [56000.0],
+            "volume": [1100],
+        }
+    )
     snapshot = {
         "ticker": "VNM",
         "trading_date": "2026-07-09",
-        "latest_price": 88.0,
+        "latest_price": 56.6,
         "total_volume": 2000,
-        "quote": {"reference_price": 80.0},
+        "quote": {"reference_price": 56.0},
         "as_of": "2026-07-09T10:15:00",
     }
 
-    with patch(
-        "data_provider.vn_fetcher.vn_provider.get_vietnam_intraday_snapshot",
-        return_value=snapshot,
+    with patch("data_provider.vn_fetcher.vn_provider.get_vietnam_kline", return_value=daily), patch(
+        "data_provider.vn_fetcher.vn_provider.get_vietnam_intraday_snapshot", return_value=snapshot
     ) as intraday:
         quote = VnFetcher().get_realtime_quote("VNM.VN")
 
@@ -222,8 +271,100 @@ def test_vn_realtime_quote_uses_stripped_symbol() -> None:
     assert quote.code == "VNM.VN"
     assert quote.market == "vn"
     assert quote.currency == "VND"
-    assert quote.price == 88.0
+    assert quote.price == pytest.approx(56600.0)
+    assert quote.pre_close == pytest.approx(56000.0)
+    assert quote.change_amount == pytest.approx(600.0)
+    assert quote.change_pct == pytest.approx(600.0 / 56000.0 * 100)
     assert quote.volume == 2000
+    assert quote.amount == pytest.approx(56600.0 * 2000)
+
+
+def test_vn_realtime_quote_normalizes_when_daily_is_also_thousand_vnd() -> None:
+    daily = pd.DataFrame(
+        {
+            "date": [pd.Timestamp("2026-07-08")],
+            "open": [55.5],
+            "high": [56.5],
+            "low": [55.0],
+            "close": [56.0],
+            "volume": [1100],
+        }
+    )
+    snapshot = {
+        "ticker": "VNM",
+        "trading_date": "2026-07-09",
+        "latest_price": 56.6,
+        "total_volume": 2000,
+        "quote": {"reference_price": 56.0},
+        "as_of": "2026-07-09T10:15:00",
+    }
+
+    with patch("data_provider.vn_fetcher.vn_provider.get_vietnam_kline", return_value=daily), patch(
+        "data_provider.vn_fetcher.vn_provider.get_vietnam_intraday_snapshot", return_value=snapshot
+    ):
+        quote = VnFetcher().get_realtime_quote("VNM.VN")
+
+    assert quote is not None
+    assert quote.price == pytest.approx(56600.0)
+    assert quote.pre_close == pytest.approx(56000.0)
+    assert quote.amount == pytest.approx(56600.0 * 2000)
+
+
+def test_vn_realtime_quote_preserves_reference_price_already_in_actual_vnd() -> None:
+    daily = pd.DataFrame(
+        {
+            "date": [pd.Timestamp("2026-07-08")],
+            "open": [55500.0],
+            "high": [56500.0],
+            "low": [55000.0],
+            "close": [56000.0],
+            "volume": [1100],
+        }
+    )
+    snapshot = {
+        "ticker": "VNM",
+        "trading_date": "2026-07-09",
+        "latest_price": 56.6,
+        "total_volume": 2000,
+        "quote": {"reference_price": 55700.0},
+        "as_of": "2026-07-09T10:15:00",
+    }
+
+    with patch("data_provider.vn_fetcher.vn_provider.get_vietnam_kline", return_value=daily), patch(
+        "data_provider.vn_fetcher.vn_provider.get_vietnam_intraday_snapshot", return_value=snapshot
+    ):
+        quote = VnFetcher().get_realtime_quote("VNM.VN")
+
+    assert quote is not None
+    assert quote.price == pytest.approx(56600.0)
+    assert quote.pre_close == pytest.approx(55700.0)
+    assert quote.change_amount == pytest.approx(900.0)
+    assert quote.change_pct == pytest.approx(900.0 / 55700.0 * 100)
+
+
+def test_vn_realtime_quote_normalizes_without_daily_history() -> None:
+    snapshot = {
+        "ticker": "VNM",
+        "trading_date": "2026-07-09",
+        "latest_price": 56.6,
+        "total_volume": 2000,
+        "quote": {"reference_price": 55.7},
+        "as_of": "2026-07-09T10:15:00",
+    }
+
+    with patch(
+        "data_provider.vn_fetcher.vn_provider.get_vietnam_kline",
+        return_value=pd.DataFrame(),
+    ), patch(
+        "data_provider.vn_fetcher.vn_provider.get_vietnam_intraday_snapshot",
+        return_value=snapshot,
+    ):
+        quote = VnFetcher().get_realtime_quote("VNM.VN")
+
+    assert quote is not None
+    assert quote.price == pytest.approx(56600.0)
+    assert quote.pre_close == pytest.approx(55700.0)
+    assert quote.amount == pytest.approx(56600.0 * 2000)
 
 
 def test_vn_ownership_snapshot_preserves_disclosed_provider_records() -> None:

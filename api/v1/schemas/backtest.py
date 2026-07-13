@@ -101,6 +101,7 @@ class PerformanceMetrics(BaseModel):
     direction_accuracy_pct: Optional[float] = None
     win_rate_pct: Optional[float] = None
     neutral_rate_pct: Optional[float] = None
+    completion_rate_pct: Optional[float] = None
     avg_stock_return_pct: Optional[float] = None
     avg_simulated_return_pct: Optional[float] = None
 
@@ -108,6 +109,10 @@ class PerformanceMetrics(BaseModel):
     take_profit_trigger_rate: Optional[float] = None
     ambiguous_rate: Optional[float] = None
     avg_days_to_first_hit: Optional[float] = None
+    headline_horizon_days: int = 5
+    is_headline_horizon: bool = False
+    metric_sample_counts: Dict[str, int] = Field(default_factory=dict)
+    metric_availability: Dict[str, Any] = Field(default_factory=dict)
 
     advice_breakdown: Dict[str, Any] = Field(default_factory=dict)
     diagnostics: Dict[str, Any] = Field(default_factory=dict)

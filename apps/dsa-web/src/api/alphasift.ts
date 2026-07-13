@@ -335,7 +335,7 @@ export const alphasiftApi = {
       const status = await alphasiftApi.getStatus();
       if (!status.available) {
         const reason = status.diagnostics?.reason ? `（${status.diagnostics.reason}）` : '';
-        throw new Error(`AlphaSift 适配层不可用${reason}。请确认后端已安装项目依赖，必要时执行 pip install -r requirements.txt 或重建 Docker/桌面后端。`);
+        throw new Error(`The AlphaSift adapter is unavailable${reason}. Confirm that backend dependencies are installed; if needed, run pip install -r requirements.txt or rebuild the Docker/desktop backend.`);
       }
     } catch (error) {
       try {

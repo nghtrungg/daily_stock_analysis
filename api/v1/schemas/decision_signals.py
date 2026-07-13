@@ -162,30 +162,69 @@ class DecisionSignalOutcomeStatsBucket(BaseModel):
     dimension: str
     value: str
     total: int
+    eligible: int = 0
     completed: int
     unable: int
+    unable_eligible: int = 0
+    non_directional: int = 0
     hit: int
     miss: int
     neutral: int
     hit_rate_pct: Optional[float] = None
+    actionable_coverage_pct: Optional[float] = None
+    completion_rate_pct: Optional[float] = None
+    directional_accuracy_pct: Optional[float] = None
+    buy_precision_pct: Optional[float] = None
+    sell_precision_pct: Optional[float] = None
+    neutral_rate_pct: Optional[float] = None
     avg_stock_return_pct: Optional[float] = None
     unable_reasons: Dict[str, int] = Field(default_factory=dict)
+    metrics: Dict[str, "DecisionSignalBaselineMetric"] = Field(default_factory=dict)
+
+
+class DecisionSignalBaselineMetric(BaseModel):
+    status: Literal["available", "unavailable"]
+    value: Optional[float] = None
+    unit: Literal["count", "percent"]
+    numerator: Optional[float] = None
+    denominator: Optional[int] = None
+    sample_count: int = 0
+    unavailable_reason: Optional[str] = None
+
+
+class DecisionSignalBreakdownAvailability(BaseModel):
+    status: Literal["available", "unavailable"]
+    reason: Optional[str] = None
 
 
 class DecisionSignalOutcomeStatsResponse(BaseModel):
     engine_version: str
+    headline_horizon: str = "5d"
     horizons: Optional[List[str]] = None
     statuses: List[str] = Field(default_factory=list)
     total: int
+    eligible: int = 0
     completed: int
     unable: int
+    unable_eligible: int = 0
+    non_directional: int = 0
     hit: int
     miss: int
     neutral: int
     hit_rate_pct: Optional[float] = None
+    actionable_coverage_pct: Optional[float] = None
+    completion_rate_pct: Optional[float] = None
+    directional_accuracy_pct: Optional[float] = None
+    buy_precision_pct: Optional[float] = None
+    sell_precision_pct: Optional[float] = None
+    neutral_rate_pct: Optional[float] = None
     avg_stock_return_pct: Optional[float] = None
     unable_reasons: Dict[str, int] = Field(default_factory=dict)
     breakdowns: Dict[str, List[DecisionSignalOutcomeStatsBucket]] = Field(default_factory=dict)
+    breakdown_availability: Dict[str, DecisionSignalBreakdownAvailability] = Field(default_factory=dict)
+    metrics: Dict[str, DecisionSignalBaselineMetric] = Field(default_factory=dict)
+    filters: Dict[str, Optional[str]] = Field(default_factory=dict)
+    version_context: Dict[str, Any] = Field(default_factory=dict)
 
 
 class DecisionSignalFeedbackRequest(BaseModel):

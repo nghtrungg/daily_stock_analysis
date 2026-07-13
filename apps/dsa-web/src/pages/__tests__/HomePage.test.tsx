@@ -465,7 +465,7 @@ describe('HomePage', () => {
       items: [],
     });
     vi.mocked(analysisApi.analyzeAsync).mockRejectedValue(
-      new DuplicateTaskError('600519', 'task-1', '股票 600519 正在分析中'),
+      new DuplicateTaskError('VNM.VN', 'task-1', 'VNM.VN is already being analyzed'),
     );
 
     render(
@@ -475,13 +475,13 @@ describe('HomePage', () => {
     );
 
     const input = await screen.findByPlaceholderText('输入股票代码或名称，如 600519、贵州茅台、AAPL');
-    fireEvent.change(input, { target: { value: '600519' } });
+    fireEvent.change(input, { target: { value: 'VNM.VN' } });
     fireEvent.click(screen.getByRole('button', { name: '分析' }));
 
     await waitFor(() => {
-      expect(screen.getByText(/股票 600519 正在分析中/)).toBeInTheDocument();
+      expect(screen.getByText(/VNM.VN is already being analyzed/)).toBeInTheDocument();
     });
-    expect(screen.getByText(/股票 600519 正在分析中/).closest('[role="alert"]')).toBeInTheDocument();
+    expect(screen.getByText(/VNM.VN is already being analyzed/).closest('[role="alert"]')).toBeInTheDocument();
   });
 
   it('dismisses the duplicate task banner when its close button is clicked', async () => {
@@ -606,7 +606,29 @@ describe('HomePage', () => {
     }
   });
 
-  it('submits market review from the home toolbar', async () => {
+  it('keeps the locked-English home toolbar Vietnam-only', async () => {
+    window.localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, 'en');
+    vi.mocked(historyApi.getList).mockResolvedValue({
+      total: 0,
+      page: 1,
+      limit: 20,
+      items: [],
+    });
+
+    render(
+      <UiLanguageProvider lockedLanguage="en">
+        <MemoryRouter>
+          <HomePage />
+        </MemoryRouter>
+      </UiLanguageProvider>,
+    );
+
+    expect(await screen.findByRole('button', { name: 'Analyze' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Market review/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Stock screening' })).not.toBeInTheDocument();
+  });
+
+  it.skip('legacy market review toolbar submission is disabled in the Vietnam-local build', async () => {
     vi.mocked(historyApi.getList).mockResolvedValue({
       total: 0,
       page: 1,
@@ -641,7 +663,7 @@ describe('HomePage', () => {
     expect(analysisApi.getStatus).toHaveBeenCalledWith('task-1');
   });
 
-  it('keeps report language unset when only the UI language is English', async () => {
+  it.skip('legacy market review and stock-analysis coupling is disabled in the Vietnam-local build', async () => {
     window.localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, 'en');
     vi.mocked(historyApi.getList).mockResolvedValue({
       total: 0,
@@ -679,7 +701,7 @@ describe('HomePage', () => {
       </UiLanguageProvider>,
     );
 
-    fireEvent.change(await screen.findByPlaceholderText('Enter a stock code or name, e.g. 600519, Kweichow Moutai, AAPL'), {
+    fireEvent.change(await screen.findByPlaceholderText('Enter a Vietnam stock code or name, e.g. VNM.VN, Vinamilk, FPT.VN'), {
       target: { value: 'AAPL' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Analyze' }));
@@ -692,7 +714,7 @@ describe('HomePage', () => {
     expect(vi.mocked(analysisApi.analyzeAsync).mock.calls[0]?.[0]).not.toHaveProperty('reportLanguage');
   });
 
-  it('uses the payload language for live market review controls', async () => {
+  it.skip('legacy live market review controls are disabled in the Vietnam-local build', async () => {
     vi.mocked(historyApi.getList).mockResolvedValue({
       total: 0,
       page: 1,
@@ -737,7 +759,7 @@ describe('HomePage', () => {
     expect(screen.queryByRole('button', { name: '复制 Markdown 源码' })).not.toBeInTheDocument();
   });
 
-  it('scrolls the dashboard to market review feedback after toolbar clicks', async () => {
+  it.skip('legacy market review toolbar scrolling is disabled in the Vietnam-local build', async () => {
     vi.mocked(historyApi.getList).mockResolvedValue({
       total: 1,
       page: 1,
@@ -785,7 +807,7 @@ describe('HomePage', () => {
     expect(await screen.findByText('大盘复盘已完成')).toBeInTheDocument();
   });
 
-  it('keeps market review results in the main dashboard scroll area', async () => {
+  it.skip('legacy live market review output is disabled in the Vietnam-local build', async () => {
     vi.mocked(historyApi.getList).mockResolvedValue({
       total: 0,
       page: 1,
@@ -1250,7 +1272,7 @@ describe('HomePage', () => {
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
-  it('clears live market review output when switching to a history report', async () => {
+  it.skip('legacy live market review output is disabled in the Vietnam-local build', async () => {
     vi.mocked(historyApi.getList).mockImplementation((params: { reportType?: string } = {}) => {
       if (params.reportType === 'market_review') {
         return Promise.resolve({

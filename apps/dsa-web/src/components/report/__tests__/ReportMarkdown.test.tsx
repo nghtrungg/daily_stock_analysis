@@ -30,4 +30,21 @@ describe('ReportMarkdown', () => {
     expect(await screen.findByRole('button', { name: 'Copy Markdown Source' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy Plain Text' })).toBeInTheDocument();
   });
+
+  it('uses localized copy labels for Vietnamese reports', async () => {
+    vi.mocked(historyApi.getMarkdown).mockResolvedValue('# Báo cáo đầy đủ');
+
+    render(
+      <ReportMarkdown
+        recordId={2}
+        stockName="FPT"
+        stockCode="FPT"
+        reportLanguage="vi"
+        onClose={() => {}}
+      />
+    );
+
+    expect(await screen.findByRole('button', { name: 'Sao chép nguồn Markdown' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sao chép văn bản thuần' })).toBeInTheDocument();
+  });
 });

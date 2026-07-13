@@ -48,7 +48,7 @@ class TestAnalysisIntegration:
         """Test flow: User enters stock name -> resolved to code -> task submitted."""
         # Setup mock behavior
         mock_task_queue.submit_tasks_batch.return_value = (
-            [MagicMock(task_id="test_task_123", stock_code="600519", analysis_phase="auto")],
+            [MagicMock(task_id="test_task_123", stock_code="VNM.VN", analysis_phase="auto")],
             []
         )
 
@@ -56,9 +56,9 @@ class TestAnalysisIntegration:
         response = client.post(
             "/api/v1/analysis/analyze",
             json={
-                "stock_code": "贵州茅台",
+                "stock_code": "VNM",
                 "async_mode": True,
-                "original_query": "贵州茅台",
+                "original_query": "Vinamilk",
                 "selection_source": "manual"
             }
         )
@@ -73,9 +73,9 @@ class TestAnalysisIntegration:
         # semantics even if the queue API gains orthogonal optional flags.
         mock_task_queue.submit_tasks_batch.assert_called_once()
         _, kwargs = mock_task_queue.submit_tasks_batch.call_args
-        assert kwargs["stock_codes"] == ["600519"]
+        assert kwargs["stock_codes"] == ["VNM.VN"]
         assert kwargs["stock_name"] is None
-        assert kwargs["original_query"] == "贵州茅台"
+        assert kwargs["original_query"] == "Vinamilk"
         assert kwargs["selection_source"] == "manual"
         assert kwargs["report_type"] == "detailed"
         assert kwargs["analysis_phase"] == "auto"
@@ -83,13 +83,13 @@ class TestAnalysisIntegration:
         assert kwargs["notify"] is True
 
     def test_trigger_analysis_batch_deduplication(self, client, mock_task_queue):
-        """Test de-duplication across different formats (600519 and 600519.SH)."""
+        """Test de-duplication across Vietnam shorthand and canonical formats."""
         mock_task_queue.submit_tasks_batch.return_value = ([], [])
 
         client.post(
             "/api/v1/analysis/analyze",
             json={
-                "stock_codes": ["600519", "600519.SH"],
+                "stock_codes": ["VNM", "VNM.VN"],
                 "async_mode": True
             }
         )
@@ -98,12 +98,12 @@ class TestAnalysisIntegration:
         mock_task_queue.submit_tasks_batch.assert_called_once()
         args, kwargs = mock_task_queue.submit_tasks_batch.call_args
         assert len(kwargs["stock_codes"]) == 1
-        assert kwargs["stock_codes"] == ["600519"]
+        assert kwargs["stock_codes"] == ["VNM.VN"]
         assert kwargs["analysis_phase"] == "auto"
 
     def test_trigger_analysis_dos_protection(self, client):
         """Test that excessive stock codes are rejected."""
-        too_many_codes = [f"{i:06d}" for i in range(101)]
+        too_many_codes = [f"V{i:03d}.VN" for i in range(101)]
         response = client.post(
             "/api/v1/analysis/analyze",
             json={
@@ -113,7 +113,7 @@ class TestAnalysisIntegration:
         )
 
         assert response.status_code == 400
-        assert "最多支持" in response.json()["message"]
+        assert "at most" in response.json()["message"].lower()
 
     def test_trigger_analysis_metadata_isolation_in_batch(self, client, mock_task_queue):
         """Test that single-stock metadata isn't applied to batch tasks."""
@@ -122,9 +122,9 @@ class TestAnalysisIntegration:
         client.post(
             "/api/v1/analysis/analyze",
             json={
-                "stock_codes": ["600519", "000001"],
-                "stock_name": "贵州茅台",
-                "original_query": "茅台",
+                "stock_codes": ["VNM.VN", "FPT.VN"],
+                "stock_name": "Vinamilk",
+                "original_query": "Vinamilk",
                 "async_mode": True
             }
         )
@@ -140,14 +140,14 @@ class TestAnalysisIntegration:
     def test_trigger_analysis_explicit_analysis_phase(self, client, mock_task_queue):
         """Explicit analysis_phase is passed through to the task queue."""
         mock_task_queue.submit_tasks_batch.return_value = (
-            [MagicMock(task_id="test_task_phase", stock_code="600519", analysis_phase="intraday")],
+            [MagicMock(task_id="test_task_phase", stock_code="VNM.VN", analysis_phase="intraday")],
             []
         )
 
         response = client.post(
             "/api/v1/analysis/analyze",
             json={
-                "stock_code": "600519",
+                "stock_code": "VNM.VN",
                 "async_mode": True,
                 "analysis_phase": "intraday",
             },

@@ -7,7 +7,7 @@ import type {
 import { Badge, Button, Card, ScoreGauge } from '../common';
 import { formatDateTime } from '../../utils/format';
 import { getMarketPhaseSummaryLabel, getPartialBarLabel } from '../../utils/marketPhase';
-import { getReportText, normalizeReportLanguage } from '../../utils/reportLanguage';
+import { getReportLocale, getReportText, normalizeReportLanguage } from '../../utils/reportLanguage';
 import { useUiLanguage } from '../../contexts/UiLanguageContext';
 
 interface ReportOverviewProps {
@@ -49,10 +49,10 @@ const normalizeBoardType = (value?: string): 'sector' | 'concept' | null => {
   if (!normalized) {
     return null;
   }
-  if (['行业', '行业板块', 'industry', 'sector'].includes(normalized)) {
+  if (['行业', '行业板块', 'industry', 'sector', 'ngành', 'nhóm ngành'].includes(normalized)) {
     return 'sector';
   }
-  if (['概念', '概念板块', '题材', 'concept', 'theme'].includes(normalized)) {
+  if (['概念', '概念板块', '题材', 'concept', 'theme', 'chủ đề'].includes(normalized)) {
     return 'concept';
   }
   return null;
@@ -286,7 +286,7 @@ export const ReportOverview: React.FC<ReportOverviewProps> = ({
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                    {formatDateTime(meta.createdAt)}
+                    {formatDateTime(meta.createdAt, getReportLocale(reportLanguage))}
                   </span>
                 </div>
               </div>

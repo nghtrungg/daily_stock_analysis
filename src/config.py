@@ -731,7 +731,7 @@ class Config:
     longbridge_app_secret: Optional[str] = None
     longbridge_access_token: Optional[str] = None
     longbridge_oauth_client_id: Optional[str] = None
-    stock_index_remote_update_enabled: bool = True
+    stock_index_remote_update_enabled: bool = False
 
     # === AlphaSift optional stock screening integration ===
     alphasift_enabled: bool = False
@@ -1025,6 +1025,7 @@ class Config:
     schedule_enabled: bool = False            # 是否启用定时任务
     schedule_time: str = "18:00"              # 每日推送时间（HH:MM 格式）
     schedule_times: List[str] = field(default_factory=lambda: ["18:00"])
+    schedule_timezone: str = "Asia/Ho_Chi_Minh"
     schedule_run_immediately: bool = True     # 启动时是否立即执行一次
     run_immediately: bool = True              # 启动时是否立即执行一次（非定时模式）
     market_review_enabled: bool = False       # Vietnam-focused default: no unsupported non-VN market review
@@ -1612,6 +1613,11 @@ class Config:
             default='',
             prefer_env_file=True,
         )
+        schedule_timezone_value = cls._resolve_env_value(
+            'SCHEDULE_TIMEZONE',
+            default='Asia/Ho_Chi_Minh',
+            prefer_env_file=True,
+        )
 
         report_language_raw = cls._resolve_report_language_env_value(
             preexisting_report_language
@@ -1641,7 +1647,7 @@ class Config:
             longbridge_oauth_client_id=os.getenv('LONGBRIDGE_OAUTH_CLIENT_ID') or None,
             stock_index_remote_update_enabled=parse_env_bool(
                 os.getenv('STOCK_INDEX_REMOTE_UPDATE_ENABLED'),
-                default=True,
+                default=False,
             ),
             generation_backend=generation_backend,
             generation_fallback_backend=generation_fallback_backend,
@@ -1980,6 +1986,10 @@ class Config:
             schedule_times=normalize_schedule_times(
                 schedule_times_value,
                 fallback_time=(schedule_time_value or '18:00').strip() or '18:00',
+            ),
+            schedule_timezone=(
+                (schedule_timezone_value or 'Asia/Ho_Chi_Minh').strip()
+                or 'Asia/Ho_Chi_Minh'
             ),
             schedule_run_immediately=schedule_run_immediately,
             run_immediately=legacy_run_immediately,
@@ -3264,6 +3274,15 @@ class Config:
                     message=f"通知时区配置无效：{exc}",
                     field="NOTIFICATION_TIMEZONE",
                 ))
+
+        try:
+            validate_notification_timezone(self.schedule_timezone)
+        except ValueError as exc:
+            issues.append(ConfigIssue(
+                severity="error",
+                message=f"Invalid schedule timezone: {exc}",
+                field="SCHEDULE_TIMEZONE",
+            ))
 
         if self.notification_min_severity and not is_supported_notification_severity(self.notification_min_severity):
             issues.append(ConfigIssue(

@@ -31,6 +31,9 @@ from data_provider.realtime_types import ChipDistribution
 from src.analyzer import (
     GeminiAnalyzer,
     AnalysisResult,
+    _filter_vietnam_direct_news,
+    _sanitize_vietnam_prompt_payload,
+    _strip_han_prompt_lines,
     apply_long_term_trend_guardrail,
     enforce_actionable_trade_plan,
     fill_money_flow_indicators_if_needed,
@@ -93,6 +96,20 @@ from src.core.trading_calendar import (
 )
 from data_provider.us_index_mapping import is_us_stock_code
 from bot.models import BotMessage
+
+
+def _sanitize_vietnam_history_payload(
+    code: str,
+    news_content: Optional[str],
+    context_snapshot: Dict[str, Any],
+) -> Tuple[Optional[str], Dict[str, Any]]:
+    """Keep persisted Vietnam analysis evidence free of foreign/Han legacy text."""
+    if not is_vn_market_symbol(code):
+        return news_content, context_snapshot
+
+    sanitized_news = _strip_han_prompt_lines(_filter_vietnam_direct_news(news_content))
+    sanitized_snapshot = _sanitize_vietnam_prompt_payload(context_snapshot)
+    return sanitized_news or None, sanitized_snapshot if isinstance(sanitized_snapshot, dict) else {}
 
 
 logger = logging.getLogger(__name__)
@@ -853,12 +870,17 @@ class StockAnalysisPipeline:
                         analysis_context_pack_overview=analysis_context_pack_overview,
                         market_phase_summary=market_phase_summary,
                     )
+                    history_news_content, context_snapshot = _sanitize_vietnam_history_payload(
+                        code,
+                        news_context,
+                        context_snapshot,
+                    )
                     result.diagnostic_context_snapshot = context_snapshot
                     saved_history_id = self.db.save_analysis_history(
                         result=result,
                         query_id=query_id,
                         report_type=report_type.value,
-                        news_content=news_context,
+                        news_content=history_news_content,
                         context_snapshot=context_snapshot,
                         save_snapshot=self.save_context_snapshot
                     )
@@ -1532,6 +1554,11 @@ class StockAnalysisPipeline:
                         chip_data=chip_data,
                         analysis_context_pack_overview=analysis_context_pack_overview,
                         market_phase_summary=market_phase_summary,
+                    )
+                    _, agent_context_snapshot = _sanitize_vietnam_history_payload(
+                        code,
+                        None,
+                        agent_context_snapshot,
                     )
                     result.diagnostic_context_snapshot = agent_context_snapshot
                     agent_context_snapshot["stock_name"] = resolved_stock_name

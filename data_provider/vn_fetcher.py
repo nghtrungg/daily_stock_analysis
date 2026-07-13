@@ -56,6 +56,7 @@ class VnFetcher(BaseFetcher):
             return pd.DataFrame(columns=STANDARD_COLUMNS)
 
         work = self._ensure_date_column_frame(df)
+        work = self._scale_thousand_vnd_frame(work)
 
         for column in ("amount", "pct_chg"):
             if column not in work.columns:
@@ -76,12 +77,16 @@ class VnFetcher(BaseFetcher):
         if not snapshot:
             return None
 
-        price = safe_float(snapshot.get("latest_price"))
-        if price is None or price <= 0:
+        raw_price = safe_float(snapshot.get("latest_price"))
+        if raw_price is None or raw_price <= 0:
             return None
+
+        daily = vn_provider.get_vietnam_kline(symbol, days=30)
+        _, price, _quote_scale = self._reconcile_actual_vnd(daily, raw_price)
 
         quote_payload = snapshot.get("quote") if isinstance(snapshot.get("quote"), dict) else {}
         pre_close = safe_float(quote_payload.get("reference_price"))
+        pre_close = self._normalize_related_quote_price(pre_close, price)
         volume = safe_int(snapshot.get("total_volume") or snapshot.get("morning_volume"))
         amount = price * volume if volume is not None else None
         change_amount = price - pre_close if pre_close and pre_close > 0 else None
@@ -166,13 +171,11 @@ class VnFetcher(BaseFetcher):
         if work.empty:
             return daily
 
-        # vnstock endpoints do not consistently use the same price unit.  Some
-        # daily OHLC responses are in VND (for example 55,700), while the live
-        # quote for the same instrument is expressed in thousand VND (56.5).
-        # Compare overlapping sources instead of applying a ticker- or
-        # threshold-based conversion, then normalize the full OHLC history
-        # before indicators and the active bar are calculated.
-        work = cls._align_daily_price_unit(work, price)
+        # vnstock endpoints do not consistently use the same price unit. Daily
+        # OHLC can be actual VND (for example 56,000), while the live quote is
+        # expressed in thousand VND (56.6). Reconcile overlapping sources and
+        # scale the smaller one upward so every downstream value is actual VND.
+        work, price, _ = cls._reconcile_actual_vnd(work, price)
 
         volume = safe_float(snapshot.get("total_volume") or snapshot.get("morning_volume")) or 0.0
         last_close = safe_float(work.iloc[-1].get("close")) or price
@@ -211,32 +214,95 @@ class VnFetcher(BaseFetcher):
         return pd.concat([work, pd.DataFrame([active_row])], ignore_index=True)
 
     @staticmethod
-    def _align_daily_price_unit(daily: pd.DataFrame, quote_price: float) -> pd.DataFrame:
-        """Align daily OHLC prices to a live quote when they differ by 1,000x.
+    def _reconcile_actual_vnd(
+        daily: pd.DataFrame,
+        quote_price: float,
+    ) -> tuple[pd.DataFrame, float, float]:
+        """Reconcile daily and quote prices into actual VND.
 
         Vietnamese providers legitimately expose prices in either VND or
-        thousand VND.  A factor close to 1,000 is a clear unit mismatch; other
-        differences are normal price movement and must remain untouched.
+        thousand VND. A factor close to 1,000 is a clear unit mismatch. The
+        lower-valued source is therefore scaled upward; normal price movement
+        remains untouched. The returned multiplier records the live-price
+        conversion only; related snapshot fields are reconciled independently
+        because one provider response can mix units.
         """
-        if quote_price <= 0 or daily.empty:
-            return daily
+        if quote_price <= 0:
+            return daily, quote_price, 1.0
+
+        # A live quote can remain available when the daily-history endpoint is
+        # degraded. vnstock/KBS live equity prices below 1,000 use the market's
+        # thousand-VND display convention, so preserve actual-VND output even
+        # without a daily close to use as the reconciliation anchor.
+        if daily.empty:
+            if quote_price < 1000:
+                return daily, quote_price * 1000.0, 1000.0
+            return daily, quote_price, 1.0
 
         last_close = safe_float(daily.iloc[-1].get("close"))
         if last_close is None or last_close <= 0:
-            return daily
+            if quote_price < 1000:
+                return daily, quote_price * 1000.0, 1000.0
+            return daily, quote_price, 1.0
+
+        # The vnstock/KBS equity endpoints expose both OHLC and live quotes in
+        # thousand-VND units (for example 56.6 for 56,600 VND). When both
+        # sources use that documented market convention there is no 1,000x
+        # mismatch to detect, so normalize the pair explicitly here.
+        if last_close < 1000 and quote_price < 1000:
+            aligned = VnFetcher._scale_thousand_vnd_frame(daily)
+            logger.info("Normalized Vietnam market prices from thousand VND to actual VND")
+            return aligned, quote_price * 1000.0, 1000.0
 
         ratio = last_close / quote_price
-        if not 900 <= ratio <= 1100:
-            return daily
+        if 900 <= ratio <= 1100:
+            logger.warning(
+                "Normalized Vietnam live quote from thousand VND to VND (ratio %.2f)",
+                ratio,
+            )
+            return daily, quote_price * 1000.0, 1000.0
 
+        inverse_ratio = quote_price / last_close
+        if 900 <= inverse_ratio <= 1100:
+            aligned = daily.copy()
+            for column in ("open", "high", "low", "close", "amount"):
+                if column in aligned.columns:
+                    aligned[column] = pd.to_numeric(aligned[column], errors="coerce") * 1000.0
+            logger.warning(
+                "Normalized Vietnam daily prices from thousand VND to VND (ratio %.2f)",
+                inverse_ratio,
+            )
+            return aligned, quote_price, 1.0
+
+        return daily, quote_price, 1.0
+
+    @staticmethod
+    def _normalize_related_quote_price(value: Optional[float], actual_price: float) -> Optional[float]:
+        """Align a snapshot reference price to an already normalized live price.
+
+        Some VN quote payloads mix units within one response: ``latest_price``
+        may use thousand VND while ``reference_price`` is already actual VND.
+        Scale only the related field that is still below 1,000 when the live
+        price has already been normalized to actual VND.
+        """
+        if value is None or value <= 0:
+            return value
+        if actual_price >= 1000 and value < 1000:
+            return value * 1000.0
+        return value
+
+    @staticmethod
+    def _scale_thousand_vnd_frame(daily: pd.DataFrame) -> pd.DataFrame:
+        """Convert a vnstock/KBS price frame from thousand VND to VND once."""
+        if daily is None or daily.empty or "close" not in daily.columns:
+            return daily
+        closes = pd.to_numeric(daily["close"], errors="coerce").dropna()
+        if closes.empty or float(closes.median()) >= 1000:
+            return daily
         aligned = daily.copy()
-        for column in ("open", "high", "low", "close"):
+        for column in ("open", "high", "low", "close", "amount"):
             if column in aligned.columns:
-                aligned[column] = pd.to_numeric(aligned[column], errors="coerce") / 1000.0
-        logger.warning(
-            "Normalized Vietnam daily OHLC from VND to thousand VND to match live quote (ratio %.2f)",
-            ratio,
-        )
+                aligned[column] = pd.to_numeric(aligned[column], errors="coerce") * 1000.0
         return aligned
 
     @staticmethod

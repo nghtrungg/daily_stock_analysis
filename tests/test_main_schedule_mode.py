@@ -406,11 +406,12 @@ class MainScheduleModeTestCase(unittest.TestCase):
         )
         run_full_analysis.assert_called_once_with(config, args, None)
         warning_log.assert_any_call(
-            "定时模式下检测到 --stocks 参数；计划执行将忽略启动时股票快照，并在每次运行前重新读取最新的 STOCK_LIST。"
+            "--stocks was supplied in scheduled mode. Scheduled runs ignore the startup "
+            "snapshot and reload the latest STOCK_LIST before every execution."
         )
 
     def test_standalone_run_resolves_stocks_before_run_full_analysis(self) -> None:
-        args = self._make_args(stocks="005930")
+        args = self._make_args(stocks="VNM")
         config = self._make_config(run_immediately=True)
 
         with patch("main.parse_arguments", return_value=args), \
@@ -422,7 +423,20 @@ class MainScheduleModeTestCase(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         run_full_analysis.assert_called_once()
         _, _, stock_codes = run_full_analysis.call_args.args
-        self.assertEqual(stock_codes, ["005930.KS"])
+        self.assertEqual(stock_codes, ["VNM.VN"])
+
+    def test_standalone_run_rejects_foreign_symbols_in_vietnam_only_mode(self) -> None:
+        args = self._make_args(stocks="AAPL")
+        config = self._make_config(run_immediately=True, enabled_markets=["vn"])
+
+        with patch("main.parse_arguments", return_value=args), \
+             patch("main.get_config", return_value=config), \
+             patch("main.setup_logging"), \
+             patch("main.run_full_analysis") as run_full_analysis:
+            exit_code = main.main()
+
+        self.assertEqual(exit_code, 2)
+        run_full_analysis.assert_not_called()
 
     def test_schedule_mode_reload_uses_latest_runtime_config(self) -> None:
         args = self._make_args(schedule=True)
@@ -511,7 +525,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
             background_task["task"]()
 
         worker.run_once.assert_called_once_with()
-        info_log.assert_any_call("[EventMonitor] 本轮触发 %d 条提醒", 2)
+        info_log.assert_any_call("[EventMonitor] Triggered %d alerts in this run", 2)
 
     def test_schedule_mode_registers_event_monitor_worker_without_legacy_rules(self) -> None:
         args = self._make_args(schedule=True)
@@ -1577,7 +1591,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
         pipeline.notifier.send.assert_not_called()
         pipeline.notifier.save_report_to_file.assert_called_once()
         saved_content, saved_filename = pipeline.notifier.save_report_to_file.call_args.args
-        self.assertTrue(saved_content.startswith("# 🎯 大盘复盘\n\n"))
+        self.assertTrue(saved_content.startswith("# 🎯 Tổng quan thị trường\n\n"))
         self.assertIn("## 本轮运行时完整复盘", saved_content)
         self.assertTrue(saved_filename.startswith("market_review_"))
         self.assertTrue(saved_filename.endswith(".md"))
@@ -1954,6 +1968,19 @@ class MainScheduleModeTestCase(unittest.TestCase):
         self.assertEqual(call_args.kwargs["override_region"], "cn,us")
         self.assertEqual(call_args.kwargs["trigger_source"], "cli")
 
+    def test_market_review_mode_is_blocked_in_vietnam_only_mode(self) -> None:
+        args = self._make_args(market_review=True)
+        config = self._make_config(enabled_markets=["vn"])
+
+        with patch("main.parse_arguments", return_value=args), \
+             patch("main.get_config", return_value=config), \
+             patch("main.setup_logging"), \
+             patch("main._run_market_review_with_shared_lock") as run_with_lock:
+            exit_code = main.main()
+
+        self.assertEqual(exit_code, 2)
+        run_with_lock.assert_not_called()
+
     def test_market_review_mode_respects_comma_list_market_review_region(self) -> None:
         args = self._make_args(market_review=True)
         config = self._make_config(
@@ -2014,7 +2041,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
 
         self.assertEqual(exit_code, 1)
         output = capture_stream.getvalue()
-        self.assertIn("加载配置失败", output)
+        self.assertIn("Failed to load configuration", output)
         self.assertIn("config boom", output)
 
     def test_bootstrap_logging_failure_does_not_block_startup(self) -> None:
@@ -2062,9 +2089,9 @@ class MainScheduleModeTestCase(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         run_mock.assert_called_once()
         output = capture_stream.getvalue()
-        self.assertIn("文件日志初始化失败，已降级为控制台日志输出", output)
+        self.assertIn("File logging initialization failed; falling back to console output", output)
         self.assertIn("/app/logs", output)
-        self.assertIn("官方 Docker 镜像启动入口会自动修复默认挂载目录权限", output)
+        self.assertIn("The official Docker entrypoint repairs default mounted-directory permissions", output)
 
     def test_run_full_analysis_import_failure_propagates(self) -> None:
         """P1: import failures in run_full_analysis must propagate, not be swallowed."""

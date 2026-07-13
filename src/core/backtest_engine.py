@@ -396,9 +396,12 @@ class BacktestEngine:
         win_loss_denominator = win_count + loss_count
         win_rate_pct = round(win_count / win_loss_denominator * 100, 2) if win_loss_denominator else None
         neutral_rate_pct = round(neutral_count / len(completed) * 100, 2) if completed else None
+        completion_rate_pct = round(len(completed) / total * 100, 2) if total else None
 
-        avg_stock_return_pct = cls._average([r.stock_return_pct for r in completed])
-        avg_simulated_return_pct = cls._average([r.simulated_return_pct for r in completed])
+        stock_returns = [r.stock_return_pct for r in completed if r.stock_return_pct is not None]
+        simulated_returns = [r.simulated_return_pct for r in completed if r.simulated_return_pct is not None]
+        avg_stock_return_pct = cls._average(stock_returns)
+        avg_simulated_return_pct = cls._average(simulated_returns)
 
         stop_applicable = [
             r
@@ -451,6 +454,35 @@ class BacktestEngine:
 
         advice_breakdown = cls._compute_advice_breakdown(completed)
         diagnostics = cls._compute_diagnostics(results_list)
+        metric_sample_counts = {
+            "completion_rate": total,
+            "direction_accuracy": direction_denominator,
+            "win_rate": win_loss_denominator,
+            "neutral_rate": len(completed),
+            "average_underlying_return": len(stock_returns),
+            "average_simulated_return": len(simulated_returns),
+            "stop_loss_hit_rate": len(stop_applicable),
+            "take_profit_hit_rate": len(take_profit_applicable),
+            "ambiguous_first_hit_rate": len(any_target_applicable),
+        }
+        diagnostics["metric_sample_counts"] = metric_sample_counts
+        metric_availability = {
+            key: {
+                "status": "available" if sample_count > 0 else "unavailable",
+                "reason": None if sample_count > 0 else "zero_denominator",
+            }
+            for key, sample_count in metric_sample_counts.items()
+        }
+        metric_availability.update({
+            "buy_side_precision": {
+                "status": "unavailable",
+                "reason": "legacy_backtests_do_not_persist_canonical_action_family",
+            },
+            "sell_side_precision": {
+                "status": "unavailable",
+                "reason": "legacy_cash_recommendations_conflate_sell_and_wait_actions",
+            },
+        })
 
         return {
             "scope": scope,
@@ -468,12 +500,17 @@ class BacktestEngine:
             "direction_accuracy_pct": direction_accuracy_pct,
             "win_rate_pct": win_rate_pct,
             "neutral_rate_pct": neutral_rate_pct,
+            "completion_rate_pct": completion_rate_pct,
             "avg_stock_return_pct": avg_stock_return_pct,
             "avg_simulated_return_pct": avg_simulated_return_pct,
             "stop_loss_trigger_rate": stop_loss_trigger_rate,
             "take_profit_trigger_rate": take_profit_trigger_rate,
             "ambiguous_rate": ambiguous_rate,
             "avg_days_to_first_hit": avg_days_to_first_hit,
+            "headline_horizon_days": 5,
+            "is_headline_horizon": int(eval_window_days) == 5,
+            "metric_sample_counts": metric_sample_counts,
+            "metric_availability": metric_availability,
             "advice_breakdown": advice_breakdown,
             "diagnostics": diagnostics,
         }

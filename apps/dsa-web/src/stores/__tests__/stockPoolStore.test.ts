@@ -505,37 +505,23 @@ describe('stockPoolStore', () => {
     await useStockPoolStore.getState().submitAnalysis();
 
     const state = useStockPoolStore.getState();
-    expect(state.inputError).toBe('请输入有效的股票代码或股票名称');
+    expect(state.inputError).toBe('Enter a valid stock code or company name');
     expect(state.isAnalyzing).toBe(false);
     expect(analysisApi.analyzeAsync).not.toHaveBeenCalled();
   });
 
-  it('accepts HK suffix codes from autocomplete without local validation errors', async () => {
-    vi.mocked(analysisApi.analyzeAsync).mockResolvedValue({
-      taskId: 'task-hk-1',
-      stockCode: '00700.HK',
-      status: 'pending',
-      message: 'accepted',
-    } as never);
-
+  it('rejects non-Vietnam suffix codes from autocomplete before calling the API', async () => {
     await useStockPoolStore.getState().submitAnalysis({
       stockCode: '00700.HK',
-      stockName: '腾讯控股',
+      stockName: 'Tencent',
       originalQuery: '00700',
       selectionSource: 'autocomplete',
     });
 
     const state = useStockPoolStore.getState();
-    expect(state.inputError).toBeUndefined();
+    expect(state.inputError).toBe('Use a Vietnam ticker such as VNM.VN');
     expect(state.isAnalyzing).toBe(false);
-    expect(analysisApi.analyzeAsync).toHaveBeenCalledWith(expect.objectContaining({
-      stockCode: '00700.HK',
-      reportType: 'detailed',
-      stockName: '腾讯控股',
-      originalQuery: '00700',
-      selectionSource: 'autocomplete',
-      notify: true,
-    }));
+    expect(analysisApi.analyzeAsync).not.toHaveBeenCalled();
   });
 
   it('merges newly discovered history items during silent refresh', async () => {

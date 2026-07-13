@@ -215,6 +215,7 @@ class TestParseResponseIntegration:
         config.location = None
 
         analyzer = GeminiAnalyzer.__new__(GeminiAnalyzer)
+        analyzer._config_override = config
         analyzer.config = config
         analyzer.llm_provider = "deepseek"
         analyzer.llm_model = "deepseek-chat"

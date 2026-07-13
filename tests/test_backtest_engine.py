@@ -221,6 +221,23 @@ class BacktestEngineTestCase(unittest.TestCase):
         self.assertIsNone(bad_bounds["max_high"])
         self.assertIsNone(bad_bounds["min_low"])
 
+    def test_decision_signal_helper_ignores_bars_after_requested_horizon(self):
+        result = BacktestEngine.evaluate_decision_signal(
+            direction_expected="up",
+            anchor_date=date(2024, 1, 1),
+            start_price=100,
+            forward_bars=self._bars(date(2024, 1, 1), [101, 102, 105, 50]),
+            config=EvaluationConfig(
+                eval_window_days=3,
+                neutral_band_pct=2.0,
+                engine_version="decision-signal-v1",
+            ),
+        )
+
+        self.assertEqual(result["end_close"], 105)
+        self.assertEqual(result["stock_return_pct"], 5.0)
+        self.assertEqual(result["outcome"], "hit")
+
     def test_decision_signal_helper_does_not_change_evaluate_single_hold_behavior(self):
         cfg = EvaluationConfig(eval_window_days=3, neutral_band_pct=2.0)
         res = BacktestEngine.evaluate_single(

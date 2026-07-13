@@ -781,18 +781,6 @@ const HomePage: React.FC = () => {
                 />
                 {t('home.notify')}
               </label>
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
-                isLoading={isSubmittingMarketReview}
-                loadingText={t('home.submitMarketReview')}
-                onClick={() => void handleTriggerMarketReview()}
-                className="h-10 flex-1 whitespace-nowrap md:flex-none"
-              >
-                <BarChart3 className="h-4 w-4" aria-hidden="true" />
-                {t('home.marketReview')}
-              </Button>
               <button
                 type="button"
                 onClick={() => handleSubmitAnalysis()}
