@@ -66,6 +66,7 @@ class TestSignalAttributionE2E:
 
         # 创建 analyzer 实例
         analyzer = GeminiAnalyzer.__new__(GeminiAnalyzer)
+        analyzer._config_override = type("Config", (), {"report_language": "zh"})()
 
         # 模拟 LLM 返回的 JSON（贡献度为字符串，总和≠100）
         response_text = json.dumps({
@@ -288,6 +289,7 @@ class TestSignalAttributionE2E:
         })
 
         analyzer = GeminiAnalyzer.__new__(GeminiAnalyzer)
+        analyzer._config_override = type("Config", (), {"report_language": "zh"})()
         result = analyzer._parse_response(response_text, "600519", "测试")
         dashboard = result.dashboard
         signal_attr = dashboard["signal_attribution"]

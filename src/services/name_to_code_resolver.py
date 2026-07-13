@@ -12,6 +12,7 @@ from __future__ import annotations
 import difflib
 import logging
 import time
+import unicodedata
 from typing import Dict, Optional, Set, Tuple
 
 from src.data.stock_mapping import STOCK_NAME_MAP
@@ -27,6 +28,32 @@ _AKSHARE_CACHE_TTL = 1800  # 30 MIN
 def _contains_cjk(text: str) -> bool:
     """Return True when text contains CJK characters."""
     return any("\u3400" <= ch <= "\u9fff" for ch in text)
+
+
+def _normalize_company_name(text: str) -> str:
+    """Normalize spacing, case, and Vietnamese accents for index lookup."""
+    compact = " ".join(str(text or "").strip().casefold().split())
+    return "".join(
+        char for char in unicodedata.normalize("NFKD", compact)
+        if not unicodedata.combining(char)
+    )
+
+
+def _resolve_vietnam_index_name(name: str) -> Optional[str]:
+    """Resolve English or Vietnamese company names from the VN-only index."""
+    from src.data.stock_index_loader import get_stock_name_index_map
+    from src.services.market_symbol_utils import is_vn_market_symbol
+
+    query = _normalize_company_name(name)
+    if not query:
+        return None
+    matches = {
+        code
+        for code, display_name in get_stock_name_index_map().items()
+        if is_vn_market_symbol(code)
+        and _normalize_company_name(display_name) == query
+    }
+    return next(iter(matches)) if len(matches) == 1 else None
 
 
 def _is_code_like(s: str) -> bool:
@@ -162,6 +189,26 @@ def resolve_name_to_code(name: str) -> Optional[str]:
     # 1. Input looks like code
     if _is_code_like(s):
         return _normalize_code(s)
+
+    vietnam_code = _resolve_vietnam_index_name(s)
+    if vietnam_code:
+        return vietnam_code
+
+    # Vietnam-only installations must not fall through to the legacy China
+    # map or perform an AkShare network request.
+    try:
+        from src.config import get_config
+
+        enabled_markets = {
+            str(market).strip().lower()
+            for market in (getattr(get_config(), "enabled_markets", None) or [])
+            if str(market).strip()
+        }
+    except Exception:
+        enabled_markets = set()
+    if enabled_markets == {"vn"}:
+        logger.debug("[NameResolver] No unique Vietnam index match for: %s", s)
+        return None
 
     # 2. Local reverse map (no duplicates)
     local_reverse = _LOCAL_REVERSE_MAP

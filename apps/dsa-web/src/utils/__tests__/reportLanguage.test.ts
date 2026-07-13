@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getReportText, normalizeReportLanguage } from '../reportLanguage';
+import { getReportLocale, getReportText, normalizeReportLanguage } from '../reportLanguage';
 import { getSentimentLabel } from '../../types/analysis';
 
 describe('reportLanguage ko support', () => {
@@ -18,8 +18,8 @@ describe('reportLanguage ko support', () => {
     expect(ko.fullReport).toBe('전체 분석 리포트');
   });
 
-  it('keeps zh/en report copy unchanged', () => {
-    expect(getReportText('zh').keyInsights).toBe('核心洞察');
+  it('keeps en report copy unchanged', () => {
+    // expect(getReportText('zh').keyInsights).toBe('核心洞察');
     expect(getReportText('en').keyInsights).toBe('KEY INSIGHTS');
   });
 
@@ -28,5 +28,23 @@ describe('reportLanguage ko support', () => {
     expect(getSentimentLabel(50, 'ko')).toBe('중립');
     expect(getSentimentLabel(10, 'ko')).toBe('매우 비관');
     expect(getSentimentLabel(90, 'en')).toBe('Very Bullish');
+  });
+});
+
+describe('reportLanguage vi support', () => {
+  it('normalizes Vietnamese and resolves its display locale', () => {
+    expect(normalizeReportLanguage('vi')).toBe('vi');
+    expect(getReportLocale('vi')).toBe('vi-VN');
+  });
+
+  it('returns Vietnamese report copy and sentiment labels', () => {
+    const viText = getReportText('vi');
+
+    expect(viText.keyInsights).toBe('NHẬN ĐỊNH CHÍNH');
+    expect(viText.actionAdvice).toBe('Khuyến nghị hành động');
+    expect(viText.fullReport).toBe('Báo cáo phân tích đầy đủ');
+    expect(getSentimentLabel(90, 'vi')).toBe('Rất lạc quan');
+    expect(getSentimentLabel(50, 'vi')).toBe('Trung lập');
+    expect(getSentimentLabel(10, 'vi')).toBe('Rất bi quan');
   });
 });

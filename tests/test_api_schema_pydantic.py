@@ -73,7 +73,7 @@ def test_schema_examples_remain_in_openapi_schema() -> None:
 
     assert root_schema["properties"]["message"]["example"] == "Daily Stock Analysis API is running"
     assert root_schema["example"]["version"] == "1.0.0"
-    assert analyze_schema["properties"]["stock_code"]["example"] == "600519"
+    assert analyze_schema["properties"]["stock_code"]["example"] == "VNM.VN"
     assert analyze_schema["properties"]["skills"]["example"] == ["bull_trend", "growth_quality"]
     assert analyze_schema["properties"]["analysis_phase"]["default"] == "auto"
     assert analyze_schema["properties"]["analysis_phase"]["enum"] == [
@@ -83,7 +83,8 @@ def test_schema_examples_remain_in_openapi_schema() -> None:
         "postmarket",
     ]
     assert history_schema["example"]["stock_code"] == "600519"
-    assert quote_schema["example"]["stock_name"] == "贵州茅台"
+    assert quote_schema["example"]["stock_code"] == "VNM.VN"
+    assert quote_schema["example"]["stock_name"] == "Vinamilk"
 
 
 def test_analyze_request_supports_legacy_strategies_dict_input() -> None:
@@ -121,6 +122,20 @@ def test_request_models_accept_korean_report_language() -> None:
         "report_language": "ko",
     })
     assert market_review_request.report_language == "ko"
+
+
+def test_request_models_accept_vietnamese_report_language() -> None:
+    analyze_request = AnalyzeRequest.model_validate({
+        "stock_code": "VNM.VN",
+        "report_language": "vi",
+    })
+    assert analyze_request.report_language == "vi"
+
+    market_review_request = MarketReviewRequest.model_validate({
+        "send_notification": False,
+        "reportLanguage": "vi",
+    })
+    assert market_review_request.report_language == "vi"
 
 
 def test_analyze_request_analysis_phase_defaults_to_auto() -> None:

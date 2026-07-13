@@ -150,7 +150,17 @@ def test_outcome_run_list_stats_signal_outcomes_and_feedback(client_and_db) -> N
     stats = stats_resp.json()
     assert stats["total"] == 1
     assert stats["hit"] == 1
+    assert stats["eligible"] == 1
+    assert stats["metrics"]["directional_accuracy"]["denominator"] == 1
     assert stats["breakdowns"]["action"][0]["value"] == "buy"
+
+    filtered_stats_resp = client.get(
+        "/api/v1/decision-signals/outcomes/stats",
+        params={"horizons": "3d", "action": "buy", "market": "cn", "source_type": "analysis"},
+    )
+    assert filtered_stats_resp.status_code == 200, filtered_stats_resp.text
+    assert filtered_stats_resp.json()["filters"]["action"] == "buy"
+    assert filtered_stats_resp.json()["filters"]["market"] == "cn"
 
     signal_outcomes_resp = client.get(f"/api/v1/decision-signals/{signal_id}/outcomes")
     assert signal_outcomes_resp.status_code == 200, signal_outcomes_resp.text
@@ -198,6 +208,12 @@ def test_outcome_api_rejects_invalid_params_and_returns_404(client_and_db) -> No
         params={"outcome": "bad"},
     )
     assert invalid_list_resp.status_code == 400
+
+    invalid_stats_resp = client.get(
+        "/api/v1/decision-signals/outcomes/stats",
+        params={"action": "not-an-action"},
+    )
+    assert invalid_stats_resp.status_code == 400
 
     missing_outcomes_resp = client.get("/api/v1/decision-signals/999999/outcomes")
     assert missing_outcomes_resp.status_code == 404

@@ -61,8 +61,6 @@ function Ensure-DesktopDependencies {
     $installReason = 'package-lock marker missing'
   } elseif ((Get-Content -Path $lockHashMarker -Raw).Trim() -ne (Get-PackageLockHash)) {
     $installReason = 'package-lock.json changed'
-  } elseif (!(Test-Path 'node_modules\electron-updater')) {
-    $installReason = 'electron-updater missing'
   }
 
   if ($null -ne $installReason) {
@@ -77,7 +75,7 @@ Push-Location (Join-Path $repoRoot 'apps\dsa-desktop')
 Ensure-DesktopDependencies
 
 Write-Host 'Stopping running app (if any)...'
-Get-Process -Name "Daily Stock Analysis" -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process -Name "Daily Stock Analysis Vietnam" -ErrorAction SilentlyContinue | Stop-Process -Force
 Get-Process -Name "stock_analysis" -ErrorAction SilentlyContinue | Stop-Process -Force
 
 if (Test-Path 'dist\win-unpacked') {

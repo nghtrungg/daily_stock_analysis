@@ -8,7 +8,11 @@ from threading import RLock
 from typing import Dict, Iterable, Optional
 
 from src.data.stock_mapping import is_meaningful_stock_name
-from src.services.market_symbol_utils import get_suffix_market, suffix_base_lookup_allowed
+from src.services.market_symbol_utils import (
+    get_suffix_market,
+    is_vn_market_symbol,
+    suffix_base_lookup_allowed,
+)
 from src.services.stock_index_remote_service import (
     get_remote_stock_index_cache_path,
     is_valid_remote_stock_index_file,
@@ -27,11 +31,17 @@ _STOCK_INDEX_CACHE_LOCK = RLock()
 def get_stock_index_candidate_paths() -> tuple[Path, ...]:
     """Return the supported locations for the generated stock index."""
     repo_root = Path(__file__).resolve().parents[2]
-    return (
-        get_remote_stock_index_cache_path(),
+    bundled = (
         repo_root / "apps" / "dsa-web" / "public" / _STOCK_INDEX_FILENAME,
         repo_root / "static" / _STOCK_INDEX_FILENAME,
     )
+    try:
+        from src.config import get_config
+
+        remote_enabled = bool(getattr(get_config(), "stock_index_remote_update_enabled", False))
+    except Exception:
+        remote_enabled = False
+    return (get_remote_stock_index_cache_path(), *bundled) if remote_enabled else bundled
 
 
 def _same_path(left: Path, right: Path) -> bool:
@@ -56,7 +66,9 @@ def _build_lookup_keys(canonical_code: str, display_code: str) -> Iterable[str]:
 
     if "." in canonical_upper:
         base, suffix = canonical_upper.rsplit(".", 1)
-        if suffix in {"SH", "SZ", "SS", "BJ"} and base.isdigit():
+        if suffix == "VN" and base:
+            _add_lookup_key(keys, base)
+        elif suffix in {"SH", "SZ", "SS", "BJ"} and base.isdigit():
             _add_lookup_key(keys, base)
         elif suffix == "HK" and base.isdigit() and 1 <= len(base) <= 5:
             digits = base.zfill(5)
@@ -113,9 +125,9 @@ def _add_code_lookup(
     lookup.setdefault(candidate, set()).add(canonical)
 
 
-def _is_jp_kr_index_code(code: str) -> bool:
-    """Return True for index-backed JP/KR suffix symbols eligible for lookup."""
-    return get_suffix_market(code) in {"jp", "kr"}
+def _is_index_resolvable_code(code: str) -> bool:
+    """Return True for suffix symbols eligible for exact/bare lookup."""
+    return is_vn_market_symbol(code) or get_suffix_market(code) in {"jp", "kr"}
 
 
 def _build_stock_code_lookup(raw_items: list) -> Dict[str, str]:
@@ -130,7 +142,7 @@ def _build_stock_code_lookup(raw_items: list) -> Dict[str, str]:
         display_code = str(item[1] or "").strip()
         if not canonical_code:
             continue
-        if not _is_jp_kr_index_code(canonical_code):
+        if not _is_index_resolvable_code(canonical_code):
             continue
         if len(item) > 8 and item[8] is False:
             continue
@@ -139,9 +151,12 @@ def _build_stock_code_lookup(raw_items: list) -> Dict[str, str]:
         _add_code_lookup(exact_lookup, display_code, canonical_code)
 
         canonical_upper = canonical_code.upper()
-        if "." in canonical_upper and suffix_base_lookup_allowed(canonical_upper):
+        if "." in canonical_upper and (
+            is_vn_market_symbol(canonical_upper)
+            or suffix_base_lookup_allowed(canonical_upper)
+        ):
             base, _suffix = canonical_upper.rsplit(".", 1)
-            if base.isdigit():
+            if base:
                 _add_code_lookup(suffix_base_lookup, base, canonical_code)
 
     result: Dict[str, str] = {}
@@ -284,9 +299,9 @@ def get_index_stock_name(stock_code: str) -> str | None:
 def resolve_index_stock_code(query: str) -> str | None:
     """Resolve an input code against the stock index pool.
 
-    Exact canonical/display-code matches win first. Bare JP/KR base-code matches
-    are accepted only when unambiguous, so ``005930`` can resolve to
-    ``005930.KS`` when that is the only indexed match.
+    Exact canonical/display-code matches win first. Bare Vietnam/JP/KR
+    base-code matches are accepted only when unambiguous, so ``VNM`` resolves
+    to ``VNM.VN`` in the Vietnam-only bundled index.
     """
     code = str(query or "").strip().upper()
     if not code:

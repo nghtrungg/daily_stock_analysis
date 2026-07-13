@@ -60,6 +60,14 @@ const BLOCK_LABELS: Record<ReportLanguage, Record<string, string>> = {
     fundamentals: '펀더멘털',
     chip: '매물대',
   },
+  vi: {
+    quote: 'giá',
+    daily_bars: 'nến ngày',
+    technical: 'kỹ thuật',
+    news: 'tin tức',
+    fundamentals: 'cơ bản',
+    chip: 'phân bổ vị thế',
+  },
 };
 
 const TEXT = {
@@ -153,6 +161,36 @@ const TEXT = {
       fetch_failed: '수집 실패',
     },
   },
+  vi: {
+    eyebrow: 'NGỮ CẢNH DỮ LIỆU',
+    title: 'Khối dữ liệu đầu vào',
+    counts: 'Số lượng trạng thái',
+    source: 'Nguồn',
+    warnings: 'Cảnh báo',
+    missingReasons: 'Lý do thiếu',
+    inputScope: 'Đầu vào phân tích',
+    evidenceScope: 'Chỉ hiển thị dữ liệu được đưa vào lần chạy LLM này, không đồng nghĩa nguồn dữ liệu đã chạy thành công',
+    qualityScore: 'Chất lượng',
+    limitations: 'Hạn chế dữ liệu',
+    newsResultCount: 'Số tin tức',
+    triggerSource: 'Nguồn kích hoạt',
+    qualityLevel: {
+      good: 'Tốt',
+      usable: 'Khả dụng',
+      limited: 'Hạn chế',
+      poor: 'Kém',
+    },
+    status: {
+      available: 'Có sẵn',
+      missing: 'Thiếu',
+      not_supported: 'Không hỗ trợ',
+      fallback: 'Dự phòng',
+      stale: 'Cũ',
+      estimated: 'Ước tính',
+      partial: 'Một phần',
+      fetch_failed: 'Tải thất bại',
+    },
+  },
 } as const;
 
 const MISSING_REASON_LABELS: Record<ReportLanguage, Record<string, string>> = {
@@ -185,6 +223,16 @@ const MISSING_REASON_LABELS: Record<ReportLanguage, Record<string, string>> = {
     chip_distribution_missing: '분석 입력에 포함되지 않음',
     today_missing: '당일 데이터가 분석 입력에 포함되지 않음',
     yesterday_missing: '전일 데이터가 분석 입력에 포함되지 않음',
+  },
+  vi: {
+    daily_bars_missing: 'Không được đưa vào dữ liệu phân tích',
+    news_context_missing: 'Không được đưa vào dữ liệu phân tích',
+    realtime_quote_missing: 'Không được đưa vào dữ liệu phân tích',
+    trend_result_missing: 'Không được đưa vào dữ liệu phân tích',
+    fundamental_context_missing: 'Không được đưa vào dữ liệu phân tích',
+    chip_distribution_missing: 'Không được đưa vào dữ liệu phân tích',
+    today_missing: 'Dữ liệu hôm nay không được đưa vào dữ liệu phân tích',
+    yesterday_missing: 'Dữ liệu hôm qua không được đưa vào dữ liệu phân tích',
   },
 };
 

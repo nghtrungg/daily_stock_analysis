@@ -226,7 +226,7 @@ class IntelligenceSource(Base):
     enabled = Column(Boolean, nullable=False, default=True, index=True)
     scope_type = Column(String(32), nullable=False, default='market', index=True)
     scope_value = Column(String(64), index=True)
-    market = Column(String(32), nullable=False, default='cn', index=True)
+    market = Column(String(32), nullable=False, default='vn', index=True)
     description = Column(Text)
     last_status = Column(String(32))
     last_error = Column(Text)
@@ -256,7 +256,7 @@ class IntelligenceItem(Base):
     fetched_at = Column(DateTime, default=datetime.now, index=True)
     scope_type = Column(String(32), nullable=False, default='market', index=True)
     scope_value = Column(String(64), nullable=False, default=INTELLIGENCE_ITEM_NULL_SCOPE_VALUE, index=True)
-    market = Column(String(32), nullable=False, default='cn', index=True)
+    market = Column(String(32), nullable=False, default='vn', index=True)
     raw_payload = Column(Text)
 
     __table_args__ = (
@@ -494,8 +494,8 @@ class PortfolioAccount(Base):
     owner_id = Column(String(64), index=True)
     name = Column(String(64), nullable=False)
     broker = Column(String(64))
-    market = Column(String(8), nullable=False, default='cn', index=True)  # cn/hk/us
-    base_currency = Column(String(8), nullable=False, default='CNY')
+    market = Column(String(8), nullable=False, default='vn', index=True)
+    base_currency = Column(String(8), nullable=False, default='VND')
     is_active = Column(Boolean, nullable=False, default=True, index=True)
     created_at = Column(DateTime, default=datetime.now, index=True)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
@@ -514,8 +514,8 @@ class PortfolioTrade(Base):
     account_id = Column(Integer, ForeignKey('portfolio_accounts.id'), nullable=False, index=True)
     trade_uid = Column(String(128))
     symbol = Column(String(16), nullable=False, index=True)
-    market = Column(String(8), nullable=False, default='cn')
-    currency = Column(String(8), nullable=False, default='CNY')
+    market = Column(String(8), nullable=False, default='vn')
+    currency = Column(String(8), nullable=False, default='VND')
     trade_date = Column(Date, nullable=False, index=True)
     side = Column(String(8), nullable=False)  # buy/sell
     quantity = Column(Float, nullable=False)
@@ -543,7 +543,7 @@ class PortfolioCashLedger(Base):
     event_date = Column(Date, nullable=False, index=True)
     direction = Column(String(8), nullable=False)  # in/out
     amount = Column(Float, nullable=False)
-    currency = Column(String(8), nullable=False, default='CNY')
+    currency = Column(String(8), nullable=False, default='VND')
     note = Column(String(255))
     created_at = Column(DateTime, default=datetime.now, index=True)
 
@@ -560,8 +560,8 @@ class PortfolioCorporateAction(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     account_id = Column(Integer, ForeignKey('portfolio_accounts.id'), nullable=False, index=True)
     symbol = Column(String(16), nullable=False, index=True)
-    market = Column(String(8), nullable=False, default='cn')
-    currency = Column(String(8), nullable=False, default='CNY')
+    market = Column(String(8), nullable=False, default='vn')
+    currency = Column(String(8), nullable=False, default='VND')
     effective_date = Column(Date, nullable=False, index=True)
     action_type = Column(String(24), nullable=False)  # cash_dividend/split_adjustment
     cash_dividend_per_share = Column(Float)
@@ -583,15 +583,15 @@ class PortfolioPosition(Base):
     account_id = Column(Integer, ForeignKey('portfolio_accounts.id'), nullable=False, index=True)
     cost_method = Column(String(8), nullable=False, default='fifo')
     symbol = Column(String(16), nullable=False, index=True)
-    market = Column(String(8), nullable=False, default='cn')
-    currency = Column(String(8), nullable=False, default='CNY')
+    market = Column(String(8), nullable=False, default='vn')
+    currency = Column(String(8), nullable=False, default='VND')
     quantity = Column(Float, nullable=False, default=0.0)
     avg_cost = Column(Float, nullable=False, default=0.0)
     total_cost = Column(Float, nullable=False, default=0.0)
     last_price = Column(Float, nullable=False, default=0.0)
     market_value_base = Column(Float, nullable=False, default=0.0)
     unrealized_pnl_base = Column(Float, nullable=False, default=0.0)
-    valuation_currency = Column(String(8), nullable=False, default='CNY')
+    valuation_currency = Column(String(8), nullable=False, default='VND')
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, index=True)
 
     __table_args__ = (
@@ -615,8 +615,8 @@ class PortfolioPositionLot(Base):
     account_id = Column(Integer, ForeignKey('portfolio_accounts.id'), nullable=False, index=True)
     cost_method = Column(String(8), nullable=False, default='fifo')
     symbol = Column(String(16), nullable=False, index=True)
-    market = Column(String(8), nullable=False, default='cn')
-    currency = Column(String(8), nullable=False, default='CNY')
+    market = Column(String(8), nullable=False, default='vn')
+    currency = Column(String(8), nullable=False, default='VND')
     open_date = Column(Date, nullable=False, index=True)
     remaining_quantity = Column(Float, nullable=False, default=0.0)
     unit_cost = Column(Float, nullable=False, default=0.0)
@@ -637,7 +637,7 @@ class PortfolioDailySnapshot(Base):
     account_id = Column(Integer, ForeignKey('portfolio_accounts.id'), nullable=False, index=True)
     snapshot_date = Column(Date, nullable=False, index=True)
     cost_method = Column(String(8), nullable=False, default='fifo')  # fifo/avg
-    base_currency = Column(String(8), nullable=False, default='CNY')
+    base_currency = Column(String(8), nullable=False, default='VND')
     total_cash = Column(Float, nullable=False, default=0.0)
     total_market_value = Column(Float, nullable=False, default=0.0)
     total_equity = Column(Float, nullable=False, default=0.0)
@@ -1659,6 +1659,17 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
             local_saved_count = 0
 
             for item in response.results:
+                if (
+                    str(code or "").strip().upper().endswith(".VN")
+                    and getattr(item, "relevance_score", None) is not None
+                    and int(getattr(item, "relevance_score", 0) or 0) <= 0
+                ):
+                    logger.debug(
+                        "Skipped explicitly zero-relevance Vietnam news evidence: %s %s",
+                        code,
+                        (getattr(item, "title", "") or "")[:120],
+                    )
+                    continue
                 title = (item.title or '').strip()
                 url = (item.url or '').strip()
                 source = (item.source or '').strip()

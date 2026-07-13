@@ -8,16 +8,13 @@
     "build": "electron-builder",
     "test": "node --test tests/*.test.js"
   },
-  "dependencies": {
-    "electron-updater": "^6.8.3"
-  },
   "devDependencies": {
     "electron": "^31.4.0",
     "electron-builder": "^24.13.3"
   },
   "build": {
-    "appId": "com.daily-stock-analysis.desktop",
-    "productName": "Daily Stock Analysis",
+    "appId": "com.nghtrungg.daily-stock-analysis-vietnam",
+    "productName": "Daily Stock Analysis Vietnam",
     "directories": {
       "output": "dist"
     },
@@ -38,14 +35,7 @@
     ],
     "win": {
       "target": "nsis",
-      "artifactName": "daily-stock-analysis-windows-installer-v${version}.${ext}",
-      "publish": [
-        {
-          "provider": "github",
-          "owner": "ZhuLinsen",
-          "repo": "daily_stock_analysis"
-        }
-      ]
+      "artifactName": "daily-stock-analysis-vietnam-windows-installer-v${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -54,7 +44,8 @@
       "include": "installer.nsh"
     },
     "mac": {
-      "target": "dmg"
+      "target": "dmg",
+      "artifactName": "daily-stock-analysis-vietnam-macos-${arch}-v${version}.${ext}"
     }
   }
 }

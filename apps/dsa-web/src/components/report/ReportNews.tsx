@@ -27,6 +27,10 @@ const NEWS_SOURCE_TEXT = {
     sourceLabel: '관련 뉴스 / 후속 검색',
     sourceHint: '출처: 리포트 페이지 보충 뉴스이며, 분석 사용 여부는 입력 데이터 블록 기준입니다.',
   },
+  vi: {
+    sourceLabel: 'Tin liên quan / truy xuất bổ sung',
+    sourceHint: 'Nguồn: tin bổ sung trên trang báo cáo; dữ liệu dùng cho phân tích được hiển thị trong Khối dữ liệu đầu vào.',
+  },
 } as const;
 
 /**

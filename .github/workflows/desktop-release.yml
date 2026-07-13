@@ -70,7 +70,7 @@ jobs:
       - name: Prepare release artifact (Windows)
         shell: pwsh
         run: |
-          $expectedInstallerName = "daily-stock-analysis-windows-installer-$env:RELEASE_TAG.exe"
+          $expectedInstallerName = "daily-stock-analysis-vietnam-windows-installer-$env:RELEASE_TAG.exe"
           $installerPath = Join-Path 'apps/dsa-desktop/dist' $expectedInstallerName
           $installerExe = Get-Item -Path $installerPath -ErrorAction SilentlyContinue
           if (-not $installerExe) {
@@ -82,39 +82,9 @@ jobs:
           }
           New-Item -ItemType Directory -Path 'dist/release-assets' -Force | Out-Null
           $exeTarget = "dist/release-assets/$expectedInstallerName"
-          $zipTarget = "dist/release-assets/daily-stock-analysis-windows-noinstall-$env:RELEASE_TAG.zip"
+          $zipTarget = "dist/release-assets/daily-stock-analysis-vietnam-windows-noinstall-$env:RELEASE_TAG.zip"
           Copy-Item -Path $installerExe.FullName -Destination $exeTarget -Force
           Compress-Archive -Path $winUnpacked -DestinationPath $zipTarget -CompressionLevel Optimal -Force
-          Get-ChildItem -Path 'apps/dsa-desktop/dist' -File |
-            Where-Object { $_.Name -eq 'latest.yml' -or $_.Name -like '*.blockmap' } |
-            ForEach-Object {
-              Copy-Item -Path $_.FullName -Destination "dist/release-assets/$($_.Name)" -Force
-            }
-          if (-not (Test-Path 'dist/release-assets/latest.yml')) {
-            throw 'No latest.yml found under dist/release-assets.'
-          }
-          $expectedVersion = $env:RELEASE_TAG.TrimStart('v')
-          $versionPattern = '^version:\s*[''"]?' + [regex]::Escape($expectedVersion) + '[''"]?\s*$'
-          if (-not (Select-String -Path 'dist/release-assets/latest.yml' -Pattern $versionPattern)) {
-            throw "latest.yml version does not match release tag $env:RELEASE_TAG."
-          }
-          $latestText = Get-Content -Path 'dist/release-assets/latest.yml' -Raw
-          $pathMatch = [regex]::Match($latestText, '(?m)^\s*path:\s*[''"]?([^''"\r\n]+)[''"]?\s*$')
-          if (-not $pathMatch.Success) {
-            throw 'latest.yml missing path field.'
-          }
-          $latestInstallerPath = $pathMatch.Groups[1].Value.Trim()
-          if ($latestInstallerPath -ne $expectedInstallerName) {
-            throw "latest.yml path ($latestInstallerPath) does not match release installer $expectedInstallerName."
-          }
-          $urlMatch = [regex]::Match($latestText, '(?m)^\s*-\s*url:\s*[''"]?([^''"\r\n]+)[''"]?\s*$')
-          if ($urlMatch.Success -and $urlMatch.Groups[1].Value.Trim() -ne $expectedInstallerName) {
-            throw "latest.yml file url ($($urlMatch.Groups[1].Value.Trim())) does not match release installer $expectedInstallerName."
-          }
-          $expectedBlockmapName = "$expectedInstallerName.blockmap"
-          if (-not (Get-ChildItem -Path 'dist/release-assets' -Filter $expectedBlockmapName -File)) {
-            throw "No matching blockmap found under dist/release-assets: $expectedBlockmapName"
-          }
           Get-ChildItem -Path 'dist/release-assets' -File | Sort-Object Name | Format-Table Name, Length
 
       - uses: actions/upload-artifact@v6
@@ -201,7 +171,7 @@ jobs:
           fi
           test -n "$dmg_file"
           mkdir -p dist/release-assets
-          cp "$dmg_file" "dist/release-assets/daily-stock-analysis-macos-${{ matrix.arch }}-${RELEASE_TAG}.dmg"
+          cp "$dmg_file" "dist/release-assets/daily-stock-analysis-vietnam-macos-${{ matrix.arch }}-${RELEASE_TAG}.dmg"
 
       - uses: actions/upload-artifact@v6
         with:

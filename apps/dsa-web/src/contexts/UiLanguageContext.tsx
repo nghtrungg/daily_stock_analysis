@@ -10,20 +10,25 @@ type UiLanguageContextValue = {
 };
 
 const fallbackContext: UiLanguageContextValue = {
-  language: 'en',
+  language: 'zh',
   setLanguage: () => undefined,
-  t: (key, params) => formatUiText(UI_TEXT.en[key], params),
+  t: (key, params) => formatUiText(UI_TEXT.zh[key], params),
 };
 
 const UiLanguageContext = createContext<UiLanguageContextValue | null>(null);
 
-export const UiLanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [language, setLanguageState] = useState<UiLanguage>(getRuntimeInitialLanguage);
+export const UiLanguageProvider: React.FC<{
+  children: React.ReactNode;
+  lockedLanguage?: UiLanguage;
+}> = ({ children, lockedLanguage }) => {
+  const [preferredLanguage, setPreferredLanguage] = useState<UiLanguage>(getRuntimeInitialLanguage);
+  const language = lockedLanguage ?? preferredLanguage;
 
   const setLanguage = useCallback((nextLanguage: UiLanguage) => {
-    setLanguageState(nextLanguage);
+    if (lockedLanguage) return;
+    setPreferredLanguage(nextLanguage);
     persistUiLanguage(getUiLanguageStorage(), nextLanguage);
-  }, []);
+  }, [lockedLanguage]);
 
   useEffect(() => {
     if (typeof document !== 'undefined') {

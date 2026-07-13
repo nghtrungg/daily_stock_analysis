@@ -280,6 +280,11 @@ class RuntimeSchedulerService:
                 schedule_time=getattr(config, "schedule_time", "18:00"),
                 schedule_times=times,
                 schedule_times_provider=self._current_times,
+                schedule_timezone=getattr(
+                    config,
+                    "schedule_timezone",
+                    "Asia/Ho_Chi_Minh",
+                ),
                 register_signals=False,
             )
             if run_immediately and self._run_immediately_in_background:
@@ -375,6 +380,11 @@ class RuntimeSchedulerService:
             "enabled": self._enabled,
             "running": running,
             "schedule_times": schedule_times,
+            "schedule_timezone": getattr(
+                scheduler,
+                "schedule_timezone",
+                "Asia/Ho_Chi_Minh",
+            ),
             "next_run_at": next_run,
             "last_run_at": self._last_run_at,
             "last_success_at": self._last_success_at,

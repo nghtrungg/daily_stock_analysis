@@ -15,7 +15,10 @@ from unittest.mock import ANY, MagicMock, patch
 _ORIGINAL_ENVIRON = dict(os.environ)
 _MODULE_TEMP_DIR = tempfile.TemporaryDirectory()
 _MODULE_ENV_FILE = Path(_MODULE_TEMP_DIR.name) / ".env"
-_MODULE_ENV_FILE.write_text("STOCK_LIST=600519,000001\n", encoding="utf-8")
+_MODULE_ENV_FILE.write_text(
+    "STOCK_LIST=600519,000001\nENABLED_MARKETS=all\n",
+    encoding="utf-8",
+)
 os.environ["ENV_FILE"] = str(_MODULE_ENV_FILE)
 
 from tests.litellm_stub import ensure_litellm_stub
@@ -141,6 +144,41 @@ def _market_phase_summary() -> dict:
 
 
 class AnalysisApiContractTestCase(unittest.TestCase):
+    def test_vietnam_index_resolves_bare_symbol_to_explicit_market_code(self) -> None:
+        if analysis_endpoint_module is None:
+            self.skipTest("analysis endpoint helpers unavailable in this environment")
+
+        self.assertEqual(
+            analysis_endpoint_module._resolve_and_normalize_input("VNM"),
+            "VNM.VN",
+        )
+
+    def test_trigger_analysis_rejects_foreign_symbol_in_vietnam_only_mode(self) -> None:
+        if trigger_analysis is None:
+            self.skipTest("analysis endpoint helpers unavailable in this environment")
+
+        with self.assertRaises(Exception) as context:
+            trigger_analysis(
+                request=SimpleNamespace(
+                    stock_code="AAPL",
+                    stock_codes=None,
+                    stock_name=None,
+                    original_query=None,
+                    selection_source="manual",
+                    report_type="detailed",
+                    force_refresh=False,
+                    async_mode=True,
+                    notify=False,
+                    analysis_phase="auto",
+                    report_language="vi",
+                    skills=None,
+                ),
+                config=SimpleNamespace(enabled_markets=["vn"]),
+            )
+
+        self.assertEqual(getattr(context.exception, "status_code", None), 400)
+        self.assertEqual(getattr(context.exception, "detail", {}).get("error"), "market_not_enabled")
+
     def test_trigger_market_review_accepts_background_task(self) -> None:
         if trigger_market_review is None or analysis_endpoint_module is None:
             self.skipTest("analysis endpoint helpers unavailable in this environment")
@@ -169,6 +207,25 @@ class AnalysisApiContractTestCase(unittest.TestCase):
         self.assertEqual(kwargs["stock_code"], "market_review")
         self.assertEqual(kwargs["stock_name"], "大盘复盘")
         self.assertEqual(kwargs["message"], "大盘复盘任务已提交")
+
+    def test_trigger_market_review_is_blocked_in_vietnam_only_mode(self) -> None:
+        if trigger_market_review is None or analysis_endpoint_module is None:
+            self.skipTest("analysis endpoint helpers unavailable in this environment")
+
+        task_queue = MagicMock()
+        with patch("api.v1.endpoints.analysis.get_task_queue", return_value=task_queue):
+            with self.assertRaises(Exception) as captured:
+                trigger_market_review(
+                    request=SimpleNamespace(send_notification=False),
+                    config=SimpleNamespace(enabled_markets=["vn"]),
+                )
+
+        self.assertEqual(getattr(captured.exception, "status_code", None), 501)
+        self.assertEqual(
+            getattr(captured.exception, "detail", {}).get("error"),
+            "vietnam_market_review_not_supported",
+        )
+        task_queue.submit_background_task.assert_not_called()
 
     def test_trigger_market_review_accepts_request_level_report_language(self) -> None:
         if trigger_market_review is None or analysis_endpoint_module is None:
@@ -2351,7 +2408,10 @@ class AnalysisApiContractTestCase(unittest.TestCase):
                 )
 
         self.assertEqual(ctx.exception.status_code, 400)
-        self.assertEqual(ctx.exception.detail["message"], "请输入有效的股票代码或股票名称")
+        self.assertEqual(
+            ctx.exception.detail["message"],
+            "Enter a valid Vietnam stock code or company name",
+        )
         resolve_mock.assert_not_called()
 
     def test_trigger_analysis_rejects_unresolvable_alpha_garbage(self) -> None:
@@ -2374,7 +2434,10 @@ class AnalysisApiContractTestCase(unittest.TestCase):
                 )
 
         self.assertEqual(ctx.exception.status_code, 400)
-        self.assertEqual(ctx.exception.detail["message"], "请输入有效的股票代码或股票名称")
+        self.assertEqual(
+            ctx.exception.detail["message"],
+            "Enter a valid Vietnam stock code or company name",
+        )
         queue_mock.assert_not_called()
 
     def test_trigger_analysis_accepts_us_suffix_code(self) -> None:
@@ -2423,7 +2486,7 @@ class AnalysisApiContractTestCase(unittest.TestCase):
         queue.submit_tasks_batch.return_value = ([], [])
 
         with patch("api.v1.endpoints.analysis.get_task_queue", return_value=queue), \
-             patch("api.v1.endpoints.analysis.resolve_index_stock_code", return_value="005930.KS"), \
+             patch("api.v1.endpoints.analysis.resolve_index_stock_code_for_analysis", return_value="005930.KS"), \
              patch("api.v1.endpoints.analysis.resolve_name_to_code") as resolve_mock:
             response = trigger_analysis(
                 request=SimpleNamespace(

@@ -26,7 +26,7 @@ DEFAULT_STOCK_INDEX_CACHE_PATH = REPO_ROOT / "data" / "cache" / "stocks.index.js
 DEFAULT_STOCK_INDEX_REMOTE_TTL_HOURS = 48
 DEFAULT_STOCK_INDEX_REMOTE_TIMEOUT_SECONDS = 10
 DEFAULT_STOCK_INDEX_REMOTE_MAX_FAILURES = 3
-SUPPORTED_STOCK_INDEX_MARKETS = {"CN", "HK", "US", "BSE", "JP", "KR"}
+SUPPORTED_STOCK_INDEX_MARKETS = {"VN", "CN", "HK", "US", "BSE", "JP", "KR"}
 
 _REMOTE_REFRESH_LOCK = Lock()
 _REMOTE_FAILURE_LOCK = Lock()
@@ -58,7 +58,7 @@ class RemoteStockIndexResult:
 def settings_from_config(config: Any) -> RemoteStockIndexSettings:
     """Build remote stock-index settings from the application config object."""
     return RemoteStockIndexSettings(
-        enabled=bool(getattr(config, "stock_index_remote_update_enabled", True)),
+        enabled=bool(getattr(config, "stock_index_remote_update_enabled", False)),
         url=DEFAULT_STOCK_INDEX_REMOTE_URL,
         ttl_hours=DEFAULT_STOCK_INDEX_REMOTE_TTL_HOURS,
         timeout_seconds=DEFAULT_STOCK_INDEX_REMOTE_TIMEOUT_SECONDS,

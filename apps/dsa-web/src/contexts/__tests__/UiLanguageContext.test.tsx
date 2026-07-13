@@ -1,7 +1,8 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
   UiLanguageProvider,
+  useUiLanguage,
 } from '../UiLanguageContext';
 import {
   getRuntimeInitialLanguage,
@@ -9,7 +10,6 @@ import {
   resolveInitialUiLanguage,
   UI_LANGUAGE_STORAGE_KEY,
 } from '../../utils/uiLanguage';
-import { UiLanguageToggle } from '../../components/i18n/UiLanguageToggle';
 
 function createStorage(value: string | null): Storage {
   const store = new Map<string, string>();
@@ -46,7 +46,7 @@ describe('UiLanguageContext', () => {
     })).toBe('en');
   });
 
-  it('falls back from invalid storage to the first supported browser language and then zh', () => {
+  it('falls back from invalid storage to the first supported browser language and then English', () => {
     expect(resolveInitialUiLanguage({
       storage: createStorage('fr'),
       navigatorLike: { language: 'en-US', languages: ['en-US'] },
@@ -60,7 +60,7 @@ describe('UiLanguageContext', () => {
     expect(resolveInitialUiLanguage({
       storage: createStorage(null),
       navigatorLike: { language: 'tr-TR', languages: ['tr-TR'] },
-    })).toBe('zh');
+    })).toBe('en');
   });
 
   it('falls back to browser language if storage getItem throws', () => {
@@ -102,22 +102,21 @@ describe('UiLanguageContext', () => {
     }
   });
 
-  it('switches UI language immediately and persists the explicit choice', () => {
+  it('keeps this local build in English even when an old Chinese preference exists', () => {
     localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, 'zh');
 
+    const LanguageProbe = () => {
+      const { language } = useUiLanguage();
+      return <span>{language}</span>;
+    };
+
     render(
-      <UiLanguageProvider>
-        <UiLanguageToggle />
+      <UiLanguageProvider lockedLanguage="en">
+        <LanguageProbe />
       </UiLanguageProvider>
     );
 
-    const toggle = screen.getByRole('button', { name: '切换界面语言' });
-    expect(screen.getByText('界面语言')).toBeInTheDocument();
-
-    fireEvent.click(toggle);
-
-    expect(localStorage.getItem(UI_LANGUAGE_STORAGE_KEY)).toBe('en');
-    expect(screen.getByRole('button', { name: 'Switch UI language' })).toBeInTheDocument();
-    expect(screen.getByText('English')).toBeInTheDocument();
+    expect(screen.getByText('en')).toBeInTheDocument();
+    expect(document.documentElement.lang).toBe('en');
   });
 });

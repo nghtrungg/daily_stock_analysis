@@ -26,6 +26,15 @@ const englishMarketReviewReport: AnalysisReport = {
   },
 };
 
+const vietnameseMarketReviewReport: AnalysisReport = {
+  ...englishMarketReviewReport,
+  meta: {
+    ...englishMarketReviewReport.meta,
+    stockName: 'Tổng kết thị trường',
+    reportLanguage: 'vi',
+  },
+};
+
 const combinedMarketReviewPayload: MarketReviewPayload = {
   version: 1,
   kind: 'market_review',
@@ -125,6 +134,31 @@ describe('MarketReviewReportView', () => {
     expect(screen.getByText('No key observations yet')).toBeInTheDocument();
     expect(screen.queryByText('复盘摘要')).not.toBeInTheDocument();
     expect(screen.queryByText('暂无摘要')).not.toBeInTheDocument();
+  });
+
+  it('renders Vietnamese market-review labels and strips the localized root heading', () => {
+    const onOpenRunFlow = vi.fn();
+
+    render(
+      <MarketReviewReportView
+        report={vietnameseMarketReviewReport}
+        content={'# Tổng kết thị trường\n\nDòng tiền đang cải thiện.'}
+        recordId={7}
+        reportLanguage="vi"
+        onOpenRunFlow={onOpenRunFlow}
+      />,
+    );
+
+    expect(screen.getByText('Tóm tắt thị trường')).toBeInTheDocument();
+    expect(screen.getByText('Chưa có tóm tắt')).toBeInTheDocument();
+    expect(screen.getByText('Nội dung tổng kết')).toBeInTheDocument();
+    expect(screen.getAllByText('Tổng kết thị trường')).toHaveLength(1);
+    expect(screen.getByText('Dòng tiền đang cải thiện.')).toBeInTheDocument();
+
+    const runFlowButton = screen.getByRole('button', { name: 'View run flow for history record 7' });
+    expect(runFlowButton).toHaveAccessibleName('View run flow for history record 7');
+    fireEvent.click(runFlowButton);
+    expect(onOpenRunFlow).toHaveBeenCalledWith(7);
   });
 
   it('renders structured data for every market in a combined market review payload', () => {

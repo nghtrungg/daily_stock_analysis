@@ -52,50 +52,33 @@ if (-not $normalizedReleaseTag) {
   $normalizedReleaseTag = $normalizedPackageVersion
 }
 
-$latestPath = Join-Path $distDirPath 'latest.yml'
-if (-not (Test-Path $latestPath)) {
-  throw "latest.yml not found in dist: $distDirPath"
+$expectedAppId = 'com.nghtrungg.daily-stock-analysis-vietnam'
+$expectedProductName = 'Daily Stock Analysis Vietnam'
+if ($packageMeta.build.appId -ne $expectedAppId) {
+  throw "Unexpected desktop appId: $($packageMeta.build.appId)"
+}
+if ($packageMeta.build.productName -ne $expectedProductName) {
+  throw "Unexpected desktop productName: $($packageMeta.build.productName)"
+}
+if ($packageMeta.build.win.PSObject.Properties.Name -contains 'publish') {
+  throw 'Local Vietnam desktop package must not include an auto-update publisher.'
+}
+if ($packageMeta.dependencies -and $packageMeta.dependencies.PSObject.Properties.Name -contains 'electron-updater') {
+  throw 'Local Vietnam desktop package must not depend on electron-updater.'
 }
 
-$ymlText = Get-Content -Path $latestPath -Raw
-if ($ymlText -match 'version:\s*([\d][^\s\r\n]*)') {
-  $normalizedLatestVersion = Normalize-SemverText -VersionText $matches[1]
-} else {
-  throw "latest.yml missing valid version field: $latestPath"
-}
-
-if ($normalizedLatestVersion -ne $normalizedReleaseTag) {
-  throw "Version mismatch: latest.yml=$normalizedLatestVersion, expected=$normalizedReleaseTag"
-}
-
-$expectedInstallerFileName = "daily-stock-analysis-windows-installer-v$normalizedReleaseTag.exe"
-
-if ($ymlText -match '(?m)^\s*path:\s*[''"]?([^''"\r\n]+)[''"]?\s*$') {
-  $latestInstallerPath = $matches[1].Trim()
-} else {
-  throw "latest.yml appears invalid: missing path field."
-}
-
-if ($latestInstallerPath -ne $expectedInstallerFileName) {
-  throw "latest.yml path ($latestInstallerPath) does not match expected installer $expectedInstallerFileName."
-}
-
-if ($ymlText -match '(?m)^\s*-\s*url:\s*[''"]?([^''"\r\n]+)[''"]?\s*$') {
-  $latestInstallerUrl = $matches[1].Trim()
-  if ($latestInstallerUrl -ne $expectedInstallerFileName) {
-    throw "latest.yml file url ($latestInstallerUrl) does not match expected installer $expectedInstallerFileName."
-  }
-}
+$expectedInstallerFileName = "daily-stock-analysis-vietnam-windows-installer-v$normalizedReleaseTag.exe"
 
 $setupFiles = Get-ChildItem -Path $distDirPath -Filter $expectedInstallerFileName -File -ErrorAction SilentlyContinue
 if (-not $setupFiles) {
   throw "No expected NSIS installer found in dist: $expectedInstallerFileName"
 }
 
-$expectedBlockmapFileName = "$expectedInstallerFileName.blockmap"
-$blockmapFiles = Get-ChildItem -Path $distDirPath -Filter $expectedBlockmapFileName -File -ErrorAction SilentlyContinue
-if (-not $blockmapFiles) {
-  throw "No matching blockmap found in dist: $expectedBlockmapFileName"
+$updateMetadata = Get-ChildItem -Path $distDirPath -File -ErrorAction SilentlyContinue |
+  Where-Object { $_.Name -like 'latest*.yml' }
+if ($updateMetadata) {
+  $metadataNames = ($updateMetadata | ForEach-Object { $_.Name }) -join ', '
+  throw "Unexpected auto-update metadata found in local desktop dist: $metadataNames"
 }
 
 $installerFiles = @()
@@ -130,9 +113,7 @@ if ($releaseAssetsDirPath) {
 }
 
 Write-Host "[check] dist: $distDirPath"
-Write-Host "[check] latest.yml version: $normalizedLatestVersion"
 Write-Host "[check] expected release version: $normalizedReleaseTag"
-Write-Host "[check] latest.yml installer path: $latestInstallerPath"
 Write-Host "[check] NSIS installers:"
 $setupFiles | ForEach-Object { Write-Host "[found] $($_.Name)" }
 if ($installerFiles) {
@@ -140,13 +121,10 @@ if ($installerFiles) {
   Write-Host "[check] installer aliases:"
   $installerFiles | ForEach-Object { Write-Host "[found] $($_.Name)" }
 }
-Write-Host "[check] blockmaps:"
-$blockmapFiles | ForEach-Object { Write-Host "[found] $($_.Name)" }
-
 $versionInTag = Normalize-SemverText -VersionText $ReleaseTag
 if ($versionInTag -and $versionInTag -ne $normalizedReleaseTag) {
   Write-Host "[warn] input release tag ($versionInTag) differs from package version ($normalizedReleaseTag)."
 }
 
-Write-Host '[check] desktop updater metadata verification passed.'
+Write-Host '[check] local Vietnam desktop artifact verification passed.'
 exit 0

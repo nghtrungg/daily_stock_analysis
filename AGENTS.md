@@ -1,4 +1,4 @@
-# AGENTS.md
+# AGENTS.md — Vietnam Local Build
 
 This file defines the default development workflow for this repository. Its goal is to reduce repeated communication and rework, and to keep changes aligned with the current project structure.
 
@@ -21,6 +21,8 @@ If this file conflicts with executable scripts, workflows, or the current code, 
 - Report format, report rendering, or Web UI changes require affected report/page screenshots in the PR description. Prefer before/after screenshots when behavior changed; if screenshots are impossible, explain why and provide alternative visual evidence.
 - Temporary screenshots and one-off validation images must not be committed. Put them in the PR description, PR comments, GitHub attachments, Actions artifacts, or external evidence links. Long-lived product documentation images are allowed only when their filenames and meaning are independent of a specific issue or PR number.
 - The `[Unreleased]` section in `docs/CHANGELOG.md` uses a flat format: one line per entry, formatted as `- [type] description`. Allowed types are `feature`, `improvement`, `fix`, `docs`, `test`, and `chore`. Do not add `### category headings` inside `[Unreleased]`; maintainers will reorganize released sections.
+- This repository is a Vietnam-focused local build. New user-facing analysis, stock-index, scheduler, report, portfolio, and Desktop work must target Vietnam symbols (`.VN`), VND, and `Asia/Ho_Chi_Minh` unless a separately approved compatibility change says otherwise.
+- Keep the local profile boundaries intact: `ENABLED_MARKETS=vn`, the Vietnam-only stock index, `DATABASE_PATH=./data/stock_analysis_vn.db`, Vietnamese reports, and disabled automatic Desktop updates. Do not reactivate multi-market routing, upstream stock-index refreshes, legacy market review, or automatic updates as incidental cleanup.
 - `README.md` is only for project positioning, high-level capabilities, quick start, main entry points, and sponsorship/cooperation information. Avoid updating it unless the change is homepage-level.
 - Put detailed module behavior, page interactions, topic configuration, troubleshooting, field contracts, implementation semantics, and edge cases in the appropriate `docs/*.md` file instead of `README.md`.
 - When changing one side of a bilingual document pair, evaluate whether the other side must be synchronized. If not synchronized, explain why in the handoff.
@@ -90,14 +92,14 @@ Personas do not invoke other personas. If multiple perspectives are useful, run 
 
 ## 3. Repository Overview
 
-- Purpose: an AI stock analysis system covering A-shares, Hong Kong stocks, US stocks, and related markets.
-- Main flow: fetch data -> technical analysis/news retrieval -> LLM analysis -> report generation -> notification delivery.
+- Purpose: a private, Vietnam-focused AI stock-analysis workspace. New analysis accepts Vietnam securities with explicit `.VN` suffixes and produces Vietnamese reports; Web and Desktop surfaces are English.
+- Main flow: fetch Vietnam data -> technical analysis/news retrieval -> LLM analysis -> schema-gated report generation -> notification delivery and historical measurement.
 - Key entry points:
   - `main.py`: analysis task entry point.
   - `server.py`: FastAPI service entry point.
   - `apps/dsa-web/`: Web frontend.
   - `apps/dsa-desktop/`: Electron desktop app.
-  - `.github/workflows/`: CI, release, and daily jobs.
+  - `.github/workflows/`: CI and optional scheduled automation. The local profile is the primary deployment target.
 - Core responsibilities:
   - `src/core/`: main flow orchestration.
   - `src/services/`: business services.
@@ -112,6 +114,13 @@ Personas do not invoke other personas. If multiple perspectives are useful, run 
   - `tests/`: pytest tests.
   - `docs/`: documentation.
 
+### Local Profile Boundaries
+
+- Use actual VND values and the Vietnam locale in user-visible financial output.
+- Use `Asia/Ho_Chi_Minh` for schedules and notification quiet hours. Default local schedule times are 09:20 and 15:10 ICT; the weekday calendar does not model official exchange holidays.
+- The legacy market-review flow is not a Vietnam market review and must remain disabled until dedicated Vietnam index support exists.
+- Legacy foreign-market adapters and compatibility data may remain in source. Do not remove or enable them broadly: the active protections are configuration, API/CLI guards, a bundled Vietnam-only index, and an isolated SQLite database.
+
 ## 4. Common Commands
 
 ### Run The App
@@ -123,15 +132,9 @@ Personas do not invoke other personas. If multiple perspectives are useful, run 
 > Do not rely on PowerShell-specific syntax in commands or validation notes.
 
 ```bash
-python main.py
-python main.py --debug
-python main.py --dry-run
-python main.py --stocks 600519,hk00700,AAPL
-python main.py --market-review
-python main.py --schedule
-python main.py --serve
-python main.py --serve-only
-uvicorn server:app --reload --host 0.0.0.0 --port 8000
+cmd.exe /d /c "chcp 65001>nul & set \"PYTHONUTF8=1\"& .venv\Scripts\python.exe main.py --dry-run --stocks VNM.VN --no-notify --no-market-review"
+cmd.exe /d /c "chcp 65001>nul & set \"PYTHONUTF8=1\"& .venv\Scripts\python.exe main.py --schedule --no-market-review"
+cmd.exe /d /c "chcp 65001>nul & set \"PYTHONUTF8=1\"& .venv\Scripts\python.exe main.py --serve-only --host 127.0.0.1 --port 8000"
 ```
 
 ### Backend Validation
@@ -147,14 +150,8 @@ python -m py_compile <changed_python_files>
 ### Web / Desktop
 
 ```bash
-cd apps/dsa-web
-npm ci
-npm run lint
-npm run build
-
-cd ../dsa-desktop
-npm install
-npm run build
+cmd.exe /d /c "cd apps\dsa-web && npm ci && npm run lint && npm run build"
+cmd.exe /d /c "cd apps\dsa-desktop && npm install && npm run build"
 ```
 
 ### PR / CI Evidence
@@ -206,7 +203,7 @@ If the PR already has relevant CI results, cite them. If CI does not cover the c
 - Configuration and runtime entry points: changing `.env` semantics, defaults, CLI args, service startup, or scheduling requires impact assessment for local runs, Docker, GitHub Actions, API, Web, and Desktop. Prefer optional enhancements that work without configuration.
 - Data sources and fallback: changes under `data_provider/` must preserve provider priority, degradation, field normalization, cache, and timeout behavior. A single provider failure should not break the whole analysis flow unless fail-fast is explicitly required.
 - API/Web/Desktop compatibility: check backend and clients when changing API, schemas, auth, or report payloads. Prefer additive fields, retained old fields, or compatibility layers.
-- Reports, prompts, and notifications: check upstream inputs and downstream consumers when changing report structure, prompts, extractors, notification templates, or bot flows. A single notification channel failure should not break the main analysis flow unless fail-fast is required. If changing `EXTRACT_PROMPT` in `src/services/image_stock_extractor.py`, include the full latest prompt in the PR description.
+- Reports, prompts, and notifications: check upstream inputs and downstream consumers when changing report structure, prompts, extractors, notification templates, or bot flows. Preserve Vietnamese report language and schema/language validation, actual-VND normalization, and isolated-history behavior. A single notification channel failure should not break the main analysis flow unless fail-fast is required. If changing `EXTRACT_PROMPT` in `src/services/image_stock_extractor.py`, include the full latest prompt in the PR description.
 - Workflows, release, and packaging: changing automatic tags, releases, Docker publishing, daily analysis, or desktop packaging requires trigger, artifact path, permission, and rollback assessment. Automatic tags remain opt-in: only commit titles containing `#patch`, `#minor`, or `#major` trigger version updates unless a requirement explicitly changes that policy.
 
 ## 8. Issue / PR / Skill Workflow

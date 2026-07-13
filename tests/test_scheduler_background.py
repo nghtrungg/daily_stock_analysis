@@ -12,13 +12,15 @@ class _FakeJob:
         self._schedule_module = schedule_module
         self.next_run = datetime(2026, 1, 1, 18, 0, 0)
         self.at_time = None
+        self.at_timezone = None
 
     @property
     def day(self):
         return self
 
-    def at(self, value):
+    def at(self, value, timezone=None):
         self.at_time = value
+        self.at_timezone = timezone
         hour, minute = [int(part) for part in value.split(":")]
         self.next_run = datetime(2026, 1, 1, hour, minute, 0)
         return self
@@ -88,9 +90,15 @@ class SchedulerBackgroundTaskTestCase(unittest.TestCase):
             order = []
 
             class FakeScheduler:
-                def __init__(self, schedule_time="18:00", schedule_time_provider=None):
+                def __init__(
+                    self,
+                    schedule_time="18:00",
+                    schedule_time_provider=None,
+                    schedule_timezone="Asia/Ho_Chi_Minh",
+                ):
                     order.append(("init", schedule_time))
                     order.append(("provider", callable(schedule_time_provider)))
+                    order.append(("timezone", schedule_timezone))
 
                 def add_background_task(self, **kwargs):
                     order.append(("background", kwargs["name"]))
@@ -113,7 +121,16 @@ class SchedulerBackgroundTaskTestCase(unittest.TestCase):
                     }],
                 )
 
-        self.assertEqual(order[:4], [("init", "18:00"), ("provider", False), ("background", "event_monitor"), ("daily", True)])
+        self.assertEqual(
+            order[:5],
+            [
+                ("init", "18:00"),
+                ("provider", False),
+                ("timezone", "Asia/Ho_Chi_Minh"),
+                ("background", "event_monitor"),
+                ("daily", True),
+            ],
+        )
 
     def test_scheduler_reloads_daily_job_when_schedule_time_changes(self):
         fake_schedule = _FakeScheduleModule()
@@ -143,11 +160,24 @@ class SchedulerBackgroundTaskTestCase(unittest.TestCase):
             scheduler = Scheduler(
                 schedule_time="18:00",
                 schedule_times=["15:10", "09:20", "15:10"],
+                schedule_timezone="Asia/Ho_Chi_Minh",
             )
             scheduler.set_daily_task(lambda: None, run_immediately=False)
 
         self.assertEqual([job.at_time for job in fake_schedule.jobs], ["09:20", "15:10"])
+        self.assertEqual(
+            [job.at_timezone for job in fake_schedule.jobs],
+            ["Asia/Ho_Chi_Minh", "Asia/Ho_Chi_Minh"],
+        )
         self.assertEqual(scheduler.schedule_times, ["09:20", "15:10"])
+
+    def test_scheduler_rejects_invalid_timezone(self):
+        fake_schedule = _FakeScheduleModule()
+        with patch.dict(sys.modules, {"schedule": fake_schedule}):
+            from src.scheduler import Scheduler
+
+            with self.assertRaisesRegex(ValueError, "Invalid schedule timezone"):
+                Scheduler(schedule_timezone="Mars/Olympus_Mons")
 
     def test_scheduler_stop_cancels_registered_daily_jobs(self):
         fake_schedule = _FakeScheduleModule()

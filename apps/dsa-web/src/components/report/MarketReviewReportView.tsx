@@ -10,7 +10,7 @@ import type {
   ReportLanguage,
 } from '../../types/analysis';
 import { markdownToPlainText } from '../../utils/markdown';
-import { getReportText, normalizeReportLanguage } from '../../utils/reportLanguage';
+import { getReportLocale, getReportText, normalizeReportLanguage } from '../../utils/reportLanguage';
 import { Card } from '../common';
 import { Tooltip } from '../common/Tooltip';
 import { ReportMarkdownBody } from './ReportMarkdownBody';
@@ -39,6 +39,10 @@ type MarketReviewSection = {
   title: string;
   content: string;
   icon: typeof FileText;
+};
+type MarketReviewSectionLabels = {
+  fullReview: string;
+  reviewOverview: string;
 };
 type StructuredMarketData = {
   id: string;
@@ -72,6 +76,8 @@ const stripTopHeading = (markdown: string, title?: string): string => {
     '大盘复盘详情',
     'a股市场复盘',
     'a 股市场复盘',
+    'tổng kết thị trường',
+    'đánh giá thị trường',
   ]);
 
   if (heading === reportTitle || genericTitles.has(heading)) {
@@ -83,30 +89,33 @@ const stripTopHeading = (markdown: string, title?: string): string => {
 
 const getSectionIcon = (title: string): typeof FileText => {
   const normalized = normalizeHeading(title);
-  if (/指数|index|overview|大盘/.test(normalized)) {
+  if (/指数|index|overview|大盘|chỉ số|tổng quan|thị trường/.test(normalized)) {
     return BarChart3;
   }
-  if (/情绪|赚钱|sentiment|breadth|temperature/.test(normalized)) {
+  if (/情绪|赚钱|sentiment|breadth|temperature|tâm lý|độ rộng/.test(normalized)) {
     return Gauge;
   }
-  if (/行业|板块|主题|轮动|sector|theme|rotation/.test(normalized)) {
+  if (/行业|板块|主题|轮动|sector|theme|rotation|ngành|chủ đề|luân chuyển/.test(normalized)) {
     return TrendingUp;
   }
-  if (/资金|成交|量能|flow|turnover|volume|capital/.test(normalized)) {
+  if (/资金|成交|量能|flow|turnover|volume|capital|dòng tiền|thanh khoản|giao dịch/.test(normalized)) {
     return WalletCards;
   }
-  if (/风险|机会|观察|risk|watch|next/.test(normalized)) {
+  if (/风险|机会|观察|risk|watch|next|rủi ro|cơ hội|theo dõi/.test(normalized)) {
     return ShieldAlert;
   }
   return FileText;
 };
 
-const splitMarketReviewSections = (markdown: string): MarketReviewSection[] => {
+const splitMarketReviewSections = (
+  markdown: string,
+  labels: MarketReviewSectionLabels,
+): MarketReviewSection[] => {
   const matches = Array.from(markdown.matchAll(SECTION_HEADING_PATTERN));
   if (matches.length === 0) {
     return [{
       id: 'full-review',
-      title: '复盘正文',
+      title: labels.fullReview,
       content: markdown,
       icon: FileText,
     }];
@@ -116,7 +125,7 @@ const splitMarketReviewSections = (markdown: string): MarketReviewSection[] => {
   const sections: MarketReviewSection[] = intro
     ? [{
         id: 'overview',
-        title: '复盘概览',
+        title: labels.reviewOverview,
         content: intro,
         icon: FileText,
       }]
@@ -131,7 +140,7 @@ const splitMarketReviewSections = (markdown: string): MarketReviewSection[] => {
       return;
     }
     sections.push({
-      id: `${index}-${normalizeHeading(title).replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-').replace(/^-|-$/g, '') || 'section'}`,
+      id: `${index}-${normalizeHeading(title).replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'section'}`,
       title,
       content,
       icon: getSectionIcon(title),
@@ -141,7 +150,10 @@ const splitMarketReviewSections = (markdown: string): MarketReviewSection[] => {
   return sections;
 };
 
-const getPayloadSections = (payload?: MarketReviewPayload | null): MarketReviewSection[] => {
+const getPayloadSections = (
+  payload: MarketReviewPayload | null | undefined,
+  fallbackTitle: string,
+): MarketReviewSection[] => {
   if (!payload) {
     return [];
   }
@@ -149,7 +161,7 @@ const getPayloadSections = (payload?: MarketReviewPayload | null): MarketReviewS
   if (payload.markets) {
     return Object.entries(payload.markets).flatMap(([region, marketPayload]) => {
       const marketTitle = marketPayload.title || region.toUpperCase();
-      return getPayloadSections(marketPayload).map((section) => ({
+      return getPayloadSections(marketPayload, fallbackTitle).map((section) => ({
         ...section,
         id: `${region}-${section.id}`,
         title: `${marketTitle} / ${section.title}`,
@@ -162,8 +174,8 @@ const getPayloadSections = (payload?: MarketReviewPayload | null): MarketReviewS
     .filter((section: MarketReviewPayloadSection) => section.markdown?.trim())
     .filter((section: MarketReviewPayloadSection) => normalizeHeading(section.title || '') !== payloadTitle)
     .map((section, index) => ({
-      id: `${section.key || index}-${normalizeHeading(section.title).replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-') || 'section'}`,
-      title: section.title || 'Review',
+      id: `${section.key || index}-${normalizeHeading(section.title).replace(/[^\p{L}\p{N}]+/gu, '-') || 'section'}`,
+      title: section.title || fallbackTitle,
       content: section.markdown,
       icon: getSectionIcon(section.title || ''),
     }));
@@ -257,6 +269,10 @@ const formatMarketHighLow = (high: unknown, low: unknown): string => {
 };
 
 const MARKET_REVIEW_TEXT: Record<ReportLanguage, {
+  eyebrow: string;
+  marketReviewTitle: string;
+  fullReview: string;
+  reviewOverview: string;
   reviewSummary: string;
   noReviewSummary: string;
   noSentimentScore: string;
@@ -280,6 +296,10 @@ const MARKET_REVIEW_TEXT: Record<ReportLanguage, {
   lagging: string;
 }> = {
   zh: {
+    eyebrow: '大盘复盘',
+    marketReviewTitle: '大盘复盘',
+    fullReview: '复盘正文',
+    reviewOverview: '复盘概览',
     reviewSummary: '复盘摘要',
     noReviewSummary: '暂无摘要',
     noSentimentScore: '暂无评分',
@@ -303,6 +323,10 @@ const MARKET_REVIEW_TEXT: Record<ReportLanguage, {
     lagging: '领跌',
   },
   en: {
+    eyebrow: 'MARKET REVIEW',
+    marketReviewTitle: 'Market Review',
+    fullReview: 'Full Review',
+    reviewOverview: 'Review Overview',
     reviewSummary: 'Review Summary',
     noReviewSummary: 'No review summary yet',
     noSentimentScore: 'No score yet',
@@ -326,6 +350,10 @@ const MARKET_REVIEW_TEXT: Record<ReportLanguage, {
     lagging: 'Lagging',
   },
   ko: {
+    eyebrow: '시장 리뷰',
+    marketReviewTitle: '시장 리뷰',
+    fullReview: '전체 리뷰',
+    reviewOverview: '리뷰 개요',
     reviewSummary: '리뷰 요약',
     noReviewSummary: '요약 없음',
     noSentimentScore: '점수 없음',
@@ -347,6 +375,33 @@ const MARKET_REVIEW_TEXT: Record<ReportLanguage, {
     conceptBoards: '테마 섹터',
     leading: '강세',
     lagging: '약세',
+  },
+  vi: {
+    eyebrow: 'TỔNG KẾT THỊ TRƯỜNG',
+    marketReviewTitle: 'Tổng kết thị trường',
+    fullReview: 'Nội dung tổng kết',
+    reviewOverview: 'Tổng quan thị trường',
+    reviewSummary: 'Tóm tắt thị trường',
+    noReviewSummary: 'Chưa có tóm tắt',
+    noSentimentScore: 'Chưa có điểm',
+    rotationAndFunds: 'Luân chuyển & Dòng tiền',
+    noRotationView: 'Chưa có nhận định luân chuyển',
+    riskAndWatch: 'Rủi ro & Theo dõi',
+    noRiskWatch: 'Chưa có điểm cần theo dõi',
+    structuredMarketData: 'Dữ liệu thị trường có cấu trúc',
+    noBreadthData: 'Không có dữ liệu',
+    advancers: 'Số mã tăng',
+    decliners: 'Số mã giảm',
+    limitUpDown: 'Trần/Sàn',
+    turnover: 'Giá trị giao dịch',
+    index: 'Chỉ số',
+    last: 'Gần nhất',
+    change: 'Thay đổi',
+    highLow: 'Cao/Thấp',
+    industryBoards: 'Nhóm ngành',
+    conceptBoards: 'Chủ đề',
+    leading: 'Dẫn đầu',
+    lagging: 'Tụt hậu',
   },
 };
 
@@ -370,7 +425,7 @@ export const MarketReviewReportView: React.FC<MarketReviewReportViewProps> = ({
 }) => {
   const normalizedReportLanguage = normalizeReportLanguage(reportLanguage);
   const text = getReportText(normalizedReportLanguage);
-  const runFlowText = UI_TEXT[normalizedReportLanguage === 'ko' ? 'en' : normalizedReportLanguage];
+  const runFlowText = UI_TEXT[normalizedReportLanguage === 'zh' ? 'zh' : 'en'];
   const marketReviewText = MARKET_REVIEW_TEXT[normalizedReportLanguage];
   const [loadedMarkdown, setLoadedMarkdown] = useState<LoadedMarkdown | null>(null);
   const [loadError, setLoadError] = useState<LoadError | null>(null);
@@ -384,17 +439,22 @@ export const MarketReviewReportView: React.FC<MarketReviewReportViewProps> = ({
   const error = loadError && loadError.recordId === recordId ? loadError.message : null;
   const hasStructuredContent = Boolean(marketReviewPayload?.sections?.length || marketReviewPayload?.markets);
   const isLoading = Boolean(recordId && !providedContent && !hasStructuredContent && loadedMarkdown?.recordId !== recordId && !error);
-  const displayTitle = marketReviewPayload?.rootTitle || marketReviewPayload?.title || meta?.stockName || 'Market Review';
+  const displayTitle = marketReviewPayload?.rootTitle
+    || marketReviewPayload?.title
+    || meta?.stockName
+    || marketReviewText.marketReviewTitle;
   const structuredContent = useMemo(
     () => stripTopHeading(content, displayTitle),
     [content, displayTitle],
   );
   const sections = useMemo(
     () => {
-      const payloadSections = getPayloadSections(marketReviewPayload);
-      return payloadSections.length > 0 ? payloadSections : splitMarketReviewSections(structuredContent);
+      const payloadSections = getPayloadSections(marketReviewPayload, marketReviewText.fullReview);
+      return payloadSections.length > 0
+        ? payloadSections
+        : splitMarketReviewSections(structuredContent, marketReviewText);
     },
-    [marketReviewPayload, structuredContent],
+    [marketReviewPayload, marketReviewText, structuredContent],
   );
   const structuredMarketData = useMemo(
     () => getStructuredMarketData(marketReviewPayload),
@@ -445,7 +505,7 @@ export const MarketReviewReportView: React.FC<MarketReviewReportViewProps> = ({
     }
   }, [content]);
 
-  const insightCards = useMemo(() => [
+  const insightCards = [
     {
       icon: FileText,
       label: marketReviewText.reviewSummary,
@@ -468,7 +528,7 @@ export const MarketReviewReportView: React.FC<MarketReviewReportViewProps> = ({
       label: marketReviewText.riskAndWatch,
       value: summary?.trendPrediction || marketReviewText.noRiskWatch,
     },
-  ], [marketReviewText, summary, text.marketSentiment]);
+  ];
 
   return (
     <div className={`animate-fade-in space-y-4 pb-8 ${className}`}>
@@ -477,7 +537,7 @@ export const MarketReviewReportView: React.FC<MarketReviewReportViewProps> = ({
           <div className="min-w-0">
             <div className="mb-2 inline-flex items-center gap-2 text-xs font-semibold text-secondary-text">
               <BarChart3 className="h-4 w-4" aria-hidden="true" />
-              <span>MARKET REVIEW</span>
+              <span>{marketReviewText.eyebrow}</span>
             </div>
             <h2 className="text-[26px] font-bold leading-tight text-foreground sm:text-[30px]">
               {displayTitle}
@@ -486,7 +546,9 @@ export const MarketReviewReportView: React.FC<MarketReviewReportViewProps> = ({
               {meta?.stockCode ? (
                 <span className="home-accent-chip px-2 py-0.5 font-mono">{meta.stockCode}</span>
               ) : null}
-              {meta?.createdAt ? <span>{new Date(meta.createdAt).toLocaleString()}</span> : null}
+              {meta?.createdAt ? (
+                <span>{new Date(meta.createdAt).toLocaleString(getReportLocale(normalizedReportLanguage))}</span>
+              ) : null}
             </div>
           </div>
 

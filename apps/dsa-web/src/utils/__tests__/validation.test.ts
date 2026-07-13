@@ -7,11 +7,10 @@ import {
 
 describe('stock code validation', () => {
   test.each([
-    ['7203.T', '7203.T'],
-    ['6758.t', '6758.T'],
-    ['005930.KS', '005930.KS'],
-    ['035720.kq', '035720.KQ'],
-  ])('accepts JP/KR Yahoo suffix code %s', (input, normalized) => {
+    ['VNM.VN', 'VNM.VN'],
+    ['mbb.vn', 'MBB.VN'],
+    ['FPT', 'FPT.VN'],
+  ])('accepts Vietnam stock code %s', (input, normalized) => {
     expect(looksLikeStockCode(input)).toBe(true);
     expect(validateStockCode(input)).toEqual({
       valid: true,
@@ -20,11 +19,15 @@ describe('stock code validation', () => {
     expect(isObviouslyInvalidStockQuery(input)).toBe(false);
   });
 
-  test.each(['7203', '005930.K', '035720.KRX'])(
-    'does not treat ambiguous JP/KR-like query %s as a valid suffix code',
+  test.each(['AAPL.US', '600519', '00700.HK', '005930.KS'])(
+    'rejects foreign-market stock code %s',
     (input) => {
       const result = validateStockCode(input);
       expect(result.valid).toBe(false);
     }
   );
+
+  test('allows Vietnamese company names with diacritics as free text', () => {
+    expect(isObviouslyInvalidStockQuery('Công ty Cổ phần Sữa Việt Nam')).toBe(false);
+  });
 });

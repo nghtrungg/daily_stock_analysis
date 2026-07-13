@@ -31,14 +31,16 @@ class _FakeJob:
         self._schedule_module = schedule_module
         self.next_run = datetime(2026, 1, 1, 18, 0, 0)
         self.at_time = None
+        self.at_timezone = None
         self.job_func = None
 
     @property
     def day(self):
         return self
 
-    def at(self, value):
+    def at(self, value, timezone=None):
         self.at_time = value
+        self.at_timezone = timezone
         hour, minute = [int(part) for part in value.split(":")]
         self.next_run = datetime(2026, 1, 1, hour, minute, 0)
         return self

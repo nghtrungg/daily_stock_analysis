@@ -21,8 +21,8 @@ FROM python:3.11-slim-bookworm
 # 设置工作目录
 WORKDIR /app
 
-# 设置时区为上海
-ENV TZ=Asia/Shanghai
+# Use Vietnam time for scheduled market analysis.
+ENV TZ=Asia/Ho_Chi_Minh
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # 安装系统依赖（wkhtmltopdf 含 wkhtmltoimage，用于 Markdown 转图片 Issue #289）
@@ -77,7 +77,7 @@ RUN EF_DATA_DIR="$(python -c 'import efinance, pathlib; print(pathlib.Path(efina
 # 设置环境变量默认值
 ENV PYTHONUNBUFFERED=1
 ENV LOG_DIR=/app/logs
-ENV DATABASE_PATH=/app/data/stock_analysis.db
+ENV DATABASE_PATH=/app/data/stock_analysis_vn.db
 # Web/API service
 ENV WEBUI_HOST=0.0.0.0
 ENV API_PORT=8000

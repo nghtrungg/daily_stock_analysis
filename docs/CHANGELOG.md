@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [improvement] Add a Vietnam-only local profile with English Web and Desktop surfaces, Vietnamese schema-gated reports, actual-VND normalization, an isolated database and stock index, disabled upstream Desktop updates, and HOSE-aligned Vietnam-time scheduling.
+- [improvement] Add a 5-trading-day prediction measurement baseline with explicit metric denominators, completion and unavailable states, segment filters, and version metadata.
+- [test] Cover mixed buy/sell, neutral, insufficient, non-directional, empty-compatible, filtered, and denominator-correct prediction outcomes.
+- [docs] Document prediction baseline action semantics, horizon rules, metric formulas, data gaps, compatibility, and rollback.
 - [improvement] Run the default GitHub stock analysis shortly after the HOSE opening and closing auctions, with Vietnam-local report timestamps.
 - [improvement] Render Discord report tables as readable vertical fields, compact section headings, and place page numbers at the start of each message.
 - [fix] Downgrade non-actionable buy reports to watch when entry or stop-loss values are missing, normalize report price precision and structured news, and keep Vietnamese report conclusions consistent.

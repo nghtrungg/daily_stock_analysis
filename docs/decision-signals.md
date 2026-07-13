@@ -160,6 +160,46 @@ P5 通过 sidecar 表保存用户反馈和后验结果，不扩展 `decision_sig
 - 后验评估只支持日线可验证的 `1d/3d/5d/10d`；`intraday/swing/long`、非方向动作、缺价和 forward bars 不足会写入 `eval_status=unable` 与明确 `unable_reason`。
 - 评估时冻结 action、market、market_phase、source_type、source_agent、plan_quality、data_quality_level、holding_state 等统计维度，历史统计不依赖后续 live join。
 
+## Prediction Measurement Baseline（Phase 1）
+
+Phase 1 只测量现有预测，不修改 action、Prompt、模型、评分阈值、报告建议或数据源优先级。Web 的信号表现以 `5d`（5 个交易日）为主口径；API 和 outcome runner 继续支持 `1d/3d/5d/10d`，已有 outcome 记录不删除、不重写含义。评估窗口只读取 anchor date 之后、按日期升序的前 N 根日线；anchor 当日和第 N 根之后的数据都不进入该 horizon，历史评估不使用随机切分。
+
+### Action 与 outcome 口径
+
+- `buy/add -> up`：收益 `>= +2%` 为 `hit`，`<= -2%` 为 `miss`，中间为 `neutral`。
+- `hold -> not_down`：收益 `>= 0` 为 `hit`，`<= -2%` 为 `miss`，中间为 `neutral`。
+- `reduce/sell/avoid -> not_up`：收益 `<= 0` 为 `hit`，`>= +2%` 为 `miss`，中间为 `neutral`。
+- `watch/alert` 等非方向 action 不进入准确率分母，写为 `unable/non_directional_action`。
+- 支持的方向 action 因缺 anchor、缺价、无效价格、结束价缺失或 forward bars 不足而无法完成时，保留为 `unable`；它们不等于 `miss`。
+
+`GET /api/v1/decision-signals/outcomes/stats` 保留原有 `total/completed/unable/hit/miss/neutral/hit_rate_pct` 字段，并新增以下 additive 字段。每个 `metrics.*` 项都返回 `value`、`unit`、`numerator`、`denominator`、`sample_count`、`status` 和 `unavailable_reason`：
+
+- `eligible`：记录了支持 horizon 且 action 可映射为方向的 outcome 行数。
+- `actionable_coverage = eligible / total`；这里的 `total` 是已生成的 outcome 行，不代表尚未运行 outcome 的全部历史信号。
+- `completion_rate = completed / eligible`。
+- `directional_accuracy = hit / (hit + miss)`；`neutral` 和所有 `unable` 均不进入分母。
+- `buy_precision`：`buy/add` 完成记录中的 `hit / (hit + miss)`。
+- `sell_precision`：`reduce/sell/avoid` 完成记录中的 `hit / (hit + miss)`。
+- `win_rate`：在结构化 DecisionSignal outcome 中与 `directional_accuracy` 同口径，仅为跨表述兼容别名。
+- `neutral_rate = neutral / completed`。
+- `average_underlying_return`：具有有效 `stock_return_pct` 的 completed 行算术平均；分母是有效收益样本数。
+- `average_simulated_return`、`stop_loss_hit_rate`、`take_profit_hit_rate`、`ambiguous_first_hit_rate`：DecisionSignal outcome 历史表没有这些字段，因此明确返回 `status=unavailable`，不返回假零值。legacy backtest performance API 仍基于其已有字段返回这些指标，并新增 `metric_sample_counts`。
+
+空数据或零分母时，比例为 `null` 且 metric `status=unavailable`；不能显示为 `0%`。Web 在方向样本少于 30 条时显示小样本提示，该提示不是置信区间或显著性结论。
+
+### 分段、过滤与版本
+
+统计 API 支持 `horizons/statuses/action/market/market_phase/source_type/data_quality_level/source_agent` 过滤，并返回 horizon、action、market、market phase、source type、data-quality level、generation source 等 breakdown。`breakdown_availability` 明确标记无记录、历史维度未保存或模型字段不受支持的情况；不得把 `unknown` 当作可靠模型分段。`source_agent` 只是 generation-source 维度，不等于完整 predictor version。
+
+当前版本边界：
+
+- DecisionSignal outcome engine：`decision-signal-v1`。
+- legacy backtest engine：配置 `BACKTEST_ENGINE_VERSION`，当前默认 `v1`。
+- measurement response contract：`prediction-measurement-v1`。
+- 完整 predictor version：旧 outcome 未持久化 Prompt、阈值、guardrail、模型和生成路径的组合版本，因此 `version_context.predictor_version_status=unavailable`。模型名本身不能代表 predictor version。
+
+本阶段不新增数据库 migration。回滚时可撤销 stats/API/Web additive 字段与展示；已有 `decision_signal_outcomes` 和 `backtest_results` 数据无需清理，旧客户端继续读取原字段。后续 Phase 2 只有在 5d completed 方向样本覆盖多个 action/market 且样本量足以避免单个样本主导结果时才应开始；仅有少量样本或大量 `unable` 时应先补数据和完成 outcome 计算。
+
 ## 脱敏与低敏边界
 
 信号写入和状态更新使用 `src/utils/sanitize.py` 中的 `sanitize_decision_signal_text()` 与 `sanitize_decision_signal_payload()`：

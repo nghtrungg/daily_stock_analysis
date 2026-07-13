@@ -88,6 +88,30 @@ describe('ReportDiagnostics', () => {
     expect(screen.getByText('Fetch / LLM / save / notification path')).toBeInTheDocument();
   });
 
+  it('localizes diagnostics for Vietnamese reports and keeps run-flow controls in English', () => {
+    const onOpenRunFlow = vi.fn();
+
+    render(
+      <ReportDiagnostics
+        recordId={7}
+        summary={diagnosticSummary}
+        language="vi"
+        onOpenRunFlow={onOpenRunFlow}
+      />,
+    );
+
+    expect(screen.getByText('Trạng thái vận hành')).toBeInTheDocument();
+    expect(screen.getByText('Suy giảm')).toBeInTheDocument();
+    expect(screen.getByText('Luồng lấy dữ liệu / LLM / lưu / thông báo')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Trạng thái vận hành'));
+    const runFlowButton = screen.getByRole('button', { name: 'View run flow for history record 7' });
+    expect(runFlowButton).toHaveTextContent('View run flow');
+    fireEvent.click(runFlowButton);
+
+    expect(onOpenRunFlow).toHaveBeenCalledWith(7);
+  });
+
   it('opens historical run flow from the diagnostics body', async () => {
     const onOpenRunFlow = vi.fn();
     vi.mocked(historyApi.getDiagnostics).mockResolvedValue(diagnosticSummary);

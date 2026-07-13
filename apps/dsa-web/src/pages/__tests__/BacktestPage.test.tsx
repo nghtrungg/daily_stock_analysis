@@ -46,6 +46,14 @@ const basePerformance = {
   takeProfitTriggerRate: 20,
   ambiguousRate: 0,
   avgDaysToFirstHit: 3.5,
+  metricSampleCounts: {
+    directionAccuracy: 2,
+    winRate: 2,
+    averageSimulatedReturn: 2,
+    averageUnderlyingReturn: 2,
+    stopLossHitRate: 2,
+    takeProfitHitRate: 2,
+  },
   adviceBreakdown: {},
   diagnostics: {},
 };
@@ -91,6 +99,15 @@ beforeEach(() => {
 });
 
 describe('BacktestPage', () => {
+  function renderChinesePage() {
+    window.localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, 'zh');
+    render(
+      <UiLanguageProvider>
+        <BacktestPage />
+      </UiLanguageProvider>,
+    );
+  }
+
   function renderEnglishPage() {
     window.localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, 'en');
     render(
@@ -101,7 +118,7 @@ describe('BacktestPage', () => {
   }
 
   it('renders shared surface inputs and prediction tracking outputs', async () => {
-    render(<BacktestPage />);
+    renderChinesePage();
 
     const filterInput = await screen.findByPlaceholderText('按股票代码筛选（留空表示全部）');
     const windowInput = screen.getByPlaceholderText('10');
@@ -127,6 +144,7 @@ describe('BacktestPage', () => {
     expect(screen.getByText('做多')).toBeInTheDocument();
     expect(screen.getAllByLabelText('是').length).toBeGreaterThan(0);
     expect(screen.getByText('方向准确率')).toBeInTheDocument();
+    expect(screen.getByText('66.7% · n=2')).toBeInTheDocument();
     expect(screen.getByText('平均模拟收益')).toBeInTheDocument();
   });
 
@@ -144,7 +162,7 @@ describe('BacktestPage', () => {
       ],
     });
 
-    render(<BacktestPage />);
+    renderChinesePage();
 
     const codeCell = await screen.findByText('600519');
     const resultRow = codeCell.closest('tr');
@@ -196,7 +214,7 @@ describe('BacktestPage', () => {
       ],
     });
 
-    render(<BacktestPage />);
+    renderChinesePage();
 
     const codeCell = await screen.findByText('600519');
     const resultRow = codeCell.closest('tr');
@@ -223,7 +241,7 @@ describe('BacktestPage', () => {
   });
 
   it('filters results with stock code, window, phase, and analysis date range when clicking Filter', async () => {
-    render(<BacktestPage />);
+    renderChinesePage();
 
     const filterInput = await screen.findByPlaceholderText('按股票代码筛选（留空表示全部）');
     const windowInput = screen.getByPlaceholderText('10');
@@ -267,7 +285,7 @@ describe('BacktestPage', () => {
       message: '未找到符合条件的历史分析记录',
       diagnostics: { emptyReason: 'no_matching_analysis' },
     });
-    render(<BacktestPage />);
+    renderChinesePage();
 
     const filterInput = await screen.findByPlaceholderText('按股票代码筛选（留空表示全部）');
     const windowInput = screen.getByPlaceholderText('10');
@@ -325,7 +343,7 @@ describe('BacktestPage', () => {
       message: '未找到符合条件的历史分析记录',
       diagnostics: { emptyReason: 'no_matching_analysis' },
     });
-    render(<BacktestPage />);
+    renderChinesePage();
 
     const filterInput = await screen.findByPlaceholderText('按股票代码筛选（留空表示全部）');
     const windowInput = screen.getByPlaceholderText('10');
@@ -378,7 +396,7 @@ describe('BacktestPage', () => {
   });
 
   it('switches to next-day validation with the 1D shortcut', async () => {
-    render(<BacktestPage />);
+    renderChinesePage();
 
     await screen.findByPlaceholderText('按股票代码筛选（留空表示全部）');
     fireEvent.click(screen.getByRole('button', { name: '1 日验证' }));

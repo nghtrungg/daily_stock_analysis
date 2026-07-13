@@ -200,7 +200,7 @@ class TestParseImportFromText:
         assert result[1] == ("00700", "腾讯控股", "medium")
 
     def test_preserves_name_when_code_is_dirty(self):
-        data = "code,name\nINVALID,贵州茅台".encode("utf-8")
+        data = "code,name\nINVALID,Vinamilk".encode("utf-8")
         result = parse_import_from_bytes(data, "a.csv")
         assert len(result) == 1
-        assert result[0] == ("600519", "贵州茅台", "medium")
+        assert result[0] == (None, "Vinamilk", "medium")

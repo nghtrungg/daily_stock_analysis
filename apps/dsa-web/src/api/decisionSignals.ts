@@ -219,6 +219,12 @@ function toOutcomeStatsParams(params: DecisionSignalOutcomeStatsParams = {}): Re
     horizons: params.horizons,
     engine_version: params.engineVersion,
     statuses: params.statuses,
+    action: params.action,
+    market: params.market,
+    market_phase: params.marketPhase,
+    source_type: params.sourceType,
+    data_quality_level: params.dataQualityLevel,
+    source_agent: params.sourceAgent,
   }) as Record<string, string | string[]>;
 }
 

@@ -35,75 +35,75 @@ class AnalyzeRequest(BaseModel):
     
     stock_code: Optional[str] = Field(
         None, 
-        description="单只股票代码", 
-        json_schema_extra={"example": "600519"},
+        description="One Vietnam stock code using the explicit .VN market suffix",
+        json_schema_extra={"example": "VNM.VN"},
     )
     stock_codes: Optional[List[str]] = Field(
         None, 
-        description="多只股票代码（与 stock_code 二选一）",
-        json_schema_extra={"example": ["600519", "000858"]},
+        description="Vietnam stock codes; use this or stock_code, not both",
+        json_schema_extra={"example": ["VNM.VN", "MBB.VN"]},
     )
     report_type: str = Field(
         "detailed",
-        description="报告类型：simple(精简) / detailed(完整) / full(完整) / brief(简洁)",
+        description="Report type: simple / detailed / full / brief",
         pattern="^(simple|detailed|full|brief)$",
     )
     force_refresh: bool = Field(
         False,
-        description="是否强制刷新（忽略缓存）"
+        description="Bypass cached analysis data"
     )
     async_mode: bool = Field(
         False,
-        description="是否使用异步模式"
+        description="Run through the asynchronous task queue"
     )
     analysis_phase: AnalysisPhase = Field(
         "auto",
-        description="分析阶段覆盖：auto(自动推断) / premarket(盘前) / intraday(盘中) / postmarket(盘后)",
+        description="Market-phase override: auto / premarket / intraday / postmarket",
     )
     stock_name: Optional[str] = Field(
         None,
-        description="用户选中的股票名称（自动补全时提供）",
-        json_schema_extra={"example": "贵州茅台"},
+        description="Selected company name supplied by autocomplete",
+        json_schema_extra={"example": "Vietnam Dairy Products JSC"},
     )
     original_query: Optional[str] = Field(
         None,
-        description="用户原始输入（如茅台、gzmt、600519）",
-        json_schema_extra={"example": "茅台"},
+        description="Original user input before symbol normalization",
+        json_schema_extra={"example": "VNM"},
     )
     selection_source: Optional[str] = Field(
         None,
-        description="股票选择来源：manual(手动输入) | autocomplete(自动补全) | import(导入) | image(图片识别)",
+        description="Selection source: manual | autocomplete | import | image",
         pattern=SELECTION_SOURCE_PATTERN,
         json_schema_extra={"example": "autocomplete"},
     )
     notify: bool = Field(
         True,
-        description="是否发送推送通知（Telegram/企业微信等）"
+        description="Send the result through configured notification channels"
     )
-    report_language: Optional[Literal["zh", "en", "ko"]] = Field(
+    report_language: Optional[Literal["zh", "en", "ko", "vi"]] = Field(
         None,
         validation_alias=AliasChoices("report_language", "reportLanguage"),
-        description="本次分析报告输出语言；未传时使用全局 REPORT_LANGUAGE",
+        description="Report language for this request; defaults to REPORT_LANGUAGE",
     )
     skills: Optional[List[str]] = Field(
         None,
         validation_alias=AliasChoices("skills", "strategies"),
-        description="本次分析使用的策略 skill ID 列表；兼容 legacy strategies 字段",
+        description="Strategy skill IDs used for this analysis; accepts legacy strategies alias",
         json_schema_extra={"example": ["bull_trend", "growth_quality"]},
     )
 
     model_config = ConfigDict(json_schema_extra={
         "example": {
-            "stock_code": "600519",
+            "stock_code": "VNM.VN",
             "report_type": "detailed",
             "force_refresh": False,
             "async_mode": False,
             "analysis_phase": "auto",
-            "stock_name": "贵州茅台",
-            "original_query": "茅台",
+            "stock_name": "Vietnam Dairy Products JSC",
+            "original_query": "VNM",
             "selection_source": "autocomplete",
             "notify": True,
-            "report_language": "zh",
+            "report_language": "vi",
             "skills": ["bull_trend"]
         }
     })
@@ -114,12 +114,12 @@ class MarketReviewRequest(BaseModel):
 
     send_notification: bool = Field(
         True,
-        description="是否在大盘复盘完成后发送推送通知",
+        description="Send a notification after market review completes",
     )
-    report_language: Optional[Literal["zh", "en", "ko"]] = Field(
+    report_language: Optional[Literal["zh", "en", "ko", "vi"]] = Field(
         None,
         validation_alias=AliasChoices("report_language", "reportLanguage"),
-        description="本次大盘复盘报告输出语言；未传时使用全局 REPORT_LANGUAGE",
+        description="Market-review language for this request; defaults to REPORT_LANGUAGE",
     )
 
 

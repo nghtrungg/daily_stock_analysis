@@ -4,7 +4,7 @@
  * Stock data index for autocomplete functionality
  */
 
-export type Market = 'CN' | 'HK' | 'US' | 'JP' | 'KR' | 'INDEX' | 'ETF' | 'BSE';
+export type Market = 'VN' | 'CN' | 'HK' | 'US' | 'JP' | 'KR' | 'INDEX' | 'ETF' | 'BSE';
 export type AssetType = 'stock' | 'index' | 'etf';
 
 /**
@@ -15,7 +15,7 @@ export interface StockIndexItem {
   canonicalCode: string;
   /** Display code: 600519 */
   displayCode: string;
-  /** Chinese name: 贵州茅台 */
+  /** Display name. The legacy property name is retained for wire compatibility. */
   nameZh: string;
   /** English name: Kweichow Moutai */
   nameEn?: string;
@@ -43,7 +43,7 @@ export interface StockSuggestion {
   canonicalCode: string;
   /** Display code */
   displayCode: string;
-  /** Chinese name */
+  /** Display name (legacy property name retained for compatibility) */
   nameZh: string;
   /** Market */
   market: Market;

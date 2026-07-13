@@ -1,7 +1,14 @@
 import type { ReportLanguage } from '../types/analysis';
 
 export const normalizeReportLanguage = (value?: string | null): ReportLanguage =>
-  value === 'en' ? 'en' : value === 'ko' ? 'ko' : 'zh';
+  value === 'en' ? 'en' : value === 'ko' ? 'ko' : value === 'vi' ? 'vi' : 'zh';
+
+const REPORT_LOCALES: Record<ReportLanguage, string> = {
+  zh: 'zh-CN',
+  en: 'en-US',
+  ko: 'ko-KR',
+  vi: 'vi-VN',
+};
 
 const REPORT_TEXT = {
   zh: {
@@ -142,6 +149,55 @@ const REPORT_TEXT = {
     neutralBoard: '중립',
     reanalyze: '재분석',
   },
+  vi: {
+    keyInsights: 'NHẬN ĐỊNH CHÍNH',
+    noAnalysisSummary: 'Chưa có kết luận phân tích',
+    actionAdvice: 'Khuyến nghị hành động',
+    noAdvice: 'Chưa có khuyến nghị',
+    trendPrediction: 'Dự báo xu hướng',
+    noPrediction: 'Chưa có dự báo',
+    marketSentiment: 'Tâm lý thị trường',
+    strategyPoints: 'CÁC MỨC CHIẾN LƯỢC',
+    sniperLevels: 'Các mức hành động',
+    idealBuy: 'Điểm mua lý tưởng',
+    secondaryBuy: 'Điểm mua bổ sung',
+    stopLoss: 'Cắt lỗ',
+    takeProfit: 'Chốt lời',
+    noValue: '—',
+    newsFeed: 'TIN TỨC',
+    relatedNews: 'Tin tức liên quan',
+    refresh: 'Làm mới',
+    retry: 'Thử lại',
+    dismiss: 'Đóng',
+    details: 'Xem chi tiết',
+    loadingNews: 'Đang tải tin tức...',
+    noNews: 'Không có tin tức liên quan',
+    noNewsDescription: 'Hãy làm mới sau để kiểm tra các cập nhật mới nhất.',
+    openLink: 'Mở',
+    transparency: 'MINH BẠCH',
+    traceability: 'Khả năng truy xuất dữ liệu',
+    rawResult: 'Kết quả phân tích thô',
+    analysisSnapshot: 'Ảnh chụp phân tích',
+    copy: 'Sao chép',
+    copied: 'Đã sao chép!',
+    recordId: 'ID bản ghi',
+    fullReport: 'Báo cáo phân tích đầy đủ',
+    loadingReport: 'Đang tải báo cáo...',
+    loadReportFailed: 'Không thể tải báo cáo',
+    copyMarkdownSource: 'Sao chép nguồn Markdown',
+    copyPlainText: 'Sao chép văn bản thuần',
+    analysisModel: 'Mô hình phân tích',
+    fearGreedIndex: 'Chỉ số Sợ hãi & Tham lam',
+    boardLinkage: 'LIÊN KẾT NHÓM NGÀNH',
+    relatedBoards: 'Nhóm ngành liên quan',
+    leadingBoard: 'Dẫn đầu',
+    laggingBoard: 'Tụt hậu',
+    neutralBoard: 'Trung lập',
+    reanalyze: 'Phân tích lại',
+  },
 } as const;
 
 export const getReportText = (language?: string | null) => REPORT_TEXT[normalizeReportLanguage(language)];
+
+export const getReportLocale = (language?: string | null): string =>
+  REPORT_LOCALES[normalizeReportLanguage(language)];

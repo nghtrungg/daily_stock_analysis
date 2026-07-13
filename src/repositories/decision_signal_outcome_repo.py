@@ -171,12 +171,30 @@ class DecisionSignalOutcomeRepository:
         engine_version: str,
         horizons: Optional[List[str]] = None,
         statuses: Optional[List[str]] = None,
+        action: Optional[str] = None,
+        market: Optional[str] = None,
+        market_phase: Optional[str] = None,
+        source_type: Optional[str] = None,
+        data_quality_level: Optional[str] = None,
+        source_agent: Optional[str] = None,
     ) -> List[DecisionSignalOutcomeRecord]:
         conditions = [DecisionSignalOutcomeRecord.engine_version == engine_version]
         if horizons:
             conditions.append(DecisionSignalOutcomeRecord.horizon.in_(horizons))
         if statuses:
             conditions.append(DecisionSignalRecord.status.in_(statuses))
+        if action:
+            conditions.append(DecisionSignalOutcomeRecord.action == action)
+        if market:
+            conditions.append(DecisionSignalOutcomeRecord.market == market)
+        if market_phase:
+            conditions.append(DecisionSignalOutcomeRecord.market_phase == market_phase)
+        if source_type:
+            conditions.append(DecisionSignalOutcomeRecord.source_type == source_type)
+        if data_quality_level:
+            conditions.append(DecisionSignalOutcomeRecord.data_quality_level == data_quality_level)
+        if source_agent:
+            conditions.append(DecisionSignalOutcomeRecord.source_agent == source_agent)
         with self.db.get_session() as session:
             rows = session.execute(
                 select(DecisionSignalOutcomeRecord)

@@ -20,11 +20,13 @@ export function getTodayIso(): string {
   return toDateInputValue(new Date());
 }
 
-export function formatMoney(value: number | undefined | null, currency = 'CNY'): string {
+export function formatMoney(value: number | undefined | null, currency = 'VND'): string {
   if (value == null || Number.isNaN(value)) return '--';
-  return `${currency} ${Number(value).toLocaleString('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+  const normalizedCurrency = currency.trim().toUpperCase() || 'VND';
+  const isVnd = normalizedCurrency === 'VND';
+  return `${normalizedCurrency} ${Number(value).toLocaleString(isVnd ? 'vi-VN' : 'en-US', {
+    minimumFractionDigits: isVnd ? 0 : 2,
+    maximumFractionDigits: isVnd ? 0 : 2,
   })}`;
 }
 

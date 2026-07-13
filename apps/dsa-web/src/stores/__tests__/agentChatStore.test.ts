@@ -115,7 +115,7 @@ describe('agentChatStore.startStream', () => {
       skills: ['bull_trend', 'ma_golden_cross'],
       skill: 'bull_trend',
       skillNames: ['趋势分析', '均线金叉'],
-      skillName: '趋势分析、均线金叉',
+      skillName: '趋势分析, 均线金叉',
     });
     expect(state.messages[1]).toMatchObject({
       role: 'assistant',
@@ -123,7 +123,7 @@ describe('agentChatStore.startStream', () => {
       skills: ['bull_trend', 'ma_golden_cross'],
       skill: 'bull_trend',
       skillNames: ['趋势分析', '均线金叉'],
-      skillName: '趋势分析、均线金叉',
+      skillName: '趋势分析, 均线金叉',
     });
   });
 
@@ -146,8 +146,8 @@ describe('agentChatStore.startStream', () => {
       content: '分析茅台',
     });
     expect(state.chatError).toMatchObject({
-      title: '回复未完整返回',
-      message: 'Agent 流式响应在完成前中断，请重试。',
+      title: 'The response was incomplete',
+      message: 'The Agent stream ended before completion. Please try again.',
       category: 'upstream_network',
       rawMessage: 'Agent stream ended before a done event was received.',
     });
@@ -168,8 +168,8 @@ describe('agentChatStore.startStream', () => {
     expect(state.loading).toBe(false);
     expect(state.messages).toHaveLength(1);
     expect(state.chatError).toMatchObject({
-      title: '系统没有配置可用的 LLM 模型',
-      message: '请先在系统设置中配置主模型、可用渠道或相关 API Key 后再重试。',
+      title: 'No usable LLM model is configured',
+      message: 'Configure a primary model, an available provider, or the required API key in System Settings, then try again.',
       category: 'llm_not_configured',
       rawMessage: 'Agent LLM: no effective primary model configured',
     });
@@ -190,8 +190,8 @@ describe('agentChatStore.startStream', () => {
     expect(state.loading).toBe(false);
     expect(state.messages).toHaveLength(1);
     expect(state.chatError).toMatchObject({
-      title: '连接上游服务超时',
-      message: '服务端访问外部依赖时超时，请稍后重试，或检查当前网络与代理设置。',
+      title: 'Upstream service timed out',
+      message: 'The server timed out while accessing an external dependency. Try again later or check the network and proxy settings.',
       category: 'upstream_timeout',
       rawMessage: 'connect timeout while calling upstream provider',
     });
@@ -212,10 +212,10 @@ describe('agentChatStore.startStream', () => {
     expect(state.loading).toBe(false);
     expect(state.messages).toHaveLength(1);
     expect(state.chatError).toMatchObject({
-      title: '请求失败',
-      message: '分析出错',
+      title: 'Request failed',
+      message: 'Analysis failed',
       category: 'unknown',
-      rawMessage: '分析出错',
+      rawMessage: 'Analysis failed',
     });
   });
 });

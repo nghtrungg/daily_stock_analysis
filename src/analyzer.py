@@ -127,6 +127,54 @@ def _effective_report_language_for_stock(report_language: Any, stock_code: str =
     return language
 
 
+def _strip_han_prompt_lines(value: Any) -> str:
+    """Remove legacy Han-language instruction lines from a Vietnamese prompt."""
+    return "\n".join(
+        line for line in str(value or "").splitlines()
+        if re.search(r"[\u3400-\u9fff]", line) is None
+    ).strip()
+
+
+def _filter_vietnam_direct_news(value: Any) -> str:
+    """Remove explicitly zero-relevance result blocks before prompt translation.
+
+    The legacy news formatter writes a ``score=0`` relevance line at the end
+    of unrelated company/sector/macro blocks. That line contains Han text and
+    would otherwise be removed by prompt sanitization while the unrelated
+    English headline remains, making it look like valid company evidence.
+    """
+    text = str(value or "")
+    if not text.strip():
+        return ""
+
+    result_block = re.compile(r"(?ms)^  \d+\. .*?(?=^  \d+\. |^\S|\Z)")
+    return result_block.sub(
+        lambda match: "" if re.search(r"\bscore\s*=\s*0\b", match.group(0)) else match.group(0),
+        text,
+    )
+
+
+def _sanitize_vietnam_prompt_payload(value: Any) -> Any:
+    """Keep structured evidence while dropping untranslated source labels."""
+    if isinstance(value, dict):
+        return {
+            str(key): sanitized
+            for key, item in value.items()
+            if (sanitized := _sanitize_vietnam_prompt_payload(item)) is not None
+        }
+    if isinstance(value, (list, tuple, set)):
+        return [
+            sanitized
+            for item in value
+            if (sanitized := _sanitize_vietnam_prompt_payload(item)) is not None
+        ]
+    if isinstance(value, str):
+        return None if re.search(r"[\u3400-\u9fff]", value) else value
+    if isinstance(value, (int, float, bool)) or value is None:
+        return value
+    return str(value)
+
+
 def _normalize_risk_warning_values(value: Any) -> List[str]:
     """Normalize arbitrary risk_warning values into a flat list of text alerts."""
     if value is None:
@@ -2811,6 +2859,78 @@ The nested dashboard must contain `core_conclusion`, `data_perspective`, `intell
 and the seven-field `"phase_decision"` object with `"watch_conditions"` and `"data_limitations"`.
 Keep `decision_type` within `buy|hold|sell`.
 
+Use the exact object/array/string nesting below. Never replace an object with
+prose and never move nested fields to a parent object:
+
+```json
+{
+  "stock_name": "company name",
+  "sentiment_score": 50,
+  "trend_prediction": "localized trend",
+  "operation_advice": "localized action advice",
+  "decision_type": "hold",
+  "action": "watch",
+  "confidence_level": "localized confidence",
+  "dashboard": {
+    "core_conclusion": {
+      "one_sentence": "one-line decision",
+      "signal_type": "localized signal",
+      "time_sensitivity": "localized timing",
+      "position_advice": {
+        "no_position": "advice without a position",
+        "has_position": "advice with a position"
+      }
+    },
+    "data_perspective": {
+      "trend_status": {"ma_alignment": "text", "is_bullish": false, "trend_score": 50},
+      "price_position": {"current_price": 0, "ma5": 0, "ma10": 0, "ma20": 0, "support_level": 0, "resistance_level": 0},
+      "volume_analysis": {"volume_ratio": 0, "volume_status": "text", "turnover_rate": 0, "volume_meaning": "text"},
+      "chip_structure": {}
+    },
+    "intelligence": {
+      "latest_news": "dated prose summary",
+      "risk_alerts": [],
+      "positive_catalysts": [],
+      "earnings_outlook": "text",
+      "sentiment_summary": "text"
+    },
+    "battle_plan": {
+      "sniper_points": {"ideal_buy": "price", "secondary_buy": "price", "stop_loss": "price", "take_profit": "price"},
+      "position_strategy": {"suggested_position": "text", "entry_plan": "text", "risk_control": "text"},
+      "action_checklist": []
+    },
+    "phase_decision": {
+      "phase_context": {"phase": "premarket"},
+      "action_window": "text",
+      "immediate_action": "text",
+      "watch_conditions": [],
+      "next_check_time": "text",
+      "confidence_reason": "text",
+      "data_limitations": []
+    }
+  },
+  "analysis_summary": "text",
+  "key_points": "comma-separated text",
+  "risk_warning": "text",
+  "buy_reason": "text",
+  "trend_analysis": "text",
+  "short_term_outlook": "text",
+  "medium_term_outlook": "text",
+  "technical_analysis": "text",
+  "ma_analysis": "text",
+  "volume_analysis": "text",
+  "pattern_analysis": "text",
+  "fundamental_analysis": "text",
+  "sector_position": "text",
+  "company_highlights": "text",
+  "news_summary": "text",
+  "market_sentiment": "text",
+  "hot_topics": "text",
+  "search_performed": true,
+  "data_sources": "text"
+}
+```
+
 ## Score bands
 
 - 20-39: reduce exposure (`action=reduce`, `decision_type=sell`) when the trend weakens or risk dominates.
@@ -2917,6 +3037,9 @@ Keep `decision_type` within `buy|hold|sell`.
         market_role = get_market_role(stock_code, lang)
         market_guidelines = get_market_guidelines(stock_code, lang)
         skill_instructions, default_skill_policy, use_legacy_default_prompt = self._get_skill_prompt_sections()
+        if is_vn_market_symbol(stock_code):
+            skill_instructions = _strip_han_prompt_lines(skill_instructions)
+            default_skill_policy = _strip_han_prompt_lines(default_skill_policy)
         if use_legacy_default_prompt:
             base_prompt = self.ENGLISH_SYSTEM_PROMPT.replace(
                 "{market_placeholder}", market_role
@@ -4161,7 +4284,10 @@ Keep `decision_type` within `buy|hold|sell`.
                         system_prompt=system_prompt,
                         stream=True,
                         stream_progress_callback=stream_progress_callback,
-                        response_validator=self._validate_json_response,
+                        response_validator=lambda text: self._validate_json_response(
+                            text,
+                            report_language=report_language,
+                        ),
                         audit_context=legacy_audit_context,
                     )
                 except _AllModelsFailedError as exc:
@@ -4303,6 +4429,13 @@ Keep `decision_type` within `buy|hold|sell`.
         stock_name = context.get('stock_name', name)
         if not stock_name or stock_name == f'股票{code}':
             stock_name = STOCK_NAME_MAP.get(code, f'股票{code}')
+        if report_language == "vi":
+            return self._format_vietnam_prompt(
+                context,
+                stock_name,
+                news_context=news_context,
+                analysis_context_pack_summary=analysis_context_pack_summary,
+            )
             
         today = context.get('today', {})
         unknown_text = get_unknown_text(report_language)
@@ -4820,6 +4953,54 @@ Keep `decision_type` within `buy|hold|sell`.
 """
         
         return prompt
+
+    def _format_vietnam_prompt(
+        self,
+        context: Dict[str, Any],
+        stock_name: str,
+        *,
+        news_context: Optional[str] = None,
+        analysis_context_pack_summary: Optional[str] = None,
+    ) -> str:
+        """Build a Han-free structured evidence prompt for Vietnamese reports."""
+        evidence = {
+            "subject": {
+                "code": context.get("code"),
+                "stock_name": stock_name,
+                "analysis_date": context.get("date"),
+            },
+            "daily_bar_and_indicators_actual_vnd": context.get("today", {}),
+            "realtime_quote_actual_vnd": context.get("realtime", {}),
+            "technical_analysis": context.get("trend_analysis", {}),
+            "market_phase": context.get("market_phase_context", {}),
+            "fundamental_context": context.get("fundamental_context", {}),
+            "ownership_structure": context.get("ownership", {}),
+            "data_quality_limitations": context.get("data_missing", []),
+            "news_window_days": context.get("news_window_days"),
+        }
+        sanitized_evidence = _sanitize_vietnam_prompt_payload(evidence)
+        sanitized_news = _strip_han_prompt_lines(_filter_vietnam_direct_news(news_context))
+        sanitized_pack = _strip_han_prompt_lines(analysis_context_pack_summary)
+        return "\n\n".join(
+            part
+            for part in (
+                "# Vietnam stock decision-dashboard request",
+                "All prices in the evidence are actual VND, not thousand-VND display units.",
+                "## Structured evidence\n```json\n"
+                + json.dumps(sanitized_evidence, ensure_ascii=False, indent=2, default=str)
+                + "\n```",
+                f"## Analysis-context quality summary\n{sanitized_pack}" if sanitized_pack else "",
+                f"## Dated news evidence\n{sanitized_news}" if sanitized_news else "## Dated news evidence\nNo usable dated news was supplied.",
+                "Return one JSON object using the exact schema in the system prompt. "
+                "Every human-readable JSON value that will appear in the final markdown dashboard must be 100% Vietnamese. "
+                "Do not emit Han characters. "
+                "Use only directly matched company news as company evidence; never attribute sector, macro, or unrelated-company items to the subject. "
+                "If no directly matched item supports a claim, state that the evidence is unavailable. "
+                "Do not claim public-infrastructure investment, government-policy benefits, industry tailwinds, or foreign-capital catalysts without dated direct evidence and a direct mechanism linking the evidence to subject revenue, costs, or earnings. "
+                "Keep every dashboard object nested exactly as shown; top-level analysis fields must be strings.",
+            )
+            if part
+        )
     
     def _format_volume(self, volume: Optional[float], language: str = "zh") -> str:
         """格式化成交量显示"""
@@ -5147,10 +5328,118 @@ Keep `decision_type` within `buy|hold|sell`.
                 return True
         return False
 
-    def _validate_analysis_minimal_contract(self, data: Dict[str, Any]) -> None:
+    @staticmethod
+    def _contains_han_text(value: Any) -> bool:
+        """Return whether a nested model payload contains untranslated Han text."""
+        if isinstance(value, str):
+            return re.search(r"[\u3400-\u9fff]", value) is not None
+        if isinstance(value, dict):
+            return any(GeminiAnalyzer._contains_han_text(item) for item in value.values())
+        if isinstance(value, (list, tuple, set)):
+            return any(GeminiAnalyzer._contains_han_text(item) for item in value)
+        return False
+
+    @staticmethod
+    def _missing_vietnam_report_fields(data: Dict[str, Any]) -> List[str]:
+        """Return renderer-facing fields missing from a Vietnamese report payload."""
+
+        def _resolve(path: str) -> Any:
+            value: Any = data
+            for segment in path.split("."):
+                if not isinstance(value, dict) or segment not in value:
+                    return None
+                value = value[segment]
+            return value
+
+        def _exists(path: str) -> bool:
+            value: Any = data
+            segments = path.split(".")
+            for segment in segments[:-1]:
+                if not isinstance(value, dict) or segment not in value:
+                    return False
+                value = value[segment]
+            return isinstance(value, dict) and segments[-1] in value
+
+        missing: List[str] = []
+        required_text = (
+            "trend_prediction",
+            "operation_advice",
+            "confidence_level",
+            "analysis_summary",
+            "dashboard.core_conclusion.one_sentence",
+            "dashboard.core_conclusion.signal_type",
+            "dashboard.core_conclusion.time_sensitivity",
+            "dashboard.core_conclusion.position_advice.no_position",
+            "dashboard.core_conclusion.position_advice.has_position",
+            "dashboard.intelligence.latest_news",
+            "dashboard.intelligence.earnings_outlook",
+            "dashboard.intelligence.sentiment_summary",
+            "dashboard.battle_plan.position_strategy.suggested_position",
+            "dashboard.battle_plan.position_strategy.entry_plan",
+            "dashboard.battle_plan.position_strategy.risk_control",
+            "dashboard.phase_decision.action_window",
+            "dashboard.phase_decision.immediate_action",
+            "dashboard.phase_decision.next_check_time",
+            "dashboard.phase_decision.confidence_reason",
+        )
+        for path in required_text:
+            value = _resolve(path)
+            if not isinstance(value, str) or not value.strip():
+                missing.append(path)
+
+        required_objects = (
+            "dashboard",
+            "dashboard.core_conclusion",
+            "dashboard.core_conclusion.position_advice",
+            "dashboard.data_perspective",
+            "dashboard.intelligence",
+            "dashboard.battle_plan",
+            "dashboard.battle_plan.sniper_points",
+            "dashboard.battle_plan.position_strategy",
+            "dashboard.phase_decision",
+            "dashboard.phase_decision.phase_context",
+        )
+        for path in required_objects:
+            if not isinstance(_resolve(path), dict):
+                missing.append(path)
+
+        required_lists = (
+            "dashboard.intelligence.risk_alerts",
+            "dashboard.intelligence.positive_catalysts",
+            "dashboard.battle_plan.action_checklist",
+            "dashboard.phase_decision.watch_conditions",
+            "dashboard.phase_decision.data_limitations",
+        )
+        for path in required_lists:
+            if not isinstance(_resolve(path), list):
+                missing.append(path)
+
+        for path in (
+            "sentiment_score",
+            "dashboard.battle_plan.sniper_points.ideal_buy",
+            "dashboard.battle_plan.sniper_points.secondary_buy",
+            "dashboard.battle_plan.sniper_points.stop_loss",
+            "dashboard.battle_plan.sniper_points.take_profit",
+        ):
+            if not _exists(path):
+                missing.append(path)
+
+        decision_type = str(data.get("decision_type") or "").strip().lower()
+        if decision_type not in {"buy", "hold", "sell"}:
+            missing.append("decision_type")
+
+        return list(dict.fromkeys(missing))
+
+    def _validate_analysis_minimal_contract(
+        self,
+        data: Dict[str, Any],
+        report_language: Optional[str] = None,
+    ) -> None:
+        schema_error: Optional[Exception] = None
         try:
             AnalysisReportSchema.model_validate(data)
         except Exception as exc:
+            schema_error = exc
             logger.warning(
                 "AnalysisReportSchema validation failed; continuing with raw parser contract: %s",
                 str(exc)[:200],
@@ -5177,6 +5466,27 @@ Keep `decision_type` within `buy|hold|sell`.
                     reason="parser_contract_failed",
                     message="sentiment_score must be integer-compatible",
                 ) from exc
+
+        if normalize_report_language(report_language, default="") == "vi":
+            if self._contains_han_text(data):
+                raise self._generation_validation_error(
+                    GenerationErrorCode.SCHEMA_VALIDATION_FAILED,
+                    reason="report_language_mismatch",
+                    message="Vietnamese report JSON contains untranslated Han text",
+                )
+            if schema_error is not None:
+                raise self._generation_validation_error(
+                    GenerationErrorCode.SCHEMA_VALIDATION_FAILED,
+                    reason="report_schema_mismatch",
+                    message=str(schema_error)[:500],
+                )
+            missing_fields = self._missing_vietnam_report_fields(data)
+            if missing_fields:
+                raise self._generation_validation_error(
+                    GenerationErrorCode.SCHEMA_VALIDATION_FAILED,
+                    reason="report_incomplete",
+                    message="Missing required Vietnamese report fields: " + ", ".join(missing_fields),
+                )
 
     def _generation_validation_error(
         self,
@@ -5221,7 +5531,7 @@ Keep `decision_type` within `buy|hold|sell`.
             )
             try:
                 _json_str, data = self._extract_analysis_json_object(response_text)
-                self._validate_analysis_minimal_contract(data)
+                self._validate_analysis_minimal_contract(data, report_language=report_language)
             except Exception as exc:
                 logger.warning("无法从响应中提取唯一有效 JSON，标记为解析失败: %s", exc)
                 return self._parse_text_response(response_text, code, name)
@@ -5328,7 +5638,11 @@ Keep `decision_type` within `buy|hold|sell`.
         
         return json_str
 
-    def _validate_json_response(self, text: str) -> None:
+    def _validate_json_response(
+        self,
+        text: str,
+        report_language: Optional[str] = None,
+    ) -> None:
         """Validate that *text* contains one parser-compatible JSON object.
 
         Used as the ``response_validator`` argument to :meth:`_call_litellm` so
@@ -5366,7 +5680,7 @@ Keep `decision_type` within `buy|hold|sell`.
                 message=str(exc)[:200],
             ) from exc
 
-        self._validate_analysis_minimal_contract(data)
+        self._validate_analysis_minimal_contract(data, report_language=report_language)
     
     def _parse_text_response(
         self, 

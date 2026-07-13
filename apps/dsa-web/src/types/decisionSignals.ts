@@ -10,7 +10,7 @@ export type DecisionSignalSourceType = 'analysis' | 'agent' | 'alert' | 'market_
 export type DecisionSignalStatus = 'active' | 'expired' | 'invalidated' | 'closed' | 'archived';
 export type DecisionSignalPlanQuality = 'complete' | 'partial' | 'minimal' | 'unknown';
 export type DecisionSignalHorizon = 'intraday' | '1d' | '3d' | '5d' | '10d' | 'swing' | 'long';
-export type DecisionSignalMarket = 'cn' | 'hk' | 'us' | 'jp' | 'kr' | 'tw';
+export type DecisionSignalMarket = 'vn' | 'cn' | 'hk' | 'us' | 'jp' | 'kr' | 'tw';
 export type DecisionSignalOutcomeEvalStatus = 'completed' | 'unable';
 export type DecisionSignalOutcomeValue = 'hit' | 'miss' | 'neutral';
 export type DecisionSignalFeedbackValue = 'useful' | 'not_useful';
@@ -237,36 +237,81 @@ export interface DecisionSignalOutcomeStatsBucket {
   dimension: string;
   value: string;
   total: number;
+  eligible: number;
   completed: number;
   unable: number;
+  unableEligible: number;
+  nonDirectional: number;
   hit: number;
   miss: number;
   neutral: number;
   hitRatePct?: number | null;
+  actionableCoveragePct?: number | null;
+  completionRatePct?: number | null;
+  directionalAccuracyPct?: number | null;
+  buyPrecisionPct?: number | null;
+  sellPrecisionPct?: number | null;
+  neutralRatePct?: number | null;
   avgStockReturnPct?: number | null;
   unableReasons: Record<string, number>;
+  metrics: Record<string, DecisionSignalBaselineMetric>;
+}
+
+export interface DecisionSignalBaselineMetric {
+  status: 'available' | 'unavailable';
+  value?: number | null;
+  unit: 'count' | 'percent';
+  numerator?: number | null;
+  denominator?: number | null;
+  sampleCount: number;
+  unavailableReason?: string | null;
+}
+
+export interface DecisionSignalBreakdownAvailability {
+  status: 'available' | 'unavailable';
+  reason?: string | null;
 }
 
 export interface DecisionSignalOutcomeStatsResponse {
   engineVersion: string;
+  headlineHorizon: '5d';
   horizons?: DecisionSignalHorizon[] | null;
   statuses: DecisionSignalStatus[];
   total: number;
+  eligible: number;
   completed: number;
   unable: number;
+  unableEligible: number;
+  nonDirectional: number;
   hit: number;
   miss: number;
   neutral: number;
   hitRatePct?: number | null;
+  actionableCoveragePct?: number | null;
+  completionRatePct?: number | null;
+  directionalAccuracyPct?: number | null;
+  buyPrecisionPct?: number | null;
+  sellPrecisionPct?: number | null;
+  neutralRatePct?: number | null;
   avgStockReturnPct?: number | null;
   unableReasons: Record<string, number>;
   breakdowns: Record<string, DecisionSignalOutcomeStatsBucket[]>;
+  breakdownAvailability: Record<string, DecisionSignalBreakdownAvailability>;
+  metrics: Record<string, DecisionSignalBaselineMetric>;
+  filters: Record<string, string | null>;
+  versionContext: Record<string, unknown>;
 }
 
 export interface DecisionSignalOutcomeStatsParams {
   horizons?: DecisionSignalHorizon[];
   engineVersion?: string;
   statuses?: DecisionSignalStatus[];
+  action?: DecisionAction;
+  market?: DecisionSignalMarket;
+  marketPhase?: MarketPhaseValue;
+  sourceType?: DecisionSignalSourceType;
+  dataQualityLevel?: string;
+  sourceAgent?: string;
 }
 
 export interface DecisionSignalFeedbackItem {

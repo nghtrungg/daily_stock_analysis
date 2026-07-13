@@ -138,6 +138,37 @@ class NewsIntelStorageTestCase(unittest.TestCase):
                 self.fail("未找到保存的新闻记录")
             self.assertTrue(row.url.startswith("no-url:"))
 
+    def test_vietnam_news_persistence_drops_explicit_zero_relevance_results(self) -> None:
+        response = self._build_response([
+            SearchResult(
+                title="Unrelated foreign-company lawsuit",
+                snippet="No VNM identity match.",
+                url="https://news.example.com/unrelated",
+                source="example.com",
+                relevance_score=0,
+            ),
+            SearchResult(
+                title="Vinamilk earnings outlook (VNM)",
+                snippet="Direct company evidence.",
+                url="https://news.example.com/vnm",
+                source="example.com",
+                relevance_score=100,
+            ),
+        ])
+
+        saved = self.db.save_news_intel(
+            code="VNM.VN",
+            name="Vinamilk",
+            dimension="earnings",
+            query=response.query,
+            response=response,
+        )
+
+        self.assertEqual(saved, 1)
+        with self.db.get_session() as session:
+            rows = session.query(NewsIntel).all()
+        self.assertEqual([row.title for row in rows], ["Vinamilk earnings outlook (VNM)"])
+
     def test_get_recent_news(self) -> None:
         """可按时间范围查询最新新闻"""
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

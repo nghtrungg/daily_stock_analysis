@@ -32,6 +32,8 @@ const pricedPosition: PortfolioPositionItem = {
 describe('portfolioFormat', () => {
   it('formats money and signed percentages consistently', () => {
     expect(formatMoney(1234.5, 'USD')).toBe('USD 1,234.50');
+    expect(formatMoney(1_234_567)).toBe('VND 1.234.567');
+    expect(formatMoney(1_234_567.89, 'vnd')).toBe('VND 1.234.568');
     expect(formatMoney(null)).toBe('--');
     expect(formatSignedPct(3.456)).toBe('+3.46%');
     expect(formatSignedPct(-1.2)).toBe('-1.20%');

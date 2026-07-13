@@ -1103,6 +1103,51 @@ class BacktestService:
 
     @staticmethod
     def _summary_to_dict(row: BacktestSummary) -> Dict[str, Any]:
+        diagnostics = json.loads(row.diagnostics_json) if row.diagnostics_json else {}
+        stored_sample_counts = diagnostics.get("metric_sample_counts") if isinstance(diagnostics, dict) else None
+        metric_sample_counts = stored_sample_counts if isinstance(stored_sample_counts, dict) else {
+            "completion_rate": int(row.total_evaluations or 0),
+            "direction_accuracy": int((row.win_count or 0) + (row.loss_count or 0)),
+            "win_rate": int((row.win_count or 0) + (row.loss_count or 0)),
+            "neutral_rate": int(row.completed_count or 0),
+            "average_underlying_return": int(row.completed_count or 0) if row.avg_stock_return_pct is not None else 0,
+            "average_simulated_return": int(row.completed_count or 0) if row.avg_simulated_return_pct is not None else 0,
+            "stop_loss_hit_rate": 0,
+            "take_profit_hit_rate": 0,
+            "ambiguous_first_hit_rate": 0,
+        }
+        total = int(row.total_evaluations or 0)
+        completed = int(row.completed_count or 0)
+        exact_sample_counts = isinstance(stored_sample_counts, dict)
+        metric_availability = {
+            key: {
+                "status": "available" if int(value or 0) > 0 else "unavailable",
+                "reason": None if int(value or 0) > 0 else "zero_denominator",
+            }
+            for key, value in metric_sample_counts.items()
+        }
+        if not exact_sample_counts:
+            for key in (
+                "average_underlying_return",
+                "average_simulated_return",
+                "stop_loss_hit_rate",
+                "take_profit_hit_rate",
+                "ambiguous_first_hit_rate",
+            ):
+                metric_availability[key] = {
+                    "status": "unavailable",
+                    "reason": "historical_summary_missing_denominator",
+                }
+        metric_availability.update({
+            "buy_side_precision": {
+                "status": "unavailable",
+                "reason": "legacy_backtests_do_not_persist_canonical_action_family",
+            },
+            "sell_side_precision": {
+                "status": "unavailable",
+                "reason": "legacy_cash_recommendations_conflate_sell_and_wait_actions",
+            },
+        })
         return {
             "scope": row.scope,
             "code": None if row.code == OVERALL_SENTINEL_CODE else row.code,
@@ -1120,14 +1165,19 @@ class BacktestService:
             "direction_accuracy_pct": row.direction_accuracy_pct,
             "win_rate_pct": row.win_rate_pct,
             "neutral_rate_pct": row.neutral_rate_pct,
+            "completion_rate_pct": round(completed / total * 100, 2) if total else None,
             "avg_stock_return_pct": row.avg_stock_return_pct,
             "avg_simulated_return_pct": row.avg_simulated_return_pct,
             "stop_loss_trigger_rate": row.stop_loss_trigger_rate,
             "take_profit_trigger_rate": row.take_profit_trigger_rate,
             "ambiguous_rate": row.ambiguous_rate,
             "avg_days_to_first_hit": row.avg_days_to_first_hit,
+            "headline_horizon_days": 5,
+            "is_headline_horizon": int(row.eval_window_days) == 5,
+            "metric_sample_counts": metric_sample_counts,
+            "metric_availability": metric_availability,
             "advice_breakdown": json.loads(row.advice_breakdown_json) if row.advice_breakdown_json else {},
-            "diagnostics": json.loads(row.diagnostics_json) if row.diagnostics_json else {},
+            "diagnostics": diagnostics,
         }
 
     @staticmethod

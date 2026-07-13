@@ -151,7 +151,7 @@ describe('StockAutocomplete', () => {
       />
     );
 
-    const input = screen.getByPlaceholderText(/输入股票代码或名称/);
+    const input = screen.getByPlaceholderText(/Enter a stock code or company name/);
     expect(input).toBeInTheDocument();
   });
 
@@ -270,7 +270,7 @@ describe('StockAutocomplete', () => {
         />
       );
 
-      const input = screen.getByPlaceholderText(/输入股票代码或名称/);
+      const input = screen.getByPlaceholderText(/Enter a stock code or company name/);
       expect(input).toHaveAttribute('data-autocomplete-mode', 'fallback');
     });
 
@@ -301,7 +301,7 @@ describe('StockAutocomplete', () => {
         />
       );
 
-      const input = screen.getByPlaceholderText(/输入股票代码或名称/);
+      const input = screen.getByPlaceholderText(/Enter a stock code or company name/);
       expect(input).toHaveAttribute('data-autocomplete-mode', 'fallback');
     });
 
@@ -607,7 +607,7 @@ describe('StockAutocomplete', () => {
       expect(screen.getByText('000660.KS')).toBeInTheDocument();
     });
 
-    it('renders KR and JP market badges in the suggestion list', () => {
+    it('renders compatibility-market badges in English', () => {
       autocompleteHookImpl = () => ({
         query: '',
         setQuery: vi.fn(),
@@ -637,8 +637,8 @@ describe('StockAutocomplete', () => {
       const input = screen.getByDisplayValue('000660');
       fireEvent.focus(input);
 
-      expect(screen.getByText('韩股')).toBeInTheDocument();
-      expect(screen.getByText('日股')).toBeInTheDocument();
+      expect(screen.getByText('Korea')).toBeInTheDocument();
+      expect(screen.getByText('Japan')).toBeInTheDocument();
       expect(screen.getByText('000660.KS')).toBeInTheDocument();
       expect(screen.getByText('7203.T')).toBeInTheDocument();
     });
