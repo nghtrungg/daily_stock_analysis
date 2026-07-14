@@ -4,9 +4,9 @@ on:
   # HOSE-aware weekday triggers (Vietnam time, UTC+7 with no daylight saving):
   # - 09:20 ICT: after the 09:00-09:15 opening auction and five minutes of continuous trading.
   # - 15:10 ICT: after negotiated trading closes at 15:00.
-  schedule:
-    - cron: '20 2 * * 1-5'     # Monday-Friday, 02:20 UTC = 09:20 Asia/Ho_Chi_Minh.
-    - cron: '10 8 * * 1-5'     # Monday-Friday, 08:10 UTC = 15:10 Asia/Ho_Chi_Minh.
+  # schedule:
+  #   - cron: '20 2 * * 1-5'     # Monday-Friday, 02:20 UTC = 09:20 Asia/Ho_Chi_Minh.
+  #   - cron: '10 8 * * 1-5'     # Monday-Friday, 08:10 UTC = 15:10 Asia/Ho_Chi_Minh.
   
   # Manual trigger.
   workflow_dispatch:
