@@ -25,6 +25,16 @@ on:
         required: false
         default: false
         type: boolean
+      stock_symbols:
+        description: 'Comma-separated Vietnam symbols supplied by Personal Stock Tracking'
+        required: false
+        default: ''
+        type: string
+      tracking_run_id:
+        description: 'Personal Stock Tracking analysis run UUID for the signed completion callback'
+        required: false
+        default: ''
+        type: string
 
 # Concurrency control: run only one analysis job at a time.
 concurrency:
@@ -65,6 +75,7 @@ jobs:
           mkdir -p data logs reports
       
       - name: Run stock analysis
+        id: analysis
         env:
           # ==========================================
           # AI configuration.
@@ -385,6 +396,7 @@ jobs:
           # ==========================================
           # Avoid writing STOCK_LIST directly and preserve same-name runner environment values.
           STOCK_LIST_CONFIG: ${{ vars.STOCK_LIST || secrets.STOCK_LIST }}
+          TRACKING_STOCK_SYMBOLS: ${{ inputs.stock_symbols }}
           ENABLED_MARKETS: ${{ vars.ENABLED_MARKETS || secrets.ENABLED_MARKETS || 'vn' }}
           MARKET_REVIEW_REGION: ${{ vars.MARKET_REVIEW_REGION || secrets.MARKET_REVIEW_REGION || 'cn' }}
           MARKET_REVIEW_COLOR_SCHEME: ${{ vars.MARKET_REVIEW_COLOR_SCHEME || secrets.MARKET_REVIEW_COLOR_SCHEME || 'green_up' }}
@@ -413,11 +425,15 @@ jobs:
           REALTIME_SOURCE_PRIORITY: ${{ vars.REALTIME_SOURCE_PRIORITY || 'tencent,akshare_sina,efinance,akshare_em' }}
           
         run: |
-          # Resolve the watchlist configuration:
-          # 1. Repository/Environment secrets or Repository variables (STOCK_LIST_CONFIG).
-          # 2. Same-name runner environment variable injected by Environment variables (STOCK_LIST).
-          # 3. Minimal default value.
-          if [ -n "${STOCK_LIST_CONFIG:-}" ]; then
+          # A tracking-app request takes precedence only for this dispatched run.
+          # It is validated before becoming STOCK_LIST so manual dispatch input cannot alter the shell command.
+          if [ -n "${TRACKING_STOCK_SYMBOLS:-}" ]; then
+            if ! [[ "$TRACKING_STOCK_SYMBOLS" =~ ^([A-Z0-9]{1,10}[.]VN)(,[A-Z0-9]{1,10}[.]VN)*$ ]]; then
+              echo "Tracking symbols must be comma-separated, uppercase .VN tickers."
+              exit 1
+            fi
+            export STOCK_LIST="$TRACKING_STOCK_SYMBOLS"
+          elif [ -n "${STOCK_LIST_CONFIG:-}" ]; then
             export STOCK_LIST="$STOCK_LIST_CONFIG"
           elif [ -z "${STOCK_LIST:-}" ]; then
             export STOCK_LIST="VNM.VN"
@@ -435,6 +451,9 @@ jobs:
 
           # Determine the run mode.
           MODE="${{ github.event.inputs.mode || 'full' }}"
+          if [ -n "${TRACKING_STOCK_SYMBOLS:-}" ]; then
+            MODE="stocks-only"
+          fi
           
           echo "=========================================="
           echo "🚀 Daily Stock Analysis"
@@ -519,6 +538,15 @@ jobs:
           else
             python main.py $FORCE_RUN_ARG
           fi
+
+      - name: Signal Personal Stock Tracking
+        if: always() && inputs.tracking_run_id != ''
+        env:
+          ANALYSIS_CALLBACK_RUN_ID: ${{ inputs.tracking_run_id }}
+          ANALYSIS_CALLBACK_URL: ${{ vars.PERSONAL_TRACKING_CALLBACK_URL }}
+          ANALYSIS_CALLBACK_SECRET: ${{ secrets.ANALYSIS_CALLBACK_SECRET }}
+          ANALYSIS_CALLBACK_STATUS: ${{ steps.analysis.outcome == 'success' && 'succeeded' || 'failed' }}
+        run: python .github/scripts/callback_analysis_run.py
       
       - name: Upload analysis reports
         uses: actions/upload-artifact@v6

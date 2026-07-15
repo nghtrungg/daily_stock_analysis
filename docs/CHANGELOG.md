@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [feature] Let Personal Stock Tracking securely dispatch the selected Vietnam symbol to the daily GitHub Actions workflow and receive an HMAC-signed completion status without changing the repository STOCK_LIST variable.
 - [improvement] Add a Vietnam-only local profile with English Web and Desktop surfaces, Vietnamese schema-gated reports, actual-VND normalization, an isolated database and stock index, disabled upstream Desktop updates, and HOSE-aligned Vietnam-time scheduling.
 - [improvement] Add a 5-trading-day prediction measurement baseline with explicit metric denominators, completion and unavailable states, segment filters, and version metadata.
 - [test] Cover mixed buy/sell, neutral, insufficient, non-directional, empty-compatible, filtered, and denominator-correct prediction outcomes.
