@@ -1,12 +1,16 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { withSupabase } from "@supabase/server";
+import { parseAnalysisCallback, type AnalysisCallback } from "../../../src/lib/analysis/callback-contract.ts";
+import {
+  callbackRunUpdate,
+  terminalCallbackMatches,
+  type StoredAnalysisRun,
+} from "../../../src/lib/analysis/callback-state.ts";
 
-const runIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const errorCodes = new Set(["SOURCE_UNAVAILABLE", "PROCESSING_FAILED"]);
-
-type CallbackPayload =
-  | { runId: string; status: "succeeded"; summary: string }
-  | { runId: string; status: "failed"; errorCode: "SOURCE_UNAVAILABLE" | "PROCESSING_FAILED" };
+type StoredRun = StoredAnalysisRun & {
+  id: string;
+  user_id: string;
+};
 
 function json(body: unknown, status = 200) {
   return Response.json(body, { status, headers: { "Content-Type": "application/json" } });
@@ -15,11 +19,9 @@ function json(body: unknown, status = 200) {
 function isEqualSignature(actual: string, expected: string) {
   let difference = actual.length ^ expected.length;
   const length = Math.max(actual.length, expected.length);
-
   for (let index = 0; index < length; index += 1) {
     difference |= (actual.charCodeAt(index) || 0) ^ (expected.charCodeAt(index) || 0);
   }
-
   return difference === 0;
 }
 
@@ -32,30 +34,7 @@ async function signBody(secret: string, body: string) {
     ["sign"],
   );
   const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body));
-
   return Array.from(new Uint8Array(signature), (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-function parseCallback(input: unknown): CallbackPayload | null {
-  if (!input || typeof input !== "object") {
-    return null;
-  }
-
-  const payload = input as Record<string, unknown>;
-  if (typeof payload.runId !== "string" || !runIdPattern.test(payload.runId)) {
-    return null;
-  }
-
-  if (payload.status === "succeeded" && typeof payload.summary === "string") {
-    const summary = payload.summary.trim();
-    return summary.length > 0 && summary.length <= 4_000 ? { runId: payload.runId, status: "succeeded", summary } : null;
-  }
-
-  if (payload.status === "failed" && typeof payload.errorCode === "string" && errorCodes.has(payload.errorCode)) {
-    return { runId: payload.runId, status: "failed", errorCode: payload.errorCode as "SOURCE_UNAVAILABLE" | "PROCESSING_FAILED" };
-  }
-
-  return null;
 }
 
 export default {
@@ -72,33 +51,56 @@ export default {
       return json({ error: { code: "UNAUTHENTICATED", message: "Callback authentication failed." } }, 401);
     }
 
-    let input: unknown;
+    let payload: AnalysisCallback;
     try {
-      input = JSON.parse(rawBody);
+      payload = parseAnalysisCallback(JSON.parse(rawBody));
     } catch {
-      return json({ error: { code: "VALIDATION_ERROR", message: "Send a JSON request body." } }, 400);
-    }
-
-    const payload = parseCallback(input);
-    if (!payload) {
       return json({ error: { code: "VALIDATION_ERROR", message: "Callback payload is invalid." } }, 422);
     }
 
-    const completedAt = new Date().toISOString();
-    const update = payload.status === "succeeded"
-      ? { status: "succeeded", summary: payload.summary, error_code: null, completed_at: completedAt, updated_at: completedAt }
-      : { status: "failed", summary: null, error_code: payload.errorCode, completed_at: completedAt, updated_at: completedAt };
-
-    const { error } = await ctx.supabaseAdmin
+    const fields = "id, user_id, status, summary, error_code, current_price_vnd, quote_as_of, quote_source";
+    const { data: existingData, error: readError } = await ctx.supabaseAdmin
       .from("analysis_runs")
-      .update(update)
+      .select(fields)
       .eq("id", payload.runId)
-      .in("status", ["queued", "dispatched", "running"]);
+      .maybeSingle();
+    const existing = existingData as StoredRun | null;
 
-    if (error) {
-      return json({ error: { code: "PROCESSING_FAILED", message: "The callback could not be recorded." } }, 500);
+    if (readError) return json({ error: { code: "PROCESSING_FAILED", message: "The callback could not be recorded." } }, 500);
+    if (!existing || typeof existing.user_id !== "string" || existing.user_id.length === 0) {
+      return json({ error: { code: "RUN_NOT_FOUND", message: "The addressed analysis run does not exist." } }, 404);
+    }
+    if (existing.status === "succeeded" || existing.status === "failed") {
+      return terminalCallbackMatches(existing, payload)
+        ? json({ received: true, idempotent: true })
+        : json({ error: { code: "CALLBACK_CONFLICT", message: "The analysis run already has a different terminal result." } }, 409);
     }
 
-    return json({ received: true });
+    const { data: updatedData, error: updateError } = await ctx.supabaseAdmin
+      .from("analysis_runs")
+      .update(callbackRunUpdate(payload, new Date().toISOString()))
+      .eq("id", payload.runId)
+      .eq("user_id", existing.user_id)
+      .in("status", ["queued", "dispatched", "running"])
+      .select("id")
+      .maybeSingle();
+
+    if (updateError) return json({ error: { code: "PROCESSING_FAILED", message: "The callback could not be recorded." } }, 500);
+    if (updatedData) return json({ received: true, idempotent: false });
+
+    // A concurrent terminal callback may have won after the initial read.
+    const { data: concurrentData, error: concurrentError } = await ctx.supabaseAdmin
+      .from("analysis_runs")
+      .select(fields)
+      .eq("id", payload.runId)
+      .eq("user_id", existing.user_id)
+      .maybeSingle();
+    const concurrent = concurrentData as StoredRun | null;
+    if (concurrentError || !concurrent) {
+      return json({ error: { code: "PROCESSING_FAILED", message: "The callback could not be recorded." } }, 500);
+    }
+    return terminalCallbackMatches(concurrent, payload)
+      ? json({ received: true, idempotent: true })
+      : json({ error: { code: "CALLBACK_CONFLICT", message: "The analysis run already has a different terminal result." } }, 409);
   }),
 };

@@ -1,6 +1,11 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { withSupabase } from "@supabase/server";
-import { createGithubWorkflowDispatch, readGithubDispatchConfig } from "../../../src/lib/analysis/github-dispatch.ts";
+import {
+  createGithubWorkflowDispatch,
+  parseGithubWorkflowDispatchResponse,
+  readGithubDispatchConfig,
+  staleAnalysisRunCutoff,
+} from "../../../src/lib/analysis/github-dispatch.ts";
 
 const vietnamSymbol = /^[A-Z0-9]{1,10}[.]VN$/;
 
@@ -120,6 +125,25 @@ export default {
       return error("WORKER_NOT_CONFIGURED", "Analysis is temporarily unavailable.", 503, cors);
     }
 
+    const now = new Date();
+    const staleCutoff = staleAnalysisRunCutoff(now);
+    const { error: staleRunError } = await ctx.supabaseAdmin
+      .from("analysis_runs")
+      .update({
+        status: "failed",
+        error_code: "CALLBACK_TIMEOUT",
+        completed_at: now.toISOString(),
+        updated_at: now.toISOString(),
+      })
+      .eq("user_id", userId)
+      .eq("symbol", symbol)
+      .in("status", ["queued", "dispatched", "running"])
+      .lt("requested_at", staleCutoff);
+
+    if (staleRunError) {
+      return error("DISPATCH_FAILED", "Analysis could not be prepared. Try again shortly.", 500, cors);
+    }
+
     const { data: run, error: createRunError } = await ctx.supabaseAdmin
       .from("analysis_runs")
       .insert({ user_id: userId, symbol, status: "queued" })
@@ -139,6 +163,7 @@ export default {
 
     const dispatchRequest = createGithubWorkflowDispatch(githubDispatch, symbol, run.id);
 
+    let dispatchResult: ReturnType<typeof parseGithubWorkflowDispatchResponse>;
     try {
       const workerResponse = await fetch(dispatchRequest.url, {
         method: "POST",
@@ -152,9 +177,7 @@ export default {
         signal: AbortSignal.timeout(10_000),
       });
 
-      if (!workerResponse.ok) {
-        throw new Error("GitHub Actions rejected the dispatch.");
-      }
+      dispatchResult = parseGithubWorkflowDispatchResponse(workerResponse.status, await workerResponse.text());
     } catch {
       await ctx.supabaseAdmin
         .from("analysis_runs")
@@ -165,9 +188,20 @@ export default {
       return error("DISPATCH_FAILED", "Analysis could not be started. Try again shortly.", 502, cors);
     }
 
+    const dispatchedUpdate: Record<string, string> = {
+      status: "dispatched",
+      updated_at: new Date().toISOString(),
+    };
+    if (dispatchResult.externalRunId) {
+      dispatchedUpdate.external_run_id = dispatchResult.externalRunId;
+    }
+    if (dispatchResult.externalRunUrl) {
+      dispatchedUpdate.external_run_url = dispatchResult.externalRunUrl;
+    }
+
     await ctx.supabaseAdmin
       .from("analysis_runs")
-      .update({ status: "dispatched", updated_at: new Date().toISOString() })
+      .update(dispatchedUpdate)
       .eq("id", run.id)
       .eq("status", "queued");
 

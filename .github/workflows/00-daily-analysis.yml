@@ -51,6 +51,7 @@ jobs:
     timeout-minutes: ${{ fromJSON(vars.ANALYSIS_TIMEOUT_MINUTES || '30') }}
     env:
       TZ: Asia/Ho_Chi_Minh
+      DATABASE_PATH: ${{ vars.DATABASE_PATH || './data/stock_analysis_vn.db' }}
     
     steps:
       - name: Random delay (avoid fixed-time access)
@@ -73,6 +74,11 @@ jobs:
       - name: Create required directories
         run: |
           mkdir -p data logs reports
+
+      - name: Capture tracking analysis start
+        id: tracking_context
+        if: inputs.tracking_run_id != ''
+        run: echo "started_at=$(date --utc '+%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
       
       - name: Run stock analysis
         id: analysis
@@ -546,6 +552,9 @@ jobs:
           ANALYSIS_CALLBACK_URL: ${{ vars.PERSONAL_TRACKING_CALLBACK_URL }}
           ANALYSIS_CALLBACK_SECRET: ${{ secrets.ANALYSIS_CALLBACK_SECRET }}
           ANALYSIS_CALLBACK_STATUS: ${{ steps.analysis.outcome == 'success' && 'succeeded' || 'failed' }}
+          ANALYSIS_CALLBACK_SYMBOL: ${{ inputs.stock_symbols }}
+          ANALYSIS_CALLBACK_STARTED_AT: ${{ steps.tracking_context.outputs.started_at }}
+          DATABASE_PATH: ${{ env.DATABASE_PATH }}
         run: python .github/scripts/callback_analysis_run.py
       
       - name: Upload analysis reports

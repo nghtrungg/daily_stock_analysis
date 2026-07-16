@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [improvement] Localize Personal Stock Tracking navigation, authentication, portfolio pages, metadata, offline state, and safe errors into Vietnamese.
+- [feature] Add wallet-ledger and tracked-quote contracts plus additive Supabase schema convergence that preserves existing portfolio data and exposes owner-only atomic cash and trade mutations.
+- [test] Cover wallet replay, weighted cost, realized sales, cash/share invariants, deterministic ordering, quote staleness, and incomplete valuation totals.
+- [feature] Implement Personal Stock Tracking wallet funding, atomic buy/sell corrections, unified activity history, quote-aware holdings, and current-run signed quote callbacks with stale-run recovery.
 - [fix] Rename the Personal Stock Tracking app directory to a space-free path so Vercel can generate valid Serverless Function names.
 - [improvement] Refresh Personal Stock Tracking with a responsive desktop sidebar, mobile navigation, accessible page shell, honest loading feedback, and improved portfolio forms and states.
 - [feature] Let Personal Stock Tracking securely dispatch the selected Vietnam symbol to the daily GitHub Actions workflow and receive an HMAC-signed completion status without changing the repository STOCK_LIST variable.
