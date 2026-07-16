@@ -2,14 +2,14 @@
 
 ## Overview
 
-This plan turns the approved product plan into small, verifiable slices. The first checkpoint establishes a polished local PWA shell and financial rules without pretending that a local prototype is connected to Supabase or a market-data provider.
+This plan records the implemented slices and the remaining deployment gates. The current local build uses authenticated Supabase contracts, an atomic VND wallet ledger, and tracked analysis quotes; it does not claim that unapplied local migrations or undeployed functions are active in a hosted project.
 
 ## Architecture decisions
 
 - Build the approved React, TypeScript, Next.js App Router, and PWA web shell in this repository.
 - Keep the transaction ledger as the source of truth; derive holdings with weighted-average cost in pure functions.
-- Start with local browser state. Replace only the data adapter in the later Supabase/RLS slice.
-- Use English initially; keep money and time helpers locale-aware for a later Vietnamese/bilingual switch.
+- Persist owner data through the Supabase adapter; keep all financial mutations behind owner-derived atomic RPCs.
+- Use Vietnamese user-facing copy, VND, `.VN` symbols, and `Asia/Ho_Chi_Minh` timestamps.
 - Use a Hallmark custom monochrome design: near-white and graphite tokens with a restrained focus signal.
 
 ## Dependency graph
@@ -96,7 +96,7 @@ See `docs/supabase-worker-spec.md` for the approved contract and security bounda
 - A new session persists only after the owner signs in.
 - RLS isolation is proven with two different accounts.
 - No secret appears in Git or browser-delivered JavaScript.
-- Status: migration and deployed function boundaries are complete; registration confirmation redirect URLs and a two-account staging check remain before this checkpoint is closed.
+- Status: local schema, adapter, and tests are implemented. Local pgTAP execution, hosted migration, registration confirmation redirects, and two-account staging checks remain before this checkpoint is closed.
 
 ### Phase 3: Single-stock analysis
 
@@ -126,7 +126,27 @@ See `docs/supabase-worker-spec.md` for the approved contract and security bounda
 - Browser calls only the authenticated Edge Function, never the worker.
 - The worker callback is authenticated and cannot disclose credentials or other users’ data.
 - A real staging run completes with a known test symbol.
-- Status: the dispatch/callback functions are deployed and reject unauthenticated calls; a signed owner request and a worker-signed callback remain to be exercised.
+- Status: dispatch/callback code and contract tests are implemented locally. The functions are not claimed as deployed; a signed owner request and worker callback remain staging gates.
+
+### Phase 4: Wallet, corrections, and tracked quotes
+
+#### Task 11: Converge the VND wallet ledger safely
+
+- Acceptance: additive schema convergence preserves legacy trade fields, creates at most one minimum opening balance and wallet, denies direct authenticated financial writes, and exposes owner-derived atomic RPCs.
+- Verify: `npx supabase test db` runs `supabase/tests/portfolio_wallet.test.sql` against a disposable local stack, followed by hosted advisors and two-account checks only after approval.
+- Status: migrations and pgTAP verification are present; execution is pending an available local Docker daemon.
+
+#### Task 12: Deliver wallet, trade, and correction workflows
+
+- Acceptance: deposit/withdrawal and buy/sell forms validate VND, quantities, shares, and cash; the Activity page edits/deletes eligible entries with optimistic-concurrency rejection and preserves input on failure.
+- Verify: adapter/domain/component tests, lint, TypeScript, build, and responsive keyboard/browser inspection.
+- Status: implemented locally.
+
+#### Task 13: Bind quotes to analysis runs and value holdings honestly
+
+- Acceptance: the worker emits one valid current-run VND quote or `QUOTE_UNAVAILABLE`; the callback is signed, strict, idempotent, and atomically persisted; portfolio totals remain incomplete when any held symbol lacks a quote.
+- Verify: TypeScript contract/valuation tests, Python quote extraction/signing/retry tests, Edge Function staging checks, and a real `.VN` callback after approval.
+- Status: local code and deterministic tests are implemented; Edge Function and real-worker staging checks remain.
 
 ## Risks and mitigations
 
@@ -144,4 +164,4 @@ See `docs/supabase-worker-spec.md` for the approved contract and security bounda
 - Approve `docs/supabase-worker-spec.md`, including email/password authentication and the worker callback contract.
 - Configure the GitHub Actions dispatch integration before production use: set `GITHUB_ACTIONS_DISPATCH_TOKEN`, `GITHUB_REPOSITORY`, `GITHUB_WORKFLOW_FILE`, `GITHUB_WORKFLOW_REF`, and `ANALYSIS_CALLBACK_SECRET` as Supabase Edge Function secrets. Set the same callback secret as the GitHub `ANALYSIS_CALLBACK_SECRET` repository secret and set `PERSONAL_TRACKING_CALLBACK_URL` as a GitHub repository variable.
 - Provide `SUPABASE_ACCESS_TOKEN` and `SUPABASE_PROJECT_REF` only if this workspace should deploy to the hosted project.
-- Confirm whether English remains the MVP UI language after the prototype review.
+- Start Docker before local Supabase migration/function verification, or run the same checks in an approved disposable CI/staging environment.
