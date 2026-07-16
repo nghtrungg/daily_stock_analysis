@@ -105,7 +105,19 @@ export function DashboardPage() {
           <span className="local-indicator">{isLoading ? 'Syncing' : 'Secure sync'}</span>
         </div>
 
-        {positions.length === 0 ? (
+        {isLoading ? (
+          <div className="loading-frame" role="status" aria-label="Loading portfolio">
+            <div className="loading-frame__heading">
+              <span className="skeleton skeleton--mark" aria-hidden="true" />
+              <div>
+                <span className="skeleton skeleton--title" aria-hidden="true" />
+                <span className="skeleton skeleton--copy" aria-hidden="true" />
+              </div>
+            </div>
+            <span className="skeleton skeleton--panel" aria-hidden="true" />
+            <span className="visually-hidden">Loading your portfolio.</span>
+          </div>
+        ) : positions.length === 0 ? (
           <section className="empty-frame" aria-label="Empty portfolio">
             <div className="empty-frame__mark" aria-hidden="true"><WalletCards size={28} strokeWidth={1.5} /></div>
             <div className="empty-frame__copy">

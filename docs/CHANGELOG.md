@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [improvement] Refresh Personal Stock Tracking with a responsive desktop sidebar, mobile navigation, accessible page shell, honest loading feedback, and improved portfolio forms and states.
 - [feature] Let Personal Stock Tracking securely dispatch the selected Vietnam symbol to the daily GitHub Actions workflow and receive an HMAC-signed completion status without changing the repository STOCK_LIST variable.
 - [improvement] Add a Vietnam-only local profile with English Web and Desktop surfaces, Vietnamese schema-gated reports, actual-VND normalization, an isolated database and stock index, disabled upstream Desktop updates, and HOSE-aligned Vietnam-time scheduling.
 - [improvement] Add a 5-trading-day prediction measurement baseline with explicit metric denominators, completion and unavailable states, segment filters, and version metadata.
@@ -29,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [feature] AnalysisContextPack P4 低敏 overview 接入历史详情。
 - [feature] AnalysisContextPack P5 增加数据质量评分。
 - [docs] 明确 AnalysisContextPack P6 文档、迁移与回滚边界。
+- [fix] Personal Stock Tracking now refreshes in-progress GitHub analysis runs until the callback records a terminal status.
 - [docs] #1386 P7 盘前/盘中/盘后分析的入口、迁移、回滚和用户可见说明。
 - [feature] #1386 P5 为个股分析报告新增 `dashboard.phase_decision`。
 - [improvement] 优化 Web 报告详情页信息层级。
