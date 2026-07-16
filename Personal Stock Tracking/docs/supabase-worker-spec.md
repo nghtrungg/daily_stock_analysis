@@ -151,6 +151,8 @@ ANALYSIS_CALLBACK_SECRET
 
 In GitHub repository settings, configure `ANALYSIS_CALLBACK_SECRET` as a repository secret with the same value and `PERSONAL_TRACKING_CALLBACK_URL` as a repository variable set to `https://<project-ref>.supabase.co/functions/v1/analysis-callback`. The workflow signs its raw JSON callback body as HMAC-SHA256 in the `x-analysis-signature` header. It must never receive a Supabase secret key.
 
+The tracking app polls active `analysis_runs` every 10 seconds. This lets the UI show the terminal callback status without a manual page refresh; polling stops as soon as the run succeeds or fails.
+
 Required only if Codex is to deploy through the Supabase CLI:
 
 ```text

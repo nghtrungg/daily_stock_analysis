@@ -30,6 +30,7 @@ type PortfolioContextValue = {
 };
 
 const emptySnapshot: PortfolioSnapshot = { transactions: [], watchlistSymbols: [], analysisRuns: [] };
+const analysisStatusPollIntervalMs = 10_000;
 const PortfolioContext = createContext<PortfolioContextValue | null>(null);
 
 function validateTransaction(input: BuyTransactionInput) {
@@ -83,6 +84,24 @@ export function PortfolioProvider({ children, store }: { children: ReactNode; st
       current = false;
     };
   }, [activeStore]);
+
+  const hasAnalysisInProgress = snapshot.analysisRuns.some(
+    (run) => run.status === 'queued' || run.status === 'dispatched' || run.status === 'running'
+  );
+
+  useEffect(() => {
+    if (!hasAnalysisInProgress) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      void reload().catch(() => {
+        // Keep the last known run status visible if a background refresh fails.
+      });
+    }, analysisStatusPollIntervalMs);
+
+    return () => window.clearInterval(interval);
+  }, [hasAnalysisInProgress, reload]);
 
   const positions = useMemo(() => derivePositions(snapshot.transactions), [snapshot.transactions]);
   const totalCostVnd = positions.reduce((total, position) => total + position.totalCostVnd, 0);

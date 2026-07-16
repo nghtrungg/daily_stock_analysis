@@ -31,11 +31,29 @@ function renderDashboard() {
 }
 
 describe('DashboardPage', () => {
-  it('explains the empty portfolio without presenting price or analysis data as available', () => {
+  it('shows a loading state before deciding that the portfolio is empty', () => {
+    const store = {
+      load: () => new Promise<never>(() => undefined),
+      addBuyTransaction: async () => undefined,
+      addWatchlistSymbol: async () => undefined,
+      requestAnalysis: async () => undefined
+    };
+
+    render(
+      <PortfolioProvider store={store}>
+        <DashboardPage />
+      </PortfolioProvider>
+    );
+
+    expect(screen.getByRole('status', { name: 'Loading portfolio' })).toBeInTheDocument();
+    expect(screen.queryByText('No holdings yet')).not.toBeInTheDocument();
+  });
+
+  it('explains the empty portfolio without presenting price or analysis data as available', async () => {
     renderDashboard();
 
     expect(screen.getByRole('heading', { name: 'Portfolio at a glance' })).toBeInTheDocument();
-    expect(screen.getByText('No holdings yet')).toBeInTheDocument();
+    expect(await screen.findByText('No holdings yet')).toBeInTheDocument();
     expect(screen.getByText('Quote: Missing')).toBeInTheDocument();
     expect(screen.getByText('Analysis: Never analysed')).toBeInTheDocument();
   });

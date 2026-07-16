@@ -158,7 +158,7 @@ class DiscordSender:
         """
         payload = {
             'content': content,
-            'username': 'A股分析机器人',
+            'username': 'Smart Reporter',
             'avatar_url': 'https://picsum.photos/200'
         }
 

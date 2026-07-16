@@ -5,6 +5,7 @@ import '../styles/app.css';
 export const metadata: Metadata = {
   title: 'Personal Portfolio Tracker',
   description: 'Private Vietnam portfolio tracking in VND.',
+  icons: { icon: '/icons/icon-192.svg' },
   manifest: '/manifest.webmanifest'
 };
 

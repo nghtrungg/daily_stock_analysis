@@ -58,7 +58,7 @@ export function EmailPasswordForm() {
   }
 
   return (
-    <form className="transaction-form" noValidate onSubmit={(event) => void submit(event)}>
+    <form className="transaction-form auth-form" noValidate onSubmit={(event) => void submit(event)}>
       <div className="auth-mode" role="group" aria-label="Account action">
         <button className={mode === 'sign-in' ? 'button button--primary' : 'button button--secondary'} onClick={() => setMode('sign-in')} type="button">Login</button>
         <button className={mode === 'sign-up' ? 'button button--primary' : 'button button--secondary'} onClick={() => setMode('sign-up')} type="button">Register</button>
