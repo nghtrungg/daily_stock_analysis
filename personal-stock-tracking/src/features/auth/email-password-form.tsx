@@ -21,7 +21,7 @@ export function EmailPasswordForm() {
     setMessage(null);
 
     if (isSignUp && password !== confirmation) {
-      setError('Passwords do not match.');
+      setError('Mật khẩu xác nhận không khớp.');
       return;
     }
 
@@ -37,11 +37,11 @@ export function EmailPasswordForm() {
 
       setIsPending(false);
       if (signUpError) {
-        setError('Account creation could not be completed. Check your details and try again.');
+        setError('Không thể tạo tài khoản. Vui lòng kiểm tra thông tin và thử lại.');
         return;
       }
       if (!data.session) {
-        setMessage('Check your email to confirm the account, then sign in with your password.');
+        setMessage('Hãy kiểm tra email để xác nhận tài khoản, sau đó đăng nhập bằng mật khẩu.');
         return;
       }
     } else {
@@ -49,7 +49,7 @@ export function EmailPasswordForm() {
 
       setIsPending(false);
       if (signInError) {
-        setError('Email or password is incorrect.');
+        setError('Email hoặc mật khẩu không đúng.');
         return;
       }
     }
@@ -59,30 +59,30 @@ export function EmailPasswordForm() {
 
   return (
     <form className="transaction-form auth-form" noValidate onSubmit={(event) => void submit(event)}>
-      <div className="auth-mode" role="group" aria-label="Account action">
-        <button className={mode === 'sign-in' ? 'button button--primary' : 'button button--secondary'} onClick={() => setMode('sign-in')} type="button">Login</button>
-        <button className={mode === 'sign-up' ? 'button button--primary' : 'button button--secondary'} onClick={() => setMode('sign-up')} type="button">Register</button>
+      <div className="auth-mode" role="group" aria-label="Thao tác tài khoản">
+        <button className={mode === 'sign-in' ? 'button button--primary' : 'button button--secondary'} onClick={() => setMode('sign-in')} type="button">Đăng nhập</button>
+        <button className={mode === 'sign-up' ? 'button button--primary' : 'button button--secondary'} onClick={() => setMode('sign-up')} type="button">Đăng ký</button>
       </div>
       <label htmlFor="auth-email">
-        <span>Email address</span>
-        <input aria-label="Email address" autoComplete="email" id="auth-email" inputMode="email" onChange={(event) => setEmail(event.target.value)} required type="email" value={email} />
-        <small>Use the email address that owns this private portfolio.</small>
+        <span>Địa chỉ email</span>
+        <input aria-label="Địa chỉ email" autoComplete="email" id="auth-email" inputMode="email" onChange={(event) => setEmail(event.target.value)} required type="email" value={email} />
+        <small>Dùng địa chỉ email sở hữu danh mục riêng tư này.</small>
       </label>
       <label htmlFor="auth-password">
-        <span>Password</span>
-        <input aria-describedby="password-help" aria-label="Password" autoComplete={isSignUp ? 'new-password' : 'current-password'} id="auth-password" minLength={12} onChange={(event) => setPassword(event.target.value)} required type="password" value={password} />
-        <small id="password-help">Use at least 12 characters.</small>
+        <span>Mật khẩu</span>
+        <input aria-describedby="password-help" aria-label="Mật khẩu" autoComplete={isSignUp ? 'new-password' : 'current-password'} id="auth-password" minLength={12} onChange={(event) => setPassword(event.target.value)} required type="password" value={password} />
+        <small id="password-help">Dùng ít nhất 12 ký tự.</small>
       </label>
       {isSignUp && (
         <label htmlFor="auth-password-confirmation">
-          <span>Confirm password</span>
-          <input aria-label="Confirm password" autoComplete="new-password" id="auth-password-confirmation" minLength={12} onChange={(event) => setConfirmation(event.target.value)} required type="password" value={confirmation} />
+          <span>Xác nhận mật khẩu</span>
+          <input aria-label="Xác nhận mật khẩu" autoComplete="new-password" id="auth-password-confirmation" minLength={12} onChange={(event) => setConfirmation(event.target.value)} required type="password" value={confirmation} />
         </label>
       )}
       {error && <p className="form-error" role="alert">{error}</p>}
       {message && <p className="form-success" role="status">{message}</p>}
       <div className="form-actions">
-        <button className="button button--primary" disabled={isPending} type="submit">{isPending ? 'Working…' : isSignUp ? 'Create account' : 'Sign in'}</button>
+        <button className="button button--primary" disabled={isPending} type="submit">{isPending ? 'Đang xử lý…' : isSignUp ? 'Tạo tài khoản' : 'Đăng nhập tài khoản'}</button>
       </div>
     </form>
   );

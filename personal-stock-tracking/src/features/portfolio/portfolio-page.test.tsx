@@ -16,8 +16,8 @@ describe('PortfolioPage', () => {
       </PortfolioProvider>
     );
 
-    expect(screen.getByRole('heading', { name: 'Your holdings' })).toBeInTheDocument();
-    expect(screen.getByText('No holdings yet')).toBeInTheDocument();
-    expect(screen.getByText('Market value unavailable')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Các khoản nắm giữ' })).toBeInTheDocument();
+    expect(screen.getByText('Chưa có khoản nắm giữ')).toBeInTheDocument();
+    expect(screen.getByText('Chưa có giá trị thị trường')).toBeInTheDocument();
   });
 });

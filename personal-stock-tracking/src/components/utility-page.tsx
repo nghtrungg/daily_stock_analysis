@@ -32,7 +32,7 @@ export function UtilityPage({
         <p className="lead-copy">{description}</p>
       </section>
 
-      <section className="workbench" aria-label={`${title} workspace`}>
+      <section className="workbench" aria-label={`Khu vực ${title.toLocaleLowerCase('vi-VN')}`}>
         <div className="empty-frame">
           <div className="empty-frame__mark" aria-hidden="true">{marker}</div>
           <div className="empty-frame__copy">

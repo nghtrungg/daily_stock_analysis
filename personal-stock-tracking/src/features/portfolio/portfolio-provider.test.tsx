@@ -29,7 +29,7 @@ describe('PortfolioProvider', () => {
         status: 'succeeded',
         requestedAt: '2026-07-16T08:00:00.000Z',
         completedAt: '2026-07-16T08:02:00.000Z',
-        summary: 'GitHub Actions completed the requested Vietnam stock analysis.',
+        summary: 'Phân tích chứng khoán Việt Nam đã hoàn tất.',
         errorCode: null
       }]
     };
@@ -50,14 +50,32 @@ describe('PortfolioProvider', () => {
       </PortfolioProvider>
     );
 
-    expect(await screen.findByText('Analysis: dispatched')).toBeInTheDocument();
+    expect(await screen.findByText('Phân tích: Đã gửi')).toBeInTheDocument();
 
     await act(async () => {
       await jest.advanceTimersByTimeAsync(10_000);
     });
 
-    await waitFor(() => expect(screen.getByText('Analysis: succeeded')).toBeInTheDocument());
-    expect(screen.getByText('GitHub Actions completed the requested Vietnam stock analysis.')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Phân tích: Hoàn tất')).toBeInTheDocument());
+    expect(screen.getByText('Phân tích chứng khoán Việt Nam đã hoàn tất.')).toBeInTheDocument();
     jest.useRealTimers();
+  });
+
+  it('does not expose raw store errors to the user', async () => {
+    const store: PortfolioStore = {
+      load: async () => { throw new Error('relation portfolio_wallets does not exist'); },
+      addBuyTransaction: jest.fn(async () => undefined),
+      addWatchlistSymbol: jest.fn(async () => undefined),
+      requestAnalysis: jest.fn(async () => undefined)
+    };
+
+    render(
+      <PortfolioProvider store={store}>
+        <WatchlistPage />
+      </PortfolioProvider>
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Không thể tải dữ liệu danh mục. Vui lòng làm mới và thử lại.');
+    expect(screen.queryByText(/portfolio_wallets/)).not.toBeInTheDocument();
   });
 });

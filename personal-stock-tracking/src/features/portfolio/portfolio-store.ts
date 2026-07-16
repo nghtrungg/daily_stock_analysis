@@ -20,6 +20,8 @@ export type AnalysisRun = {
   errorCode: string | null;
 };
 
+export class PortfolioStoreError extends Error {}
+
 export type PortfolioSnapshot = {
   transactions: PortfolioTransaction[];
   watchlistSymbols: string[];
@@ -55,29 +57,37 @@ type AnalysisRunRow = {
   error_code: string | null;
 };
 
-function readError(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
+const analysisErrorMessages: Record<string, string> = {
+  ACTIVE_RUN_EXISTS: 'Một yêu cầu phân tích cho mã này đang được xử lý.',
+  COOLDOWN_ACTIVE: 'Vui lòng chờ một phút trước khi phân tích lại mã này.',
+  DISPATCH_FAILED: 'Không thể bắt đầu phân tích. Vui lòng thử lại sau.',
+  NOT_WATCHED: 'Hãy thêm mã này vào danh sách theo dõi hoặc danh mục trước khi phân tích.',
+  ORIGIN_NOT_ALLOWED: 'Nguồn truy cập ứng dụng không được phép.',
+  VALIDATION_ERROR: 'Yêu cầu phân tích không hợp lệ.',
+  WORKER_NOT_CONFIGURED: 'Tính năng phân tích đang tạm thời không khả dụng.'
+};
 
-  return fallback;
+const analysisFallback = 'Không thể yêu cầu phân tích. Vui lòng thử lại sau.';
+
+function analysisErrorMessage(code: unknown): string {
+  return typeof code === 'string' ? analysisErrorMessages[code] ?? analysisFallback : analysisFallback;
 }
 
 async function readFunctionError(error: unknown) {
   if (!error || typeof error !== 'object' || !('context' in error)) {
-    return readError(error, 'Analysis could not be requested. Try again shortly.');
+    return analysisFallback;
   }
 
   const context = error.context;
   if (!context || typeof context !== 'object' || !('json' in context) || typeof context.json !== 'function') {
-    return readError(error, 'Analysis could not be requested. Try again shortly.');
+    return analysisFallback;
   }
 
   try {
-    const body = await context.json() as { error?: { message?: string } };
-    return body.error?.message ?? 'Analysis could not be requested. Try again shortly.';
+    const body = await context.json() as { error?: { code?: string } };
+    return analysisErrorMessage(body.error?.code);
   } catch {
-    return 'Analysis could not be requested. Try again shortly.';
+    return analysisFallback;
   }
 }
 
@@ -123,7 +133,7 @@ export function createSupabasePortfolioStore(): PortfolioStore {
       ]);
 
       if (transactionsResult.error || watchlistResult.error || analysisResult.error) {
-        throw new Error('Your portfolio data could not be loaded. Refresh and try again.');
+        throw new PortfolioStoreError('Không thể tải dữ liệu danh mục. Vui lòng làm mới và thử lại.');
       }
 
       return {
@@ -144,7 +154,7 @@ export function createSupabasePortfolioStore(): PortfolioStore {
       });
 
       if (error) {
-        throw new Error('The transaction could not be saved. Check the values and try again.');
+        throw new PortfolioStoreError('Không thể lưu giao dịch. Vui lòng kiểm tra thông tin và thử lại.');
       }
     },
 
@@ -152,10 +162,10 @@ export function createSupabasePortfolioStore(): PortfolioStore {
       const { error } = await supabase.from('watchlist_symbols').insert({ symbol });
 
       if (error?.code === '23505') {
-        throw new Error(`${symbol} is already on your watchlist.`);
+        throw new PortfolioStoreError(`${symbol} đã có trong danh sách theo dõi.`);
       }
       if (error) {
-        throw new Error('The watchlist symbol could not be saved. Try again shortly.');
+        throw new PortfolioStoreError('Không thể lưu mã theo dõi. Vui lòng thử lại sau.');
       }
     },
 
@@ -163,11 +173,11 @@ export function createSupabasePortfolioStore(): PortfolioStore {
       const { data, error } = await supabase.functions.invoke('request-analysis', { body: { symbol } });
 
       if (error) {
-        throw new Error(await readFunctionError(error));
+        throw new PortfolioStoreError(await readFunctionError(error));
       }
       if (data && typeof data === 'object' && 'error' in data) {
-        const response = data as { error?: { message?: string } };
-        throw new Error(response.error?.message ?? 'Analysis could not be requested. Try again shortly.');
+        const response = data as { error?: { code?: string } };
+        throw new PortfolioStoreError(analysisErrorMessage(response.error?.code));
       }
     }
   };

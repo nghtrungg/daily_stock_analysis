@@ -8,7 +8,8 @@ import {
   type AnalysisRun,
   type BuyTransactionInput,
   type PortfolioSnapshot,
-  type PortfolioStore
+  type PortfolioStore,
+  PortfolioStoreError
 } from './portfolio-store';
 
 export type { BuyTransactionInput } from './portfolio-store';
@@ -35,14 +36,26 @@ const PortfolioContext = createContext<PortfolioContextValue | null>(null);
 
 function validateTransaction(input: BuyTransactionInput) {
   if (!Number.isFinite(input.quantity) || input.quantity <= 0) {
-    throw new Error('Quantity must be greater than zero.');
+    throw new Error('Khối lượng phải lớn hơn 0.');
   }
   if (!Number.isFinite(input.unitPriceVnd) || input.unitPriceVnd <= 0) {
-    throw new Error('Unit price must be greater than zero.');
+    throw new Error('Đơn giá phải lớn hơn 0.');
   }
   if (!Number.isFinite(input.feeVnd) || input.feeVnd < 0) {
-    throw new Error('Fees cannot be negative.');
+    throw new Error('Phí không được âm.');
   }
+}
+
+function requireUserVietnamSymbol(value: string): string {
+  try {
+    return requireVietnamSymbol(value);
+  } catch {
+    throw new Error('Mã chứng khoán phải có hậu tố .VN.');
+  }
+}
+
+function safeStoreMessage(error: unknown, fallback: string): string {
+  return error instanceof PortfolioStoreError ? error.message : fallback;
 }
 
 export function PortfolioProvider({ children, store }: { children: ReactNode; store?: PortfolioStore }) {
@@ -69,9 +82,9 @@ export function PortfolioProvider({ children, store }: { children: ReactNode; st
           setErrorMessage(null);
         }
       })
-      .catch((error) => {
+      .catch(() => {
         if (current) {
-          setErrorMessage(error instanceof Error ? error.message : 'Your portfolio data could not be loaded.');
+          setErrorMessage('Không thể tải dữ liệu danh mục. Vui lòng làm mới và thử lại.');
         }
       })
       .finally(() => {
@@ -128,7 +141,7 @@ export function PortfolioProvider({ children, store }: { children: ReactNode; st
       await operation();
       await reload();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Your change could not be saved.';
+      const message = safeStoreMessage(error, 'Không thể lưu thay đổi. Vui lòng thử lại.');
       setErrorMessage(message);
       throw new Error(message, { cause: error });
     } finally {
@@ -138,17 +151,17 @@ export function PortfolioProvider({ children, store }: { children: ReactNode; st
 
   const addBuyTransaction = useCallback(async (input: BuyTransactionInput) => {
     validateTransaction(input);
-    const transaction = { ...input, symbol: requireVietnamSymbol(input.symbol) };
+    const transaction = { ...input, symbol: requireUserVietnamSymbol(input.symbol) };
     await mutate(() => activeStore.addBuyTransaction(transaction));
   }, [activeStore, mutate]);
 
   const addWatchlistSymbol = useCallback(async (value: string) => {
-    const symbol = requireVietnamSymbol(value);
+    const symbol = requireUserVietnamSymbol(value);
     await mutate(() => activeStore.addWatchlistSymbol(symbol));
   }, [activeStore, mutate]);
 
   const requestAnalysis = useCallback(async (value: string) => {
-    const symbol = requireVietnamSymbol(value);
+    const symbol = requireUserVietnamSymbol(value);
     setAnalysisSymbolsBeingRequested((symbols) => [...new Set([...symbols, symbol])]);
     setErrorMessage(null);
 
@@ -156,7 +169,7 @@ export function PortfolioProvider({ children, store }: { children: ReactNode; st
       await activeStore.requestAnalysis(symbol);
       await reload();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Analysis could not be requested.';
+      const message = safeStoreMessage(error, 'Không thể yêu cầu phân tích. Vui lòng thử lại sau.');
       setErrorMessage(message);
       throw new Error(message, { cause: error });
     } finally {

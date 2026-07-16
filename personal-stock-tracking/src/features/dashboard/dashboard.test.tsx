@@ -45,41 +45,41 @@ describe('DashboardPage', () => {
       </PortfolioProvider>
     );
 
-    expect(screen.getByRole('status', { name: 'Loading portfolio' })).toBeInTheDocument();
-    expect(screen.queryByText('No holdings yet')).not.toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Đang tải danh mục' })).toBeInTheDocument();
+    expect(screen.queryByText('Chưa có khoản nắm giữ')).not.toBeInTheDocument();
   });
 
   it('explains the empty portfolio without presenting price or analysis data as available', async () => {
     renderDashboard();
 
-    expect(screen.getByRole('heading', { name: 'Portfolio at a glance' })).toBeInTheDocument();
-    expect(await screen.findByText('No holdings yet')).toBeInTheDocument();
-    expect(screen.getByText('Quote: Missing')).toBeInTheDocument();
-    expect(screen.getByText('Analysis: Never analysed')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Tổng quan danh mục' })).toBeInTheDocument();
+    expect(await screen.findByText('Chưa có khoản nắm giữ')).toBeInTheDocument();
+    expect(screen.getByText('Giá: Chưa có')).toBeInTheDocument();
+    expect(screen.getByText('Phân tích: Chưa từng phân tích')).toBeInTheDocument();
   });
 
   it('uses real application routes for every bottom-navigation destination', () => {
     renderDashboard();
 
-    expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/');
-    expect(screen.getByRole('link', { name: 'Portfolio' })).toHaveAttribute('href', '/portfolio');
-    expect(screen.getByRole('link', { name: 'Watchlist' })).toHaveAttribute('href', '/watchlist');
-    expect(screen.getByRole('link', { name: 'Activity' })).toHaveAttribute('href', '/activity');
-    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings');
+    expect(screen.getByRole('link', { name: 'Trang chủ' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: 'Danh mục' })).toHaveAttribute('href', '/portfolio');
+    expect(screen.getByRole('link', { name: 'Theo dõi' })).toHaveAttribute('href', '/watchlist');
+    expect(screen.getByRole('link', { name: 'Lịch sử' })).toHaveAttribute('href', '/activity');
+    expect(screen.getByRole('link', { name: 'Cài đặt' })).toHaveAttribute('href', '/settings');
   });
 
   it('adds a valid buy transaction and derives the holding locally', async () => {
     renderDashboard();
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Add transaction' })[0]);
-    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: 'vnm.vn' } });
-    fireEvent.change(screen.getByLabelText('Quantity'), { target: { value: '10' } });
-    fireEvent.change(screen.getByLabelText('Unit price (VND)'), { target: { value: '50000' } });
-    fireEvent.change(screen.getByLabelText('Fees (VND)'), { target: { value: '1000' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save transaction' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Ghi giao dịch' })[0]);
+    fireEvent.change(screen.getByLabelText('Mã chứng khoán'), { target: { value: 'vnm.vn' } });
+    fireEvent.change(screen.getByLabelText('Khối lượng'), { target: { value: '10' } });
+    fireEvent.change(screen.getByLabelText('Đơn giá (VND)'), { target: { value: '50000' } });
+    fireEvent.change(screen.getByLabelText('Phí (VND)'), { target: { value: '1000' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu giao dịch' }));
 
     expect(await screen.findByText('VNM.VN')).toBeInTheDocument();
-    expect(screen.getByText(/10 shares/)).toBeInTheDocument();
+    expect(screen.getByText(/10 cổ phiếu/)).toBeInTheDocument();
     expect(screen.getByText(/50\.100/)).toBeInTheDocument();
   });
 });

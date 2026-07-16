@@ -13,27 +13,27 @@ type AppShellProps = {
 };
 
 const navigation = [
-  { href: '/', label: 'Home', icon: House },
-  { href: '/portfolio', label: 'Portfolio', icon: WalletCards },
-  { href: '/watchlist', label: 'Watchlist', icon: Eye },
-  { href: '/activity', label: 'Activity', icon: ListPlus },
-  { href: '/settings', label: 'Settings', icon: Settings }
+  { href: '/', label: 'Trang chủ', icon: House },
+  { href: '/portfolio', label: 'Danh mục', icon: WalletCards },
+  { href: '/watchlist', label: 'Theo dõi', icon: Eye },
+  { href: '/activity', label: 'Lịch sử', icon: ListPlus },
+  { href: '/settings', label: 'Cài đặt', icon: Settings }
 ] as const;
 
 export function AppShell({ activePath, action, children }: AppShellProps) {
-  const activeLabel = navigation.find(({ href }) => href === activePath)?.label ?? 'Portfolio';
+  const activeLabel = navigation.find(({ href }) => href === activePath)?.label ?? 'Danh mục';
 
   return (
     <div className="app-shell">
-      <a className="skip-link" href="#main-content">Skip to portfolio content</a>
+      <a className="skip-link" href="#main-content">Bỏ qua để đến nội dung danh mục</a>
 
       <aside className="app-sidebar">
-        <Link className="brand-lockup" href="/" aria-label="Personal portfolio tracker home">
+        <Link className="brand-lockup" href="/" aria-label="Trang chủ sổ theo dõi danh mục cá nhân">
           <span className="brand-mark" aria-hidden="true">L</span>
-          <span className="brand-copy"><strong>Ledger</strong><small>Personal investing</small></span>
+          <span className="brand-copy"><strong>Ledger</strong><small>Đầu tư cá nhân</small></span>
         </Link>
 
-        <nav className="primary-nav" aria-label="Primary navigation">
+        <nav className="primary-nav" aria-label="Điều hướng chính">
           {navigation.map(({ href, label, icon: Icon }) => (
             <Link key={href} href={href} aria-current={activePath === href ? 'page' : undefined}>
               <Icon aria-hidden="true" size={19} strokeWidth={1.9} />
@@ -44,25 +44,25 @@ export function AppShell({ activePath, action, children }: AppShellProps) {
 
         <div className="sidebar-note">
           <LockKeyhole aria-hidden="true" size={18} />
-          <div><strong>Private workspace</strong><small>Owner-only portfolio data</small></div>
+          <div><strong>Không gian riêng tư</strong><small>Dữ liệu chỉ dành cho chủ sở hữu</small></div>
         </div>
       </aside>
 
       <div className="app-canvas">
         <header className="app-header">
-          <Link className="mobile-wordmark" href="/" aria-label="Personal portfolio tracker home">Ledger</Link>
+          <Link className="mobile-wordmark" href="/" aria-label="Trang chủ sổ theo dõi danh mục cá nhân">Ledger</Link>
           <div className="header-context">
-            <span>Vietnam portfolio</span>
+            <span>Danh mục Việt Nam</span>
             <strong>{activeLabel}</strong>
           </div>
-          <div className="header-action">{action ?? <span className="secure-status"><LockKeyhole aria-hidden="true" size={14} />Protected</span>}</div>
+          <div className="header-action">{action ?? <span className="secure-status"><LockKeyhole aria-hidden="true" size={14} />Được bảo vệ</span>}</div>
         </header>
 
         <main className="app-main" id="main-content" tabIndex={-1}>{children}</main>
 
         <footer className="app-footer">
-          <p>Ledger · Vietnam portfolio tracking · Informational only</p>
-          <p>All values in VND</p>
+          <p>Ledger · Theo dõi danh mục Việt Nam · Chỉ mang tính tham khảo</p>
+          <p>Mọi giá trị đều bằng VND</p>
         </footer>
       </div>
     </div>

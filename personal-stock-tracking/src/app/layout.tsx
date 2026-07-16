@@ -3,8 +3,8 @@ import '../styles/tokens.css';
 import '../styles/app.css';
 
 export const metadata: Metadata = {
-  title: 'Personal Portfolio Tracker',
-  description: 'Private Vietnam portfolio tracking in VND.',
+  title: 'Theo dõi danh mục đầu tư cá nhân',
+  description: 'Theo dõi riêng tư danh mục đầu tư Việt Nam bằng VND.',
   icons: { icon: '/icons/icon-192.svg' },
   manifest: '/manifest.webmanifest'
 };
@@ -16,7 +16,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="vi">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
