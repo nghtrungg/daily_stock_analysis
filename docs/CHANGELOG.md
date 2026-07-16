@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [fix] Rename the Personal Stock Tracking app directory to a space-free path so Vercel can generate valid Serverless Function names.
 - [improvement] Refresh Personal Stock Tracking with a responsive desktop sidebar, mobile navigation, accessible page shell, honest loading feedback, and improved portfolio forms and states.
 - [feature] Let Personal Stock Tracking securely dispatch the selected Vietnam symbol to the daily GitHub Actions workflow and receive an HMAC-signed completion status without changing the repository STOCK_LIST variable.
 - [improvement] Add a Vietnam-only local profile with English Web and Desktop surfaces, Vietnamese schema-gated reports, actual-VND normalization, an isolated database and stock index, disabled upstream Desktop updates, and HOSE-aligned Vietnam-time scheduling.
