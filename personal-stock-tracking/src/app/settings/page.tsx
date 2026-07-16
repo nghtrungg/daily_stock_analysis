@@ -9,12 +9,12 @@ export default async function SettingsPage() {
   return (
     <UtilityPage
       activePath="/settings"
-      eyebrow="Application preferences"
-      title="Settings"
-      description="Your data is protected by your account session and row-level security. Market data remains visibly unavailable until a trusted quote source is connected."
+      eyebrow="Tùy chọn ứng dụng"
+      title="Cài đặt"
+      description="Dữ liệu được bảo vệ bằng phiên tài khoản và chính sách bảo mật theo từng dòng. Giá thị trường sẽ được hiển thị là chưa có cho đến khi kết nối nguồn giá đáng tin cậy."
       marker={<Settings size={28} strokeWidth={1.5} />}
-      emptyTitle="Secure portfolio workspace"
-      emptyCopy="Your ledger and watchlist are stored privately. Quote freshness and language controls will arrive in later slices."
+      emptyTitle="Không gian danh mục an toàn"
+      emptyCopy="Sổ giao dịch và danh sách theo dõi của bạn được lưu riêng tư. Thời điểm cập nhật giá sẽ được bổ sung trong các bước tiếp theo."
       action={<SignOutButton />}
     />
   );

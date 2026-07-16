@@ -9,18 +9,18 @@ describe('EmailPasswordForm', () => {
   it('offers normal sign-in and account registration without a magic-link action', () => {
     render(<EmailPasswordForm />);
 
-    expect(screen.getByRole('button', { name: 'Login' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Register' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'password');
+    expect(screen.getByRole('button', { name: 'Đăng nhập' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Đăng ký' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Đăng nhập tài khoản' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Mật khẩu')).toHaveAttribute('type', 'password');
   });
 
   it('shows password confirmation when the user selects registration', () => {
     render(<EmailPasswordForm />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Register' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Đăng ký' }));
 
-    expect(screen.getByLabelText('Confirm password')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Xác nhận mật khẩu')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tạo tài khoản' })).toBeInTheDocument();
   });
 });

@@ -6,12 +6,13 @@ describe('AppShell', () => {
   it('provides skip navigation and exposes the active destination', () => {
     render(
       <AppShell activePath="/watchlist">
-        <h1>Watchlist</h1>
+        <h1>Theo dõi</h1>
       </AppShell>
     );
 
-    expect(screen.getByRole('link', { name: 'Skip to portfolio content' })).toHaveAttribute('href', '#main-content');
+    expect(screen.getByRole('link', { name: 'Bỏ qua để đến nội dung danh mục' })).toHaveAttribute('href', '#main-content');
     expect(screen.getByRole('main')).toHaveAttribute('id', 'main-content');
-    expect(screen.getByRole('link', { name: 'Watchlist' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Theo dõi' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('navigation', { name: 'Điều hướng chính' })).toBeInTheDocument();
   });
 });

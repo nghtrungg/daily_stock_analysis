@@ -20,7 +20,7 @@ describe('WatchlistPage', () => {
       </PortfolioProvider>
     );
 
-    const analyzeButton = await screen.findByRole('button', { name: 'Analyze' });
+    const analyzeButton = await screen.findByRole('button', { name: 'Phân tích' });
     expect(analyzeButton).toBeEnabled();
 
     fireEvent.click(analyzeButton);
@@ -43,11 +43,11 @@ describe('WatchlistPage', () => {
       </PortfolioProvider>
     );
 
-    const analyzeButtons = await screen.findAllByRole('button', { name: 'Analyze' });
+    const analyzeButtons = await screen.findAllByRole('button', { name: 'Phân tích' });
     fireEvent.click(analyzeButtons[0]);
 
-    expect(await screen.findByRole('button', { name: 'Requesting…' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Analyze' })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: 'Đang gửi yêu cầu…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Phân tích' })).toBeEnabled();
 
     await act(async () => resolveAnalysis?.());
   });

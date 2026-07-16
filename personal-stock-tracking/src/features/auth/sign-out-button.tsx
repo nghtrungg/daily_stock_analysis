@@ -15,5 +15,5 @@ export function SignOutButton() {
     router.refresh();
   }
 
-  return <button className="button button--secondary" disabled={isPending} onClick={() => void signOut()} type="button">{isPending ? 'Signing out…' : 'Sign out'}</button>;
+  return <button className="button button--secondary" disabled={isPending} onClick={() => void signOut()} type="button">{isPending ? 'Đang đăng xuất…' : 'Đăng xuất'}</button>;
 }

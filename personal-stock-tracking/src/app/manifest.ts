@@ -2,9 +2,9 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Personal Portfolio Tracker',
-    short_name: 'Portfolio',
-    description: 'Private Vietnam portfolio tracking in VND.',
+    name: 'Theo dõi danh mục đầu tư cá nhân',
+    short_name: 'Danh mục',
+    description: 'Theo dõi riêng tư danh mục đầu tư Việt Nam bằng VND.',
     start_url: '/',
     display: 'standalone',
     background_color: '#fafafa',
