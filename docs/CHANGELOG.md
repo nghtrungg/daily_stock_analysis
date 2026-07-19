@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [feature] Add the empty PostgreSQL 17 `dsa` compute schema with JSONB/timestamptz contracts, Vietnam constraints, least-privilege worker access, and private-table RLS.
+- [test] Add deterministic migration drift checks and a disposable Supabase CI gate with pgTAP coverage for worker access, anonymous denial, two-user private-schema isolation, ownership boundaries, and Vietnam constraints.
+- [docs] Document PR1 Supabase schema ownership, generation, security, validation, credential, advisor, and rollback boundaries.
 - [docs] Formalize and mirror the Supabase schema ownership, consumer compatibility, migration deployment, rollback, and full-chain drift-validation contract with personal-stock-tracking.
 - [fix] Route Vietnam P/E and P/B through company-profile ratios and use explicitly stale recent-session fallbacks for missing valuation and capital-flow inputs.
 - [improvement] Add evidence-gated sector health, structured decision scenarios, hidden unavailable chip blocks, wrapped report tables, complete-sentence checks, and per-stock closing summaries to Vietnamese reports.

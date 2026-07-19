@@ -62,6 +62,7 @@ This is the entry point for project documentation. The README covers the project
 | --- | --- |
 | [API Spec](architecture/api_spec.json) | FastAPI OpenAPI artifact |
 | [Market Support Boundaries](market-support.md) | Market routing, Vietnam-local defaults, and provider degradation |
+| [PR1 Supabase Private Schema](migration/pr1-supabase-schema.md) | Private `dsa` PostgreSQL contract, worker grants, RLS, validation, and rollback |
 | [Vietnam Settlement Calendar And Schema Migrations](settlement-calendar.md) | Versioned Vietnam closures, T+2 calculation status, migrations, and rollback |
 | [Vietnam Settlement-Window Risk Heuristic](settlement-risk.md) | Deterministic historical estimates, score policy, API fields, limitations, and rollback |
 | [DecisionSignal Trade Links And Settlement Alerts](settlement-signal-alerts.md) | Recommendation-to-purchase traceability, persistent lifecycle transitions, notifications, and rollback |

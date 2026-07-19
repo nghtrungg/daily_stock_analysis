@@ -8,12 +8,16 @@ concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   changes:
     name: 🔎 Change Detection
     runs-on: ubuntu-latest
     outputs:
       frontend: ${{ steps.filter.outputs.frontend }}
+      database: ${{ steps.filter.outputs.database }}
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v5
@@ -24,6 +28,12 @@ jobs:
           filters: |
             frontend:
               - 'apps/dsa-web/**'
+            database:
+              - 'supabase/**'
+              - 'scripts/generate_pr0_schema_inventory.py'
+              - 'scripts/generate_pr1_supabase_migration.py'
+              - 'docs/migration/pr0-schema-inventory.json'
+              - 'src/storage.py'
 
   ai-governance:
     name: ai-governance
@@ -109,6 +119,35 @@ jobs:
           from api.app import app; print('✅ api')
           print('✅ All Docker imports OK')
           "
+
+  database-gate:
+    name: database-gate
+    runs-on: ubuntu-latest
+    needs: [changes, ai-governance]
+    if: needs.changes.outputs.database == 'true'
+    timeout-minutes: 20
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v5
+      - name: 🗄️ Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.101.0
+      - name: ▶️ Start disposable Supabase
+        run: supabase start
+      - name: 🧱 Apply clean migration chain
+        run: supabase db reset --local
+      - name: 🔐 Run database security tests
+        run: supabase test db
+      - name: 🔎 Lint database schema
+        run: supabase db lint --local --level warning
+      - name: ♻️ Reapply migration chain
+        run: supabase db reset --local
+      - name: 🔐 Re-run database security tests
+        run: supabase test db
+      - name: ⏹️ Stop disposable Supabase
+        if: always()
+        run: supabase stop --no-backup
 
   web-gate:
     name: web-gate
