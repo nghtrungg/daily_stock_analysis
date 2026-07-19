@@ -8,16 +8,22 @@ import logging
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from zoneinfo import ZoneInfo
 
 from data_provider.base import canonical_stock_code, normalize_stock_code
 from src.config import get_config
+from src.core.trading_calendar import calculate_vn_settlement
 from src.repositories.portfolio_repo import (
     DuplicateTradeDedupHashError,
     DuplicateTradeUidError,
     PortfolioBusyError as RepoPortfolioBusyError,
     PortfolioRepository,
+)
+from src.repositories.decision_signal_trade_link_repo import (
+    DecisionSignalTradeLinkRepository,
+    SOURCE_RECOMMENDATION_LINK,
 )
 
 logger = logging.getLogger(__name__)
@@ -67,6 +73,10 @@ class PortfolioConflictError(Exception):
     """Raised when request conflicts with existing portfolio state."""
 
 
+class PortfolioAmbiguousPositionError(ValueError):
+    """Raised when account selection is required for a held symbol."""
+
+
 class PortfolioOversellError(ValueError):
     """Raised when a sell would exceed the available position quantity."""
 
@@ -90,6 +100,45 @@ class PortfolioOversellError(ValueError):
         )
 
 
+class PortfolioUnsettledSaleError(PortfolioOversellError):
+    """Raised when held shares exist but are not yet sellable."""
+
+    def __init__(
+        self,
+        *,
+        symbol: str,
+        trade_date: Optional[date],
+        requested_quantity: float,
+        held_quantity: float,
+        sellable_quantity: float,
+        unsettled_quantity: float,
+        next_sellable_at: Optional[datetime],
+    ) -> None:
+        self.held_quantity = max(0.0, float(held_quantity))
+        self.sellable_quantity = max(0.0, float(sellable_quantity))
+        self.unsettled_quantity = max(0.0, float(unsettled_quantity))
+        self.next_sellable_at = next_sellable_at
+        super().__init__(
+            symbol=symbol,
+            trade_date=trade_date,
+            requested_quantity=requested_quantity,
+            available_quantity=sellable_quantity,
+        )
+        next_hint = (
+            self.next_sellable_at.isoformat()
+            if self.next_sellable_at is not None
+            else "unknown"
+        )
+        self.args = (
+            "Unsettled sale rejected for "
+            f"{symbol}: requested={round(self.requested_quantity, 8)}, "
+            f"held={round(self.held_quantity, 8)}, "
+            f"sellable={round(self.sellable_quantity, 8)}, "
+            f"unsettled={round(self.unsettled_quantity, 8)}, "
+            f"next_sellable_at={next_hint}",
+        )
+
+
 @dataclass
 class _AvgState:
     quantity: float = 0.0
@@ -109,8 +158,16 @@ class _ResolvedPositionPrice:
 class PortfolioService:
     """Business logic for account CRUD, event writes, and snapshot replay."""
 
-    def __init__(self, repo: Optional[PortfolioRepository] = None):
+    def __init__(
+        self,
+        repo: Optional[PortfolioRepository] = None,
+        signal_trade_link_repo: Optional[DecisionSignalTradeLinkRepository] = None,
+    ):
         self.repo = repo or PortfolioRepository()
+        self.signal_trade_link_repo = (
+            signal_trade_link_repo
+            or DecisionSignalTradeLinkRepository(self.repo.db)
+        )
 
     # ------------------------------------------------------------------
     # Account CRUD
@@ -199,6 +256,8 @@ class PortfolioService:
         trade_uid: Optional[str] = None,
         dedup_hash: Optional[str] = None,
         note: Optional[str] = None,
+        executed_at: Optional[datetime] = None,
+        source_decision_signal_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         side_norm = (side or "").strip().lower()
         if side_norm not in VALID_SIDES:
@@ -216,7 +275,22 @@ class PortfolioService:
             with self.repo.portfolio_write_session() as session:
                 account = self._require_active_account_in_session(session=session, account_id=account_id)
                 market_norm = self._normalize_market(market or account.market)
+                if market_norm == "vn" and not (symbol or "").strip().upper().endswith(".VN"):
+                    raise ValueError("Vietnam portfolio symbols must use an explicit .VN suffix")
                 currency_norm = self._normalize_currency(currency or self._default_currency_for_market(market_norm))
+                source_signal = self._validate_source_decision_signal(
+                    session=session,
+                    source_decision_signal_id=source_decision_signal_id,
+                    trade_side=side_norm,
+                    trade_symbol=symbol_norm,
+                    trade_market=market_norm,
+                )
+                stored_execution_at, effective_execution_at, execution_inferred = (
+                    self._normalize_trade_execution(
+                        trade_date=trade_date,
+                        executed_at=executed_at,
+                    )
+                )
                 self._validate_trade_identity(
                     account_id=account_id,
                     trade_uid=trade_uid_norm,
@@ -230,6 +304,7 @@ class PortfolioService:
                         market=market_norm,
                         currency=currency_norm,
                         trade_date=trade_date,
+                        sale_at=effective_execution_at,
                         quantity=float(quantity),
                         session=session,
                     )
@@ -241,6 +316,7 @@ class PortfolioService:
                     market=market_norm,
                     currency=currency_norm,
                     trade_date=trade_date,
+                    executed_at=stored_execution_at,
                     side=side_norm,
                     quantity=float(quantity),
                     price=float(price),
@@ -249,7 +325,51 @@ class PortfolioService:
                     note=(note or "").strip() or None,
                     dedup_hash=dedup_hash_norm,
                 )
-                return {"id": int(row.id)}
+                if side_norm == "buy" and market_norm == "vn":
+                    settlement = calculate_vn_settlement(
+                        effective_execution_at,
+                        settlement_sessions=2,
+                    )
+                    settlement_warnings = list(settlement.warnings)
+                    if execution_inferred:
+                        settlement_warnings.append(
+                            "execution_time_inferred_from_trade_date"
+                        )
+                    self.repo.add_trade_settlement_in_session(
+                        session=session,
+                        trade_id=int(row.id),
+                        settlement_date=settlement.settlement_date,
+                        estimated_sellable_at=self._to_utc_naive(
+                            settlement.estimated_sellable_at
+                        ),
+                        actual_sellable_at=None,
+                        calendar_version=settlement.calendar_version,
+                        policy_version=settlement.policy_version,
+                        calculation_status=settlement.calculation_status.value,
+                        warnings_json=json.dumps(
+                            settlement_warnings,
+                            ensure_ascii=False,
+                            separators=(",", ":"),
+                        ),
+                    )
+                if source_signal is not None:
+                    self.signal_trade_link_repo.create_in_session(
+                        session=session,
+                        signal_id=int(source_signal.id),
+                        trade_id=int(row.id),
+                        link_type=SOURCE_RECOMMENDATION_LINK,
+                    )
+                return {
+                    "id": int(row.id),
+                    "source_decision_signal_id": (
+                        int(source_signal.id) if source_signal is not None else None
+                    ),
+                    "link_type": (
+                        SOURCE_RECOMMENDATION_LINK
+                        if source_signal is not None
+                        else None
+                    ),
+                }
         except (DuplicateTradeUidError, DuplicateTradeDedupHashError) as exc:
             raise PortfolioConflictError(str(exc)) from exc
 
@@ -376,8 +496,14 @@ class PortfolioService:
             page=page,
             page_size=page_size,
         )
+        links = self.signal_trade_link_repo.links_by_trade_ids(
+            int(row.id) for row in rows
+        )
         return {
-            "items": [self._trade_row_to_dict(row) for row in rows],
+            "items": [
+                self._trade_row_to_dict(row, source_link=links.get(int(row.id)))
+                for row in rows
+            ],
             "total": total,
             "page": page,
             "page_size": page_size,
@@ -613,6 +739,120 @@ class PortfolioService:
             "accounts": accounts_payload,
         }
 
+    def get_position_settlement(
+        self,
+        *,
+        symbol: str,
+        account_id: Optional[int] = None,
+        as_of: Optional[date] = None,
+        cost_method: str = "fifo",
+    ) -> Optional[Dict[str, Any]]:
+        """Return an on-demand settlement projection for one held position."""
+        as_of_date = as_of or date.today()
+        method = self._normalize_cost_method(cost_method)
+        target = self._normalize_symbol_for_position(symbol)
+        if not target:
+            raise ValueError("symbol must not be empty")
+
+        accounts = (
+            [self._require_active_account(account_id)]
+            if account_id is not None
+            else self.repo.list_accounts(include_inactive=False)
+        )
+        as_of_at = datetime.combine(
+            as_of_date,
+            time.max,
+            tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"),
+        )
+        matches: List[Dict[str, Any]] = []
+        for account in accounts:
+            replay = self._replay_account(
+                account=account,
+                as_of_date=as_of_date,
+                cost_method=method,
+                include_realtime=False,
+            )
+            position = next(
+                (
+                    item
+                    for item in replay["positions_cache"]
+                    if self._normalize_symbol_for_position(item["symbol"]) == target
+                    and float(item.get("quantity") or 0.0) > EPS
+                ),
+                None,
+            )
+            if position is None:
+                continue
+            lots = [
+                item
+                for item in replay["lots_cache"]
+                if self._normalize_symbol_for_position(item["symbol"]) == target
+                and float(item.get("remaining_quantity") or 0.0) > EPS
+            ]
+            warnings = sorted(
+                {
+                    str(warning)
+                    for lot in lots
+                    for warning in (lot.get("warnings") or [])
+                    if str(warning)
+                }
+            )
+            matches.append(
+                {
+                    "account_id": int(account.id),
+                    "symbol": position["symbol"],
+                    "as_of": as_of_at.isoformat(),
+                    "total_quantity": float(position["quantity"]),
+                    "sellable_quantity": float(position["sellable_quantity"]),
+                    "unsettled_quantity": float(position["unsettled_quantity"]),
+                    "settlement_state": position["settlement_state"],
+                    "next_sellable_at": position.get("next_sellable_at"),
+                    "calculation_status": position["settlement_calculation_status"],
+                    "warnings": warnings,
+                    "lots": [
+                        {
+                            "source_trade_id": (
+                                int(lot["source_trade_id"])
+                                if lot.get("source_trade_id") is not None
+                                else None
+                            ),
+                            "acquired_at": (
+                                lot["acquired_at"].isoformat()
+                                if lot.get("acquired_at") is not None
+                                else None
+                            ),
+                            "remaining_quantity": round(float(lot["remaining_quantity"]), 8),
+                            "unit_cost": round(float(lot["unit_cost"]), 8),
+                            "settlement_state": self._lot_settlement_state(
+                                lot,
+                                as_of_at=as_of_at,
+                            ),
+                            "estimated_sellable_at": (
+                                lot["estimated_sellable_at"].isoformat()
+                                if lot.get("estimated_sellable_at") is not None
+                                else None
+                            ),
+                            "actual_sellable_at": (
+                                lot["actual_sellable_at"].isoformat()
+                                if lot.get("actual_sellable_at") is not None
+                                else None
+                            ),
+                            "calculation_status": str(
+                                lot.get("calendar_status") or "unknown"
+                            ),
+                            "warnings": list(lot.get("warnings") or []),
+                        }
+                        for lot in lots
+                    ],
+                }
+            )
+
+        if account_id is None and len(matches) > 1:
+            raise PortfolioAmbiguousPositionError(
+                f"{target} is held in multiple accounts; pass account_id"
+            )
+        return matches[0] if matches else None
+
     def refresh_fx_rates(
         self,
         *,
@@ -674,6 +914,7 @@ class PortfolioService:
         market: str,
         currency: str,
         trade_date: date,
+        sale_at: datetime,
         quantity: float,
         session: Optional[Any] = None,
     ) -> None:
@@ -682,18 +923,45 @@ class PortfolioService:
             self._normalize_market(market),
             self._normalize_currency(currency),
         )
-        available_quantity = self._calculate_available_quantity(
+        if market != "vn":
+            available_quantity = self._calculate_available_quantity(
+                account_id=account_id,
+                key=key,
+                as_of_date=trade_date,
+                session=session,
+            )
+            if available_quantity + EPS < quantity:
+                raise PortfolioOversellError(
+                    symbol=key[0],
+                    trade_date=trade_date,
+                    requested_quantity=quantity,
+                    available_quantity=available_quantity,
+                )
+            return
+
+        inventory = self._calculate_settlement_inventory(
             account_id=account_id,
             key=key,
             as_of_date=trade_date,
+            as_of_at=sale_at,
             session=session,
         )
-        if available_quantity + EPS < quantity:
+        if inventory["held_quantity"] + EPS < quantity:
             raise PortfolioOversellError(
                 symbol=key[0],
                 trade_date=trade_date,
                 requested_quantity=quantity,
-                available_quantity=available_quantity,
+                available_quantity=inventory["held_quantity"],
+            )
+        if inventory["sellable_quantity"] + EPS < quantity:
+            raise PortfolioUnsettledSaleError(
+                symbol=key[0],
+                trade_date=trade_date,
+                requested_quantity=quantity,
+                held_quantity=inventory["held_quantity"],
+                sellable_quantity=inventory["sellable_quantity"],
+                unsettled_quantity=inventory["unsettled_quantity"],
+                next_sellable_at=inventory["next_sellable_at"],
             )
 
     def _calculate_available_quantity(
@@ -775,6 +1043,99 @@ class PortfolioService:
 
         return quantity_held
 
+    def _calculate_settlement_inventory(
+        self,
+        *,
+        account_id: int,
+        key: Tuple[str, str, str],
+        as_of_date: date,
+        as_of_at: datetime,
+        session: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        if session is None:
+            trades = self.repo.list_trades(account_id, as_of=as_of_date)
+            corporate_actions = self.repo.list_corporate_actions(
+                account_id,
+                as_of=as_of_date,
+            )
+            settlements = self.repo.list_trade_settlements(
+                trade_ids=[row.id for row in trades],
+            )
+        else:
+            trades = self.repo.list_trades_in_session(
+                session=session,
+                account_id=account_id,
+                as_of=as_of_date,
+            )
+            corporate_actions = self.repo.list_corporate_actions_in_session(
+                session=session,
+                account_id=account_id,
+                as_of=as_of_date,
+            )
+            settlements = self.repo.list_trade_settlements_in_session(
+                session=session,
+                trade_ids=[row.id for row in trades],
+            )
+
+        events = []
+        for row in corporate_actions:
+            event_key = (
+                self._normalize_symbol_for_position(row.symbol),
+                self._normalize_market(row.market),
+                self._normalize_currency(row.currency),
+            )
+            if event_key == key:
+                events.append(("corp", row.effective_date, row.id, row))
+        for row in trades:
+            event_key = (
+                self._normalize_symbol_for_position(row.symbol),
+                self._normalize_market(row.market),
+                self._normalize_currency(row.currency),
+            )
+            if event_key == key:
+                events.append(("trade", row.trade_date, row.id, row))
+        event_priority = {"corp": 1, "trade": 2}
+        events.sort(key=lambda item: (item[1], event_priority[item[0]], item[2]))
+
+        lots: List[Dict[str, Any]] = []
+        for event_type, event_date, _, event in events:
+            if event_type == "corp":
+                if (event.action_type or "").strip().lower() != "split_adjustment":
+                    continue
+                split_ratio = float(event.split_ratio or 0.0)
+                if split_ratio <= 0:
+                    raise ValueError(f"Invalid split_ratio for {key[0]}")
+                for lot in lots:
+                    lot["remaining_quantity"] *= split_ratio
+                continue
+
+            quantity = float(event.quantity or 0.0)
+            side = (event.side or "").strip().lower()
+            if side == "buy":
+                lot = self._settlement_lot_metadata(
+                    trade=event,
+                    settlement=settlements.get(int(event.id)),
+                    market=key[1],
+                )
+                lot["remaining_quantity"] = quantity
+                lots.append(lot)
+                continue
+            if side != "sell":
+                raise ValueError(f"Unsupported trade side: {event.side}")
+            _, historical_sale_at, _ = self._normalize_trade_execution(
+                trade_date=event.trade_date,
+                executed_at=self._from_utc_naive(event.executed_at),
+            )
+            self._consume_settlement_lots(
+                lots,
+                quantity,
+                symbol=key[0],
+                trade_date=event_date,
+                sale_at=historical_sale_at,
+            )
+
+        return self._summarize_settlement_lots(lots, as_of_at=as_of_at)
+
     def _replay_account(
         self,
         *,
@@ -784,6 +1145,9 @@ class PortfolioService:
         include_realtime: bool,
     ) -> Dict[str, Any]:
         trades = self.repo.list_trades(account.id, as_of=as_of_date)
+        settlements = self.repo.list_trade_settlements(
+            trade_ids=[row.id for row in trades],
+        )
         cash_ledger = self.repo.list_cash_ledger(account.id, as_of=as_of_date)
         corporate_actions = self.repo.list_corporate_actions(account.id, as_of=as_of_date)
 
@@ -807,6 +1171,7 @@ class PortfolioService:
 
         fifo_lots: Dict[Tuple[str, str, str], List[Dict[str, Any]]] = defaultdict(list)
         avg_state: Dict[Tuple[str, str, str], _AvgState] = defaultdict(_AvgState)
+        avg_lots: Dict[Tuple[str, str, str], List[Dict[str, Any]]] = defaultdict(list)
 
         for event_type, event_date, _, event in events:
             if event_type == "cash":
@@ -837,34 +1202,52 @@ class PortfolioService:
                 side = (event.side or "").lower().strip()
                 if side == "buy":
                     cash_balances[key[2]] -= (gross + fee + tax)
+                    settlement_lot = self._settlement_lot_metadata(
+                        trade=event,
+                        settlement=settlements.get(int(event.id)),
+                        market=key[1],
+                    )
+                    settlement_lot.update(
+                        {
+                            "symbol": key[0],
+                            "market": key[1],
+                            "currency": key[2],
+                            "open_date": event_date,
+                            "remaining_quantity": qty,
+                            "unit_cost": (gross + fee + tax) / qty,
+                            "source_trade_id": event.id,
+                        }
+                    )
                     if cost_method == "fifo":
-                        unit_cost = (gross + fee + tax) / qty
-                        fifo_lots[key].append(
-                            {
-                                "symbol": key[0],
-                                "market": key[1],
-                                "currency": key[2],
-                                "open_date": event_date,
-                                "remaining_quantity": qty,
-                                "unit_cost": unit_cost,
-                                "source_trade_id": event.id,
-                            }
-                        )
+                        fifo_lots[key].append(settlement_lot)
                     else:
+                        avg_lots[key].append(settlement_lot)
                         state = avg_state[key]
                         state.quantity += qty
                         state.total_cost += (gross + fee + tax)
                 elif side == "sell":
                     cash_balances[key[2]] += (gross - fee - tax)
                     proceeds_net = gross - fee - tax
+                    _, sale_at, _ = self._normalize_trade_execution(
+                        trade_date=event.trade_date,
+                        executed_at=self._from_utc_naive(event.executed_at),
+                    )
                     if cost_method == "fifo":
                         cost_basis = self._consume_fifo_lots(
                             fifo_lots[key],
                             qty,
                             key[0],
                             event_date,
+                            sale_at=sale_at,
                         )
                     else:
+                        self._consume_settlement_lots(
+                            avg_lots[key],
+                            qty,
+                            symbol=key[0],
+                            trade_date=event_date,
+                            sale_at=sale_at,
+                        )
                         cost_basis = self._consume_avg_position(
                             avg_state[key],
                             qty,
@@ -930,6 +1313,9 @@ class PortfolioService:
                             lot["remaining_quantity"] *= split_ratio
                             lot["unit_cost"] /= split_ratio
                     else:
+                        for lot in avg_lots[key]:
+                            lot["remaining_quantity"] *= split_ratio
+                            lot["unit_cost"] /= split_ratio
                         state = avg_state[key]
                         state.quantity *= split_ratio
                 else:
@@ -941,6 +1327,7 @@ class PortfolioService:
             cost_method=cost_method,
             fifo_lots=fifo_lots,
             avg_state=avg_state,
+            avg_lots=avg_lots,
             include_realtime=include_realtime,
         )
         fx_stale = fx_stale or stale_pos
@@ -968,6 +1355,14 @@ class PortfolioService:
             position_limitations,
         )
 
+        public_positions = [
+            {
+                field: value
+                for field, value in position.items()
+                if field != "next_sellable_at_utc"
+            }
+            for position in position_rows
+        ]
         account_payload = {
             "account_id": account.id,
             "account_name": account.name,
@@ -987,7 +1382,7 @@ class PortfolioService:
             "fx_stale": fx_stale,
             "data_quality": "partial" if limitations else "ok",
             "limitations": limitations,
-            "positions": position_rows,
+            "positions": public_positions,
         }
 
         return {
@@ -1013,8 +1408,13 @@ class PortfolioService:
         cost_method: str,
         fifo_lots: Dict[Tuple[str, str, str], List[Dict[str, Any]]],
         avg_state: Dict[Tuple[str, str, str], _AvgState],
+        avg_lots: Optional[
+            Dict[Tuple[str, str, str], List[Dict[str, Any]]]
+        ] = None,
         include_realtime: bool = True,
     ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], float, float, bool]:
+        if avg_lots is None:
+            avg_lots = defaultdict(list)
         position_rows: List[Dict[str, Any]] = []
         lot_rows: List[Dict[str, Any]] = []
         market_value_base = 0.0
@@ -1065,16 +1465,25 @@ class PortfolioService:
                 if qty <= EPS:
                     continue
                 avg_cost = total_cost / qty
-                lot_rows.append(
-                    {
-                        "symbol": symbol,
-                        "market": market,
-                        "currency": currency,
-                        "open_date": as_of_date,
-                        "remaining_quantity": qty,
-                        "unit_cost": avg_cost,
-                        "source_trade_id": None,
-                    }
+                active_lots = [
+                    lot for lot in avg_lots[key]
+                    if lot["remaining_quantity"] > EPS
+                ]
+                lot_rows.extend(active_lots)
+
+            as_of_at = datetime.combine(
+                as_of_date,
+                time.max,
+                tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"),
+            )
+            settlement_summary = self._summarize_settlement_lots(
+                active_lots,
+                as_of_at=as_of_at,
+            )
+            for lot in active_lots:
+                lot["settlement_state"] = self._lot_settlement_state(
+                    lot,
+                    as_of_at=as_of_at,
                 )
 
             price_info = self._resolve_position_price(
@@ -1131,6 +1540,35 @@ class PortfolioService:
                     "price_available": price_info.is_available,
                     "data_quality": "partial" if limitations else "ok",
                     "limitations": limitations,
+                    "position_lifecycle": "open",
+                    "settlement_state": settlement_summary["settlement_state"],
+                    "total_quantity": round(qty, 8),
+                    "sellable_quantity": round(
+                        settlement_summary["sellable_quantity"],
+                        8,
+                    ),
+                    "unsettled_quantity": round(
+                        settlement_summary["unsettled_quantity"],
+                        8,
+                    ),
+                    "next_sellable_at": (
+                        settlement_summary["next_sellable_at"].isoformat()
+                        if settlement_summary["next_sellable_at"] is not None
+                        else None
+                    ),
+                    "next_sellable_at_utc": (
+                        self._to_utc_naive(
+                            settlement_summary["next_sellable_at"]
+                        )
+                        if settlement_summary["next_sellable_at"] is not None
+                        else None
+                    ),
+                    "settlement_calculation_status": settlement_summary[
+                        "settlement_calculation_status"
+                    ],
+                    "settlement_warnings": settlement_summary[
+                        "settlement_warnings"
+                    ],
                 }
             )
 
@@ -1364,29 +1802,275 @@ class PortfolioService:
         return values
 
     @staticmethod
+    def _normalize_trade_execution(
+        *,
+        trade_date: date,
+        executed_at: Optional[datetime],
+    ) -> Tuple[Optional[datetime], datetime, bool]:
+        """Return UTC-naive storage time and an Asia/Ho_Chi_Minh effective time."""
+        vietnam_tz = ZoneInfo("Asia/Ho_Chi_Minh")
+        if executed_at is None:
+            inferred = datetime.combine(
+                trade_date,
+                time(14, 45),
+                tzinfo=vietnam_tz,
+            )
+            return None, inferred, True
+
+        if executed_at.tzinfo is None:
+            local_execution = executed_at.replace(tzinfo=vietnam_tz)
+        else:
+            local_execution = executed_at.astimezone(vietnam_tz)
+        if local_execution.date() != trade_date:
+            raise ValueError(
+                "executed_at must resolve to trade_date in Asia/Ho_Chi_Minh"
+            )
+        return (
+            PortfolioService._to_utc_naive(local_execution),
+            local_execution,
+            False,
+        )
+
+    @staticmethod
+    def _to_utc_naive(value: datetime) -> datetime:
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+    @staticmethod
+    def _from_utc_naive(value: Optional[datetime]) -> Optional[datetime]:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(ZoneInfo("Asia/Ho_Chi_Minh"))
+
+    @classmethod
+    def _settlement_lot_metadata(
+        cls,
+        *,
+        trade: Any,
+        settlement: Optional[Any],
+        market: str,
+    ) -> Dict[str, Any]:
+        acquired_at = None
+        if settlement is not None:
+            _, acquired_at, _ = cls._normalize_trade_execution(
+                trade_date=trade.trade_date,
+                executed_at=cls._from_utc_naive(trade.executed_at),
+            )
+        if settlement is None:
+            return {
+                "acquired_at": None,
+                "estimated_sellable_at": None,
+                "estimated_sellable_at_utc": None,
+                "actual_sellable_at": None,
+                "actual_sellable_at_utc": None,
+                "calendar_status": "unknown",
+                "warnings": ["settlement_provenance_missing"],
+                "legacy_sellable": True,
+            }
+
+        estimated = cls._from_utc_naive(settlement.estimated_sellable_at)
+        actual = cls._from_utc_naive(settlement.actual_sellable_at)
+        try:
+            warnings = json.loads(settlement.warnings_json or "[]")
+        except (TypeError, ValueError):
+            warnings = ["settlement_warnings_invalid"]
+        if not isinstance(warnings, list):
+            warnings = ["settlement_warnings_invalid"]
+        return {
+            "acquired_at": acquired_at,
+            "estimated_sellable_at": estimated,
+            "estimated_sellable_at_utc": (
+                cls._to_utc_naive(estimated) if estimated is not None else None
+            ),
+            "actual_sellable_at": actual,
+            "actual_sellable_at_utc": (
+                cls._to_utc_naive(actual) if actual is not None else None
+            ),
+            "calendar_status": settlement.calculation_status or "unknown",
+            "warnings": [str(item) for item in warnings if str(item)],
+            "legacy_sellable": False,
+        }
+
+    @staticmethod
+    def _lot_is_sellable(
+        lot: Dict[str, Any],
+        *,
+        as_of_at: datetime,
+    ) -> bool:
+        if lot.get("legacy_sellable"):
+            return True
+        sellable_at = (
+            lot.get("actual_sellable_at")
+            or lot.get("estimated_sellable_at")
+        )
+        return sellable_at is not None and sellable_at <= as_of_at
+
+    @classmethod
+    def _lot_settlement_state(
+        cls,
+        lot: Dict[str, Any],
+        *,
+        as_of_at: datetime,
+    ) -> str:
+        if lot.get("calendar_status") == "unknown":
+            return "unknown"
+        return "sellable" if cls._lot_is_sellable(lot, as_of_at=as_of_at) else "unsettled"
+
+    @classmethod
+    def _summarize_settlement_lots(
+        cls,
+        lots: List[Dict[str, Any]],
+        *,
+        as_of_at: datetime,
+    ) -> Dict[str, Any]:
+        active_lots = [
+            lot for lot in lots
+            if float(lot.get("remaining_quantity") or 0.0) > EPS
+        ]
+        held_quantity = sum(
+            float(lot["remaining_quantity"]) for lot in active_lots
+        )
+        sellable_quantity = sum(
+            float(lot["remaining_quantity"])
+            for lot in active_lots
+            if cls._lot_is_sellable(lot, as_of_at=as_of_at)
+        )
+        unsettled_quantity = max(0.0, held_quantity - sellable_quantity)
+        upcoming = [
+            lot.get("actual_sellable_at") or lot.get("estimated_sellable_at")
+            for lot in active_lots
+            if not cls._lot_is_sellable(lot, as_of_at=as_of_at)
+        ]
+        next_sellable_at = min(
+            (value for value in upcoming if value is not None),
+            default=None,
+        )
+
+        statuses = {
+            str(lot.get("calendar_status") or "unknown")
+            for lot in active_lots
+        }
+        if "unknown" in statuses or not statuses:
+            calculation_status = "unknown"
+        elif "degraded" in statuses:
+            calculation_status = "degraded"
+        else:
+            calculation_status = "confirmed"
+
+        if "unknown" in statuses:
+            settlement_state = "unknown"
+        elif unsettled_quantity <= EPS:
+            settlement_state = "sellable"
+        elif sellable_quantity <= EPS:
+            settlement_state = "unsettled"
+        else:
+            settlement_state = "partially_sellable"
+
+        return {
+            "held_quantity": held_quantity,
+            "sellable_quantity": sellable_quantity,
+            "unsettled_quantity": unsettled_quantity,
+            "next_sellable_at": next_sellable_at,
+            "settlement_state": settlement_state,
+            "settlement_calculation_status": calculation_status,
+            "settlement_warnings": sorted(
+                {
+                    str(warning)
+                    for lot in active_lots
+                    for warning in (lot.get("warnings") or [])
+                    if str(warning)
+                }
+            ),
+        }
+
+    @classmethod
+    def _consume_settlement_lots(
+        cls,
+        lots: List[Dict[str, Any]],
+        quantity: float,
+        *,
+        symbol: str,
+        trade_date: Optional[date],
+        sale_at: datetime,
+    ) -> None:
+        summary = cls._summarize_settlement_lots(lots, as_of_at=sale_at)
+        if summary["held_quantity"] + EPS < quantity:
+            raise PortfolioOversellError(
+                symbol=symbol,
+                trade_date=trade_date,
+                requested_quantity=quantity,
+                available_quantity=summary["held_quantity"],
+            )
+        if summary["sellable_quantity"] + EPS < quantity:
+            raise PortfolioUnsettledSaleError(
+                symbol=symbol,
+                trade_date=trade_date,
+                requested_quantity=quantity,
+                held_quantity=summary["held_quantity"],
+                sellable_quantity=summary["sellable_quantity"],
+                unsettled_quantity=summary["unsettled_quantity"],
+                next_sellable_at=summary["next_sellable_at"],
+            )
+
+        remaining = quantity
+        while remaining > EPS:
+            eligible_index = next(
+                index
+                for index, lot in enumerate(lots)
+                if cls._lot_is_sellable(lot, as_of_at=sale_at)
+            )
+            lot = lots[eligible_index]
+            take = min(remaining, float(lot["remaining_quantity"]))
+            lot["remaining_quantity"] = float(lot["remaining_quantity"]) - take
+            remaining -= take
+            if lot["remaining_quantity"] <= EPS:
+                lots.pop(eligible_index)
+
+    @staticmethod
     def _consume_fifo_lots(
         lots: List[Dict[str, Any]],
         quantity: float,
         symbol: str,
         trade_date: Optional[date] = None,
+        sale_at: Optional[datetime] = None,
     ) -> float:
         remaining = quantity
         cost_basis = 0.0
         while remaining > EPS:
-            if not lots:
-                raise PortfolioOversellError(
+            eligible_index = next(
+                (
+                    index
+                    for index, lot in enumerate(lots)
+                    if sale_at is None
+                    or PortfolioService._lot_is_sellable(lot, as_of_at=sale_at)
+                ),
+                None,
+            )
+            if eligible_index is None:
+                summary = PortfolioService._summarize_settlement_lots(
+                    lots,
+                    as_of_at=sale_at
+                    or datetime.max.replace(tzinfo=ZoneInfo("Asia/Ho_Chi_Minh")),
+                )
+                raise PortfolioUnsettledSaleError(
                     symbol=symbol,
                     trade_date=trade_date,
                     requested_quantity=quantity,
-                    available_quantity=quantity - remaining,
+                    held_quantity=summary["held_quantity"],
+                    sellable_quantity=quantity - remaining,
+                    unsettled_quantity=summary["unsettled_quantity"],
+                    next_sellable_at=summary["next_sellable_at"],
                 )
-            head = lots[0]
+            head = lots[eligible_index]
             take = min(remaining, float(head["remaining_quantity"]))
             cost_basis += take * float(head["unit_cost"])
             head["remaining_quantity"] = float(head["remaining_quantity"]) - take
             remaining -= take
             if head["remaining_quantity"] <= EPS:
-                lots.pop(0)
+                lots.pop(eligible_index)
         return cost_basis
 
     @staticmethod
@@ -1663,7 +2347,11 @@ class PortfolioService:
         }
 
     @staticmethod
-    def _trade_row_to_dict(row: Any) -> Dict[str, Any]:
+    def _trade_row_to_dict(
+        row: Any,
+        *,
+        source_link: Optional[Any] = None,
+    ) -> Dict[str, Any]:
         return {
             "id": int(row.id),
             "account_id": int(row.account_id),
@@ -1679,7 +2367,60 @@ class PortfolioService:
             "tax": float(row.tax),
             "note": row.note,
             "created_at": row.created_at.isoformat() if row.created_at else None,
+            "source_decision_signal_id": (
+                int(source_link.signal_id) if source_link is not None else None
+            ),
+            "link_type": (
+                str(source_link.link_type) if source_link is not None else None
+            ),
         }
+
+    def _validate_source_decision_signal(
+        self,
+        *,
+        session: Any,
+        source_decision_signal_id: Optional[int],
+        trade_side: str,
+        trade_symbol: str,
+        trade_market: str,
+    ) -> Optional[Any]:
+        if source_decision_signal_id is None:
+            return None
+        if trade_side != "buy":
+            raise ValueError(
+                "source_decision_signal_id is only valid for buy trades"
+            )
+        signal = self.signal_trade_link_repo.get_signal_in_session(
+            session=session,
+            signal_id=int(source_decision_signal_id),
+        )
+        if signal is None:
+            raise ValueError(
+                f"Source DecisionSignal not found: {source_decision_signal_id}"
+            )
+        if str(signal.market or "").strip().lower() != trade_market:
+            raise ValueError(
+                "Source DecisionSignal market does not match the trade market"
+            )
+        signal_symbol = canonical_stock_code(
+            normalize_stock_code(str(signal.stock_code or ""))
+        )
+        trade_signal_symbol = canonical_stock_code(
+            normalize_stock_code(trade_symbol)
+        )
+        if not signal_symbol or signal_symbol != trade_signal_symbol:
+            raise ValueError(
+                "Source DecisionSignal symbol does not match the trade symbol"
+            )
+        if str(signal.action or "").strip().lower() not in {"buy", "add"}:
+            raise ValueError(
+                "Source DecisionSignal must be an entry recommendation (buy or add)"
+            )
+        if str(signal.status or "").strip().lower() != "active":
+            raise ValueError(
+                "Source DecisionSignal must be active when the trade is recorded"
+            )
+        return signal
 
     @staticmethod
     def _cash_ledger_row_to_dict(row: Any) -> Dict[str, Any]:

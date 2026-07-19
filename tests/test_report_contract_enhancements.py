@@ -9,6 +9,7 @@ from src.analyzer import (
     AnalysisResult,
     check_content_integrity,
     enforce_actionable_trade_plan,
+    fill_money_flow_indicators_if_needed,
     fill_vietnam_order_flow_if_needed,
     normalize_report_output_data,
 )
@@ -220,6 +221,43 @@ def test_vietnam_order_flow_is_exposed_separately_from_chip_data() -> None:
     assert perspective["order_flow"]["foreign_net_value"] == 1_500_000.0
     assert "chip_structure" not in perspective
     assert "không phải dữ liệu phân bổ chip" in perspective["order_flow"]["note"]
+
+
+def test_vietnam_order_flow_discloses_stale_fallback_session() -> None:
+    result = _buy_result()
+    context = {
+        "capital_flow": {
+            "status": "partial",
+            "data": {
+                "fallback_as_of": "2026-07-17T15:10:00",
+                "coverage": {"active_order_flow": "fallback"},
+                "stock_flow": {
+                    "active_buy_volume": 700.0,
+                    "active_sell_volume": 200.0,
+                },
+            },
+        }
+    }
+
+    fill_vietnam_order_flow_if_needed(result, context)
+
+    order_flow = result.dashboard["data_perspective"]["order_flow"]
+    assert order_flow["fallback_as_of"] == "2026-07-17T15:10:00"
+    assert "2026-07-17T15:10:00" in order_flow["note"]
+    assert "không phải dữ liệu realtime" in order_flow["note"]
+
+
+def test_money_flow_indicators_do_not_depend_on_fundamental_context() -> None:
+    result = _buy_result()
+
+    fill_money_flow_indicators_if_needed(
+        result,
+        {"mfi_14": 61.25, "cmf_20": 0.1234},
+    )
+
+    money_flow = result.dashboard["data_perspective"]["money_flow_indicators"]
+    assert money_flow["mfi_14"] == 61.25
+    assert money_flow["cmf_20"] == 0.1234
 
 
 def test_long_term_ma_context_detects_bear_market_rally() -> None:

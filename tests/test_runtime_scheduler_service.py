@@ -23,6 +23,7 @@ from src.services.runtime_scheduler import (
     RUNTIME_SCHEDULER_RUN_IMMEDIATELY_ENV,
     RUNTIME_SCHEDULER_SUPPRESS_START_ENV,
     RuntimeSchedulerService,
+    build_settlement_outcome_background_tasks,
 )
 
 
@@ -398,7 +399,7 @@ class RuntimeSchedulerServiceTestCase(unittest.TestCase):
 
         scheduler = service._scheduler
         self.assertIsNotNone(scheduler)
-        self.assertEqual(len(scheduler.background_tasks), 1)  # type: ignore[attr-defined]
+        self.assertEqual(len(scheduler.background_tasks), 2)  # type: ignore[attr-defined]
         self.assertEqual(scheduler.background_tasks[0]["name"], "agent_event_monitor")  # type: ignore[index]
         self.assertEqual(scheduler.background_tasks[0]["interval_seconds"], 7 * 60)  # type: ignore[index]
         self.assertEqual(scheduler.background_tasks[0]["run_immediately"], True)  # type: ignore[index]
@@ -494,6 +495,26 @@ class RuntimeSchedulerServiceTestCase(unittest.TestCase):
         self.assertIs(first_task["task"], third_task["task"])
         self.assertEqual(second_task["interval_seconds"], 11 * 60)
         self.assertEqual(third_task["interval_seconds"], 11 * 60)
+
+    def test_settlement_outcome_background_task_is_after_market_and_idempotent(self) -> None:
+        outcome_service = MagicMock()
+        outcome_service.run.side_effect = [
+            {"evaluated": 1},
+            {"evaluated": 0},
+        ]
+        task = build_settlement_outcome_background_tasks(
+            SimpleNamespace(),
+            service_factory=lambda: outcome_service,
+            now_provider=lambda: datetime(2026, 7, 17, 15, 30),
+        )[0]
+
+        self.assertEqual(task["name"], "settlement_outcomes_after_market")
+        self.assertFalse(task["run_immediately"])
+        task["task"]()
+        task["task"]()
+
+        self.assertEqual(outcome_service.run.call_count, 2)
+        outcome_service.run.assert_called_with(limit=100)
 
     def test_force_enabled_survives_time_reconcile_until_explicit_enabled_update(self) -> None:
         fake_schedule = _FakeScheduleModule()

@@ -426,6 +426,30 @@ worker 会把 `triggered`、`skipped`、`degraded`、`failed` 写入 `alert_trig
 
 回滚 P8 只需 revert 文档、配置说明和 Web 文案改动；没有数据库迁移或用户数据清理。回滚早期 Phase 时，已创建的持久化规则不会自动删除，按下方 Phase 回滚说明处理。
 
+## Vietnam settlement lifecycle events
+
+Settlement-aware trading PR 6 extends the same `AlertWorker` with system-owned
+`settlement_lifecycle` rules for explicit `.VN` positions. It does not add a second
+rule engine or notification gateway.
+
+- Supported events are `position_became_partially_sellable`,
+  `position_became_sellable`, `thesis_invalidated_while_unsettled`, and
+  `settlement_risk_increased`.
+- Stable targets use `account:<id>:symbol:<symbol>`.
+- The first observation establishes a baseline. Later observations are compared with
+  `settlement_alert_states`, which prevents unchanged events from repeating after a
+  restart.
+- Triggers, notification attempts, cooldowns, alert routing, and sanitization use the
+  existing alert tables and worker paths.
+- The worker only observes deterministic portfolio state. It never changes settlement
+  dates, sellable quantities, lots, trades, or DecisionSignal actions.
+- Notification diagnostics are limited to public settlement fields and exclude owner
+  identity, account name, broker, cash, cost basis, P&L, notes, and raw reports.
+
+The runtime remains governed by `AGENT_EVENT_MONITOR_ENABLED` and
+`AGENT_EVENT_MONITOR_INTERVAL_MINUTES`. Full linkage, API, privacy, and rollback
+details are in [DecisionSignal Trade Links And Settlement Alerts](settlement-signal-alerts.md).
+
 ## Phase 边界
 
 - P0：本文档、契约、存储评估和兼容测试。

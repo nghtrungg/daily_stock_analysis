@@ -490,6 +490,28 @@ def test_portfolio_block_is_auxiliary_and_does_not_change_quality_score() -> Non
     assert "portfolio: missing" not in pack.data_quality.limitations
 
 
+def test_settlement_risk_block_is_authoritative_and_auxiliary() -> None:
+    baseline = AnalysisContextBuilder.build(_artifacts())
+    pack = AnalysisContextBuilder.build(
+        _artifacts(
+            settlement_risk={
+                "policy_version": "vn-settlement-risk-v1",
+                "data_quality": "limited",
+                "survivability_status": "caution",
+                "survivability_score": 58.0,
+                "warnings": ["low_sample_confidence"],
+            }
+        )
+    )
+
+    risk = pack.blocks["settlement_risk"]
+    assert risk.status == ContextFieldStatus.PARTIAL
+    assert risk.source == "deterministic_settlement_risk_service"
+    assert risk.metadata["authoritative"] is True
+    assert risk.metadata["heuristic_not_probability"] is True
+    assert pack.data_quality.overall_score == baseline.data_quality.overall_score
+
+
 def test_build_batch_returns_one_pack_per_artifact() -> None:
     packs = AnalysisContextBuilder.build_batch(
         [
@@ -499,6 +521,43 @@ def test_build_batch_returns_one_pack_per_artifact() -> None:
     )
 
     assert [pack.subject.code for pack in packs] == ["600519", "000001"]
+
+
+def test_settlement_block_exposes_only_authoritative_low_sensitivity_fields() -> None:
+    pack = AnalysisContextBuilder.build(
+        _artifacts(
+            code="VNM.VN",
+            market="vn",
+            portfolio_context={
+                "account_id": 7,
+                "account_name": "Private account",
+                "total_cost": 99_000_000,
+                "settlement_snapshot": {
+                    "snapshot_version": "vn-settlement-v1",
+                    "scope": "selected_account",
+                    "position_lifecycle": "open",
+                    "settlement_state": "partially_sellable",
+                    "total_quantity": 100,
+                    "sellable_quantity": 40,
+                    "unsettled_quantity": 60,
+                    "next_sellable_at": "2026-07-20T13:00:00+07:00",
+                    "maximum_sell_quantity": 40,
+                    "calendar_status": "confirmed",
+                    "warnings": ["calendar_degraded"],
+                },
+            },
+        )
+    )
+
+    settlement = pack.blocks["settlement"]
+    assert settlement.status == ContextFieldStatus.AVAILABLE
+    assert settlement.metadata["authoritative"] is True
+    assert settlement.items["maximum_sell_quantity"].value == 40
+    assert settlement.items["calendar_status"].value == "confirmed"
+    assert "account_id" not in settlement.items
+    assert "account_name" not in settlement.items
+    assert "total_cost" not in settlement.items
+    assert pack.data_quality.overall_score == 100
 
 
 def test_builder_output_safe_dict_redacts_sensitive_mapping_keys() -> None:

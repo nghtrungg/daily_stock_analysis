@@ -366,7 +366,7 @@ def get_stock_bar(
                 ),
                 sentiment_score=sentiment_score,
                 guardrail_reason=_extract_guardrail_reason(raw_result),
-                align_with_score=True,
+                align_with_score=not bool(raw_result.get("settlement_risk")),
             )
 
             display_stock_code = service._display_stock_code(record.code)
@@ -519,7 +519,8 @@ def get_history_detail(
                 get_sentiment_label(result.get("sentiment_score"), report_language)
                 if result.get("sentiment_score") is not None
                 else result.get("sentiment_label")
-            )
+            ),
+            settlement_risk=result.get("settlement_risk"),
         )
         
         strategy = ReportStrategy(

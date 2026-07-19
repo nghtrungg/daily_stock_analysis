@@ -10,6 +10,7 @@ import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
 from src.agent.events import (
@@ -39,6 +40,10 @@ from src.services.decision_signal_summary import (
 )
 from src.services.history_service import HistoryService
 from src.services.market_light_service import normalize_market_alert_region
+from src.services.settlement_alert_service import (
+    SettlementAlertService,
+    SettlementLifecycleEvent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +90,7 @@ class AlertWorker:
         service: Optional[AlertService] = None,
         decision_signal_service: Optional[DecisionSignalService] = None,
         notifier: Optional[Any] = None,
+        settlement_alert_service: Optional[SettlementAlertService] = None,
         now_provider: Optional[Callable[[], float]] = None,
         fingerprint_ttl_seconds: int = ALERT_WORKER_FINGERPRINT_TTL_SECONDS,
     ) -> None:
@@ -92,6 +98,9 @@ class AlertWorker:
         self.service = service or AlertService()
         self.decision_signal_service = decision_signal_service or DecisionSignalService()
         self.notifier = notifier
+        self.settlement_alert_service = (
+            settlement_alert_service or SettlementAlertService()
+        )
         self.now_provider = now_provider or time.time
         self.fingerprint_ttl_seconds = max(1, int(fingerprint_ttl_seconds))
         self._trigger_fingerprints: Dict[str, float] = {}
@@ -135,8 +144,10 @@ class AlertWorker:
 
         self._prune_fingerprints()
         runtime_rules = self._load_runtime_rules(config)
-        stats["loaded"] = len(runtime_rules)
-        if not runtime_rules:
+        settlement_events = self._load_settlement_events_safely()
+        stats["loaded"] = len(runtime_rules) + len(settlement_events)
+        self._process_settlement_events(settlement_events, stats)
+        if not runtime_rules and not settlement_events:
             logger.info("[AlertWorker] No active alert rules loaded")
             return stats
 
@@ -199,6 +210,87 @@ class AlertWorker:
                         stats["notified"] += 1
 
         return stats
+
+    def _load_settlement_events_safely(self) -> List[SettlementLifecycleEvent]:
+        try:
+            return list(self.settlement_alert_service.evaluate_transitions())
+        except Exception as exc:
+            logger.warning(
+                "[AlertWorker] Settlement lifecycle evaluation failed: %s",
+                self.service._sanitize_text(
+                    str(exc) or "settlement lifecycle evaluation failed"
+                ),
+            )
+            return []
+
+    def _process_settlement_events(
+        self,
+        events: List[SettlementLifecycleEvent],
+        stats: Dict[str, int],
+    ) -> None:
+        for event in events:
+            stats["evaluated"] += 1
+            runtime_rule = RuntimeAlertRule(
+                key=f"settlement:{event.rule_id}:{event.target}:{event.event_type}",
+                rule=SimpleNamespace(
+                    stock_code=event.target,
+                    target_scope="portfolio_position",
+                    target=event.target,
+                    alert_type="settlement_lifecycle",
+                    description=event.message,
+                    metadata={
+                        "persisted_rule_id": event.rule_id,
+                        "effective_target": event.target,
+                        "display_target": event.target,
+                    },
+                ),
+                source="db",
+                severity=event.severity,
+                cooldown_policy=event.cooldown_policy,
+                effective_target=event.target,
+                display_target=event.target,
+            )
+            result = {
+                "rule_id": event.rule_id,
+                "status": "triggered",
+                "record_status": "triggered",
+                "triggered": True,
+                "observed_value": event.observed_value,
+                "threshold": event.threshold,
+                "data_source": "settlement_lifecycle",
+                "data_timestamp": event.data_timestamp,
+                "reason": self.service._sanitize_text(event.message),
+                "message": self.service._sanitize_text(event.message),
+                "diagnostics": dict(event.diagnostics),
+            }
+            trigger_write = self._record_trigger_safely(
+                runtime_rule,
+                result,
+                "triggered",
+            )
+            if trigger_write.created:
+                stats["recorded"] += 1
+            stats["triggered"] += 1
+            if not trigger_write.created:
+                continue
+            cooldown_decision = self._check_db_cooldown(
+                runtime_rule,
+                trigger_write.trigger_id,
+            )
+            if cooldown_decision.suppressed:
+                stats["cooldown_suppressed"] += 1
+                stats["notification_attempts"] += 1
+                continue
+            dispatch = self._send_notification_safely(runtime_rule, result)
+            stats["notification_attempts"] += (
+                self._record_notification_attempts_safely(
+                    trigger_write.trigger_id,
+                    dispatch,
+                )
+            )
+            if self._dispatch_has_real_channel_success(dispatch):
+                self._upsert_db_cooldown_safely(runtime_rule, result)
+                stats["notified"] += 1
 
     def _load_runtime_rules(self, config: Any) -> List[RuntimeAlertRule]:
         runtime_rules: List[RuntimeAlertRule] = []

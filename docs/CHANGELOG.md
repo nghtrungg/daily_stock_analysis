@@ -9,6 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [fix] Route Vietnam P/E and P/B through company-profile ratios and use explicitly stale recent-session fallbacks for missing valuation and capital-flow inputs.
+- [improvement] Add evidence-gated sector health, structured decision scenarios, hidden unavailable chip blocks, wrapped report tables, complete-sentence checks, and per-stock closing summaries to Vietnamese reports.
+- [test] Cover Vietnam valuation routing, distinct-session fallback averages, stale flow recovery, truncated Vietnamese narratives, and enhanced report rendering.
+- [feature] Add an ordered, transactional schema migration runner and a versioned Vietnam trading and settlement calendar with explicit confirmed, degraded, and unknown calculation status.
+- [test] Cover legacy database preservation, repeated and concurrent migration initialization, Vietnam holidays, settlement-only closures, year boundaries, malformed or missing coverage, timezone normalization, and deterministic settlement results.
+- [docs] Document the Vietnam T+2 calendar contract, official 2026 sources, Docker packaging, migration failure behavior, and rollback boundary.
+- [feature] Make the Vietnam portfolio ledger settlement-aware with frozen buy-side provenance, acquisition-lot timing, and transactional rejection of sales above sellable quantity.
+- [test] Cover settlement-aware FIFO and average-cost replay, partial sales, split adjustments, degraded and unknown status, legacy trades, cache idempotency, and concurrent sale attempts.
+- [docs] Document execution-time inference, settlement-sidecar provenance, derived position states, legacy compatibility, and additive rollback behavior.
+- [feature] Expose settlement-aware portfolio trade timestamps, snapshot fields, account-scoped lot details, and structured insufficient-sellable-quantity conflicts through additive API contracts.
+- [test] Cover compatible trade-date requests, execution-time validation, Vietnam symbol suffix enforcement, settlement serialization and account scoping, and distinct unsettled-sale and oversell conflicts.
+- [docs] Document the settlement-aware portfolio wire contract and synchronize the external Web implementation examples.
+- [feature] Add a versioned low-sensitivity Vietnam settlement context to legacy and Agent analysis with deterministic sale recommendation guardrails.
+- [test] Cover no-position, unsettled, partially sellable, sellable, unknown-calendar, model quantity override, context privacy, report compatibility, and guarded DecisionSignal extraction paths.
+- [docs] Document settlement-aware analysis aggregation, additive report fields, reason codes, DecisionSignal metadata, external-client compatibility, and rollback.
+- [feature] Add a versioned deterministic Vietnam settlement-window risk heuristic, optional report/API fields, and an unsafe-entry guardrail.
+- [test] Cover settlement-risk history quality, invalid bars, gaps, volatility, volume degradation, support omission, deterministic scoring, weight renormalization, report compatibility, and guardrail interaction.
+- [docs] Document settlement-risk inputs, formulas, scoring limitations, public settings, additive API behavior, and rollback.
+- [feature] Add transactional DecisionSignal-to-purchase links and expose nullable source linkage through the portfolio trade API.
+- [feature] Add persistent Vietnam settlement lifecycle, thesis invalidation, and risk-increase alerts through the existing worker, cooldown, history, and notification paths.
+- [fix] Make settlement-risk alerts compare only within one policy version, select risk by immutable analysis time, and evaluate snapshots on the Vietnam business date.
+- [test] Cover valid and invalid trade links, legacy requests, partial and full sellability, restart deduplication, thesis and risk transitions, payload privacy, and notification failure isolation.
+- [docs] Document PR 6 linkage, settlement alert transitions, runtime behavior, privacy, compatibility, and rollback.
+- [feature] Add versioned Vietnam settlement-aware signal and linked-execution outcomes with forward-only horizons, cost estimates, and explicit daily-bar ambiguity.
+- [feature] Expose idempotent settlement-outcome run, list, and aggregate APIs and evaluate them through the existing after-market runtime scheduler.
+- [test] Cover holiday-aware first sellability, no-look-ahead entry, daily MAE/MFE proxies, linked-trade-only executions, cost application, version separation, idempotency, empty metrics, API behavior, and scheduler repetition.
+- [docs] Document PR 7 outcome identities, versions, daily-bar limitations, cost assumptions, aggregate availability, API and scheduler contracts, compatibility, and rollback.
 - [improvement] Localize Personal Stock Tracking navigation, authentication, portfolio pages, metadata, offline state, and safe errors into Vietnamese.
 - [feature] Add wallet-ledger and tracked-quote contracts plus additive Supabase schema convergence that preserves existing portfolio data and exposes owner-only atomic cash and trade mutations.
 - [test] Cover wallet replay, weighted cost, realized sales, cash/share invariants, deterministic ordering, quote staleness, and incomplete valuation totals.

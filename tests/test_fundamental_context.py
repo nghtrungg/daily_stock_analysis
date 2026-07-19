@@ -38,7 +38,69 @@ class _DummyBoardFetcher:
         return self._boards
 
 
+class _DummyVietnamProfileFetcher:
+    name = "VnFetcher"
+    priority = 4
+
+    def is_available_for_request(self, capability: str = "") -> bool:
+        return capability in {"", "company_profile"}
+
+    def get_company_profile(self, stock_code: str):
+        assert stock_code == "FPT.VN"
+        return {
+            "source": "vnstock",
+            "pe_ratio": 18.4,
+            "pb_ratio": 4.1,
+            "roe": 22.3,
+        }
+
+
 class TestFundamentalContext(unittest.TestCase):
+    def test_vietnam_valuation_uses_company_ratio_source_not_realtime_quote(self) -> None:
+        manager = DataFetcherManager(fetchers=[_DummyVietnamProfileFetcher()])
+        cfg = SimpleNamespace(
+            enable_fundamental_pipeline=True,
+            fundamental_cache_ttl_seconds=0,
+            fundamental_cache_max_entries=0,
+            fundamental_stage_timeout_seconds=2.0,
+            fundamental_fetch_timeout_seconds=1.0,
+            fundamental_retry_max=1,
+        )
+        empty_bundle = {
+            "status": "not_supported",
+            "growth": {},
+            "earnings": {},
+            "institution": {},
+            "source_chain": [],
+            "errors": [],
+        }
+
+        with patch("src.config.get_config", return_value=cfg), \
+                patch.object(manager, "get_realtime_quote") as realtime_quote, \
+                patch.object(manager, "get_capital_flow_context", return_value=manager._build_fundamental_block(
+                    "not_supported", {}, [], []
+                )), \
+                patch.object(manager, "get_dragon_tiger_context", return_value=manager._build_fundamental_block(
+                    "not_supported", {}, [], []
+                )), \
+                patch.object(manager, "get_board_context", return_value=manager._build_fundamental_block(
+                    "not_supported", {}, [], []
+                )), \
+                patch(
+                    "data_provider.fundamental_adapter.AkshareFundamentalAdapter.get_fundamental_bundle",
+                    return_value=empty_bundle,
+                ):
+            context = manager.get_fundamental_context("FPT.VN")
+
+        realtime_quote.assert_not_called()
+        self.assertEqual(context["valuation"]["status"], "ok")
+        self.assertEqual(context["valuation"]["data"]["pe_ratio"], 18.4)
+        self.assertEqual(context["valuation"]["data"]["pb_ratio"], 4.1)
+        self.assertEqual(
+            context["valuation"]["source_chain"][0]["provider"],
+            "vnstock_company_profile",
+        )
+
     def test_offshore_market_returns_not_supported_when_adapter_empty(self) -> None:
         """When yfinance adapter has no data, offshore (US/HK) status is not_supported.
 

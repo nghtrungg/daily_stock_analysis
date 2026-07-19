@@ -16,7 +16,7 @@ import logging
 import math
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field as dataclass_field
 from typing import Optional, Dict, Any, List, Tuple, Callable
 
 import litellm
@@ -483,13 +483,80 @@ def check_content_integrity(
             missing.append("dashboard.phase_decision.immediate_action")
         if not isinstance(phase_decision.get("watch_conditions"), list):
             missing.append("dashboard.phase_decision.watch_conditions")
+        if not isinstance(phase_decision.get("decision_scenarios"), list):
+            missing.append("dashboard.phase_decision.decision_scenarios")
         if _is_blank_text(phase_decision.get("next_check_time")):
             missing.append("dashboard.phase_decision.next_check_time")
         if _is_blank_text(phase_decision.get("confidence_reason")):
             missing.append("dashboard.phase_decision.confidence_reason")
         if not isinstance(phase_decision.get("data_limitations"), list):
             missing.append("dashboard.phase_decision.data_limitations")
+    if normalize_report_language(getattr(result, "report_language", "zh")) == "vi":
+        truncated_fields = _find_truncated_vietnamese_report_fields(result)
+        missing.extend(f"truncated:{path}" for path in truncated_fields)
     return len(missing) == 0, missing
+
+
+def _looks_like_truncated_vietnamese_text(value: Any) -> bool:
+    """Detect the common mid-word fragments produced by prematurely cut output."""
+    if not isinstance(value, str):
+        return False
+    text = value.strip()
+    if not text or text[-1] in ".!?;:…)]}\"'":
+        return False
+    match = re.search(r"([A-Za-zÀ-ỹ]+)$", text)
+    if not match:
+        return False
+    token = match.group(1)
+    if token != token.lower() or len(token) > 2:
+        return False
+    return re.fullmatch(r"[bcdfghjklmnpqrstvwxyz]{1,2}", token) is not None
+
+
+def _find_truncated_vietnamese_report_fields(result: "AnalysisResult") -> List[str]:
+    """Return renderer-facing narrative paths that end in a cut word."""
+    found: List[str] = []
+
+    def scan(path: str, value: Any) -> None:
+        if _looks_like_truncated_vietnamese_text(value):
+            found.append(path)
+        elif isinstance(value, list):
+            for index, item in enumerate(value):
+                scan(f"{path}[{index}]", item)
+
+    for attr in ("analysis_summary", "risk_warning", "buy_reason"):
+        scan(attr, getattr(result, attr, None))
+    dashboard = result.dashboard if isinstance(result.dashboard, dict) else {}
+    core = dashboard.get("core_conclusion")
+    if isinstance(core, dict):
+        scan("dashboard.core_conclusion.one_sentence", core.get("one_sentence"))
+        position = core.get("position_advice")
+        if isinstance(position, dict):
+            scan("dashboard.core_conclusion.position_advice.no_position", position.get("no_position"))
+            scan("dashboard.core_conclusion.position_advice.has_position", position.get("has_position"))
+    intelligence = dashboard.get("intelligence")
+    if isinstance(intelligence, dict):
+        for key in ("risk_alerts", "positive_catalysts", "earnings_outlook", "sentiment_summary"):
+            scan(f"dashboard.intelligence.{key}", intelligence.get(key))
+    battle = dashboard.get("battle_plan")
+    if isinstance(battle, dict):
+        scan("dashboard.battle_plan.action_checklist", battle.get("action_checklist"))
+        position = battle.get("position_strategy")
+        if isinstance(position, dict):
+            for key in ("entry_plan", "risk_control"):
+                scan(f"dashboard.battle_plan.position_strategy.{key}", position.get(key))
+    phase = dashboard.get("phase_decision")
+    if isinstance(phase, dict):
+        for key in ("watch_conditions", "confidence_reason", "data_limitations"):
+            scan(f"dashboard.phase_decision.{key}", phase.get(key))
+        scenarios = phase.get("decision_scenarios")
+        if isinstance(scenarios, list):
+            for index, scenario in enumerate(scenarios):
+                if not isinstance(scenario, dict):
+                    continue
+                for key in ("condition", "action", "invalidation"):
+                    scan(f"dashboard.phase_decision.decision_scenarios[{index}].{key}", scenario.get(key))
+    return found
 
 
 def apply_placeholder_fill(result: "AnalysisResult", missing_fields: List[str]) -> None:
@@ -605,6 +672,9 @@ def apply_placeholder_fill(result: "AnalysisResult", missing_fields: List[str]) 
             elif field == "dashboard.phase_decision.watch_conditions":
                 if not isinstance(phase_decision.get("watch_conditions"), list):
                     phase_decision["watch_conditions"] = []
+            elif field == "dashboard.phase_decision.decision_scenarios":
+                if not isinstance(phase_decision.get("decision_scenarios"), list):
+                    phase_decision["decision_scenarios"] = []
             elif field == "dashboard.phase_decision.data_limitations":
                 if not isinstance(phase_decision.get("data_limitations"), list):
                     phase_decision["data_limitations"] = []
@@ -1236,6 +1306,16 @@ def fill_vietnam_order_flow_if_needed(
         "en": "Buy Up/Sell Down is derived from trade direction, not chip distribution; foreign/proprietary flow appears only when vnstock_data is configured.",
         "ko": "적극 매수/매도는 체결 방향에서 계산하며 매물대 데이터가 아닙니다. 외국인/자기매매는 vnstock_data 설정 시에만 표시됩니다.",
     }
+    fallback_as_of = str(data.get("fallback_as_of") or "").strip()
+    if fallback_as_of:
+        notes["vi"] = (
+            "Buy Up/Sell Down và dòng tiền khối ngoại/tự doanh đang dùng dữ liệu "
+            f"của phiên gần nhất ({fallback_as_of}); không phải dữ liệu realtime hay phân bổ chip."
+        )
+        notes["zh"] = f"主动买卖与外资/自营资金使用最近可用交易时点（{fallback_as_of}），并非实时或筹码分布数据。"
+        notes["en"] = f"Order, foreign, and proprietary flow use the latest available session ({fallback_as_of}), not realtime or chip-distribution data."
+        notes["ko"] = f"주문·외국인·자기매매 수급은 최근 가용 세션({fallback_as_of}) 기준이며 실시간 또는 매물대 데이터가 아닙니다."
+        order_flow["fallback_as_of"] = fallback_as_of
     order_flow["note"] = notes.get(language, notes["en"])
     order_flow["coverage"] = data.get("coverage", {}) if isinstance(data, dict) else {}
     dashboard = result.dashboard if isinstance(result.dashboard, dict) else {}
@@ -2246,6 +2326,11 @@ class AnalysisResult:
     report_language: str = "zh"  # 报告输出语言：zh/en
     action: Optional[str] = None  # 建议动作 taxonomy：buy/add/hold/reduce/sell/watch/avoid/alert
     action_label: Optional[str] = None  # 本地化建议动作标签
+    settlement_constraint: Optional[str] = None
+    maximum_sell_quantity: Optional[float] = None
+    reason_codes: List[str] = dataclass_field(default_factory=list)
+    settlement_snapshot: Optional[Dict[str, Any]] = None
+    settlement_risk: Optional[Dict[str, Any]] = None
 
     # ========== 决策仪表盘 (新增) ==========
     dashboard: Optional[Dict[str, Any]] = None  # 完整的决策仪表盘数据
@@ -2311,6 +2396,11 @@ class AnalysisResult:
             'report_language': self.report_language,
             'action': self.action,
             'action_label': self.action_label,
+            'settlement_constraint': self.settlement_constraint,
+            'maximum_sell_quantity': self.maximum_sell_quantity,
+            'reason_codes': self.reason_codes,
+            'settlement_snapshot': self.settlement_snapshot,
+            'settlement_risk': self.settlement_risk,
             'dashboard': self.dashboard,  # 决策仪表盘数据
             'trend_analysis': self.trend_analysis,
             'short_term_outlook': self.short_term_outlook,
@@ -2856,7 +2946,7 @@ Return one valid JSON object containing `stock_name`, `sentiment_score`, `trend_
 `technical_analysis`, `ma_analysis`, `volume_analysis`, `pattern_analysis`, `fundamental_analysis`,
 `sector_position`, `company_highlights`, `news_summary`, `market_sentiment`, and `hot_topics`.
 The nested dashboard must contain `core_conclusion`, `data_perspective`, `intelligence`, `battle_plan`,
-and the seven-field `"phase_decision"` object with `"watch_conditions"` and `"data_limitations"`.
+and the `"phase_decision"` object with `"watch_conditions"`, `"decision_scenarios"`, and `"data_limitations"`.
 Keep `decision_type` within `buy|hold|sell`.
 
 Use the exact object/array/string nesting below. Never replace an object with
@@ -2885,7 +2975,14 @@ prose and never move nested fields to a parent object:
       "trend_status": {"ma_alignment": "text", "is_bullish": false, "trend_score": 50},
       "price_position": {"current_price": 0, "ma5": 0, "ma10": 0, "ma20": 0, "support_level": 0, "resistance_level": 0},
       "volume_analysis": {"volume_ratio": 0, "volume_status": "text", "turnover_rate": 0, "volume_meaning": "text"},
-      "chip_structure": {}
+      "chip_structure": {},
+      "sector_health": {
+        "score": null,
+        "label": "localized label",
+        "peer_symbols": [],
+        "rationale": "evidence-based explanation or explicit unavailable reason",
+        "data_status": "available|partial|unavailable"
+      }
     },
     "intelligence": {
       "latest_news": "dated prose summary",
@@ -2904,6 +3001,9 @@ prose and never move nested fields to a parent object:
       "action_window": "text",
       "immediate_action": "text",
       "watch_conditions": [],
+      "decision_scenarios": [
+        {"condition": "price/volume trigger", "action": "specific response", "invalidation": "condition that cancels the response"}
+      ],
       "next_check_time": "text",
       "confidence_reason": "text",
       "data_limitations": []
@@ -2941,6 +3041,10 @@ prose and never move nested fields to a parent object:
 - Do not flip directly between buy and sell only because one trading day moved up or down.
 - Base recommendations on support/resistance, volume, positioning, capital flow, and risk flags.
 - If price is between support/resistance and capital flow is unclear, prefer hold/watch or a range-bound setup.
+- Write complete sentences and never end a narrative field or list item in the middle of a word.
+- `analysis_summary` is the short closing summary: write 2-3 complete, concise sentences covering action, decisive levels, and the main limitation.
+- Calculate `sector_health.score` only from supplied sector/peer evidence. Never invent peer performance; use `score=null` and `data_status=unavailable` when evidence is insufficient.
+- Provide 2-4 `decision_scenarios` that map explicit price/volume conditions to actions and invalidation conditions.
 """
 
     TEXT_SYSTEM_PROMPT = """你是一位专业的股票分析助手。
@@ -3078,6 +3182,10 @@ prose and never move nested fields to a parent object:
 
 - If the current system time is between 11:30 and 13:00 Vietnam Time, change context to: "This is a midday analysis of the morning session. Evaluate if morning volume indicates an afternoon breakout or breakdown, and adapt the Action Checklist for the 13:00 reopening."
 - In that mode, the `battle_plan.action_checklist` and `phase_decision.next_check_time` must focus on the 13:00 reopening, afternoon confirmation levels, and invalidation conditions.
+- Include `dashboard.data_perspective.sector_health` and compute it only from supplied sector/peer evidence; use a null score with an explicit unavailable reason when evidence is insufficient.
+- Include 2-4 `dashboard.phase_decision.decision_scenarios`, each with `condition`, `action`, and `invalidation`, so the report can render a decision tree.
+- Every narrative field and list item must contain complete Vietnamese sentences; never stop in the middle of a word.
+- Write `analysis_summary` as a 2-3 sentence closing summary covering the recommended action, decisive price levels, and the main data/risk limitation.
 """
         if lang == "en":
             return base_prompt + """
@@ -4998,6 +5106,10 @@ prose and never move nested fields to a parent object:
                 "If no directly matched item supports a claim, state that the evidence is unavailable. "
                 "Do not claim public-infrastructure investment, government-policy benefits, industry tailwinds, or foreign-capital catalysts without dated direct evidence and a direct mechanism linking the evidence to subject revenue, costs, or earnings. "
                 "Keep every dashboard object nested exactly as shown; top-level analysis fields must be strings.",
+                "Write every narrative field and list item as complete Vietnamese sentences; never end in the middle of a word. "
+                "Return dashboard.data_perspective.sector_health with an evidence-based score or an explicit unavailable state. "
+                "Return 2-4 dashboard.phase_decision.decision_scenarios mapping condition to action and invalidation. "
+                "Write analysis_summary as the 2-3 sentence closing summary for the report.",
             )
             if part
         )
@@ -5152,12 +5264,20 @@ prose and never move nested fields to a parent object:
                 "dashboard.phase_decision.action_window": "dashboard.phase_decision.action_window: cửa sổ hành động theo phiên",
                 "dashboard.phase_decision.immediate_action": "dashboard.phase_decision.immediate_action: hành động hiện tại",
                 "dashboard.phase_decision.watch_conditions": "dashboard.phase_decision.watch_conditions: danh sách điều kiện theo dõi",
+                "dashboard.phase_decision.decision_scenarios": "dashboard.phase_decision.decision_scenarios: 2-4 nhánh gồm condition, action và invalidation",
                 "dashboard.phase_decision.next_check_time": "dashboard.phase_decision.next_check_time: thời điểm kiểm tra tiếp theo",
                 "dashboard.phase_decision.confidence_reason": "dashboard.phase_decision.confidence_reason: lý do về độ tin cậy và giới hạn dữ liệu",
                 "dashboard.phase_decision.data_limitations": "dashboard.phase_decision.data_limitations: danh sách giới hạn dữ liệu",
             }
             lines = ["### Yêu cầu bổ sung: điền các trường bắt buộc còn thiếu và xuất lại toàn bộ JSON:"]
-            lines.extend(f"- {labels[field]}" for field in missing_fields if field in labels)
+            for field in missing_fields:
+                if field in labels:
+                    lines.append(f"- {labels[field]}")
+                elif field.startswith("truncated:"):
+                    lines.append(
+                        f"- Viết lại {field.removeprefix('truncated:')} thành câu tiếng Việt hoàn chỉnh; "
+                        "không được dừng giữa một từ."
+                    )
             return "\n".join(lines)
         if report_language in ("en", "ko"):
             lines = ["### Completion requirements: fill the missing mandatory fields below and output the full JSON again:"]

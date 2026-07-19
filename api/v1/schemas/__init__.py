@@ -74,6 +74,7 @@ from api.v1.schemas.portfolio import (
     PortfolioAccountItem,
     PortfolioAccountListResponse,
     PortfolioTradeCreateRequest,
+    PortfolioTradeCreatedResponse,
     PortfolioCashLedgerCreateRequest,
     PortfolioCorporateActionCreateRequest,
     PortfolioEventCreatedResponse,
@@ -122,6 +123,11 @@ from api.v1.schemas.decision_signals import (
     DecisionSignalOutcomeRunResponse,
     DecisionSignalOutcomeStatsBucket,
     DecisionSignalOutcomeStatsResponse,
+    SettlementOutcomeItem,
+    SettlementOutcomeListResponse,
+    SettlementOutcomeRunRequest,
+    SettlementOutcomeRunResponse,
+    SettlementOutcomeStatsResponse,
     DecisionSignalStatusUpdateRequest,
 )
 
@@ -187,6 +193,7 @@ __all__ = [
     "PortfolioAccountItem",
     "PortfolioAccountListResponse",
     "PortfolioTradeCreateRequest",
+    "PortfolioTradeCreatedResponse",
     "PortfolioCashLedgerCreateRequest",
     "PortfolioCorporateActionCreateRequest",
     "PortfolioEventCreatedResponse",
@@ -233,5 +240,10 @@ __all__ = [
     "DecisionSignalOutcomeRunResponse",
     "DecisionSignalOutcomeStatsBucket",
     "DecisionSignalOutcomeStatsResponse",
+    "SettlementOutcomeItem",
+    "SettlementOutcomeListResponse",
+    "SettlementOutcomeRunRequest",
+    "SettlementOutcomeRunResponse",
+    "SettlementOutcomeStatsResponse",
     "DecisionSignalStatusUpdateRequest",
 ]

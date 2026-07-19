@@ -1,0 +1,64 @@
+[
+  {
+    "scenario": "single_stock",
+    "symbols": ["VNM.VN"],
+    "result": {
+      "success": true,
+      "code": "VNM.VN",
+      "currency": "VND",
+      "operation_advice": "QUAN SÁT",
+      "sentiment_score": 58,
+      "data_quality": "good",
+      "news_count": 2
+    }
+  },
+  {
+    "scenario": "batch",
+    "symbols": ["FPT.VN", "VNM.VN"],
+    "result": {
+      "success_count": 2,
+      "failure_count": 0,
+      "currency": "VND"
+    }
+  },
+  {
+    "scenario": "failed_provider",
+    "symbols": ["HPG.VN"],
+    "result": {
+      "success": true,
+      "code": "HPG.VN",
+      "provider_trace": ["primary:failed", "fallback:success"],
+      "degraded": true
+    }
+  },
+  {
+    "scenario": "stale_quote",
+    "symbols": ["VCB.VN"],
+    "result": {
+      "success": true,
+      "code": "VCB.VN",
+      "quote_status": "stale",
+      "realtime_overlay_applied": false
+    }
+  },
+  {
+    "scenario": "partial_data",
+    "symbols": ["MWG.VN"],
+    "result": {
+      "success": true,
+      "code": "MWG.VN",
+      "data_quality": "partial",
+      "limitations": ["fundamentals_unavailable"]
+    }
+  },
+  {
+    "scenario": "no_news",
+    "symbols": ["GAS.VN"],
+    "result": {
+      "success": true,
+      "code": "GAS.VN",
+      "news_count": 0,
+      "limitations": ["no_recent_news"]
+    }
+  }
+]

@@ -72,6 +72,7 @@ class PipelineAnalysisArtifacts:
     news_result_count: Optional[int]
     metadata: Dict[str, Any]
     portfolio_context: Optional[Dict[str, Any]] = None
+    settlement_risk: Optional[Dict[str, Any]] = None
 
 
 class AnalysisContextBuilder:
@@ -97,6 +98,12 @@ class AnalysisContextBuilder:
         portfolio_block = _build_portfolio_block(artifacts)
         if portfolio_block is not None:
             blocks["portfolio"] = portfolio_block
+        settlement_block = _build_settlement_block(artifacts)
+        if settlement_block is not None:
+            blocks["settlement"] = settlement_block
+        settlement_risk_block = _build_settlement_risk_block(artifacts)
+        if settlement_risk_block is not None:
+            blocks["settlement_risk"] = settlement_risk_block
         data_quality = _build_data_quality(blocks, warnings=data_quality_warnings)
 
         return AnalysisContextPack(
@@ -498,6 +505,93 @@ def _build_portfolio_block(artifacts: PipelineAnalysisArtifacts) -> Optional[Ana
         source="portfolio_context",
         warnings=warnings,
         metadata={"auxiliary": True, "quality_weighted": False},
+    )
+
+
+def _build_settlement_block(
+    artifacts: PipelineAnalysisArtifacts,
+) -> Optional[AnalysisContextBlock]:
+    context = _to_dict(artifacts.portfolio_context)
+    snapshot = _to_dict(context.get("settlement_snapshot"))
+    if not snapshot:
+        return None
+
+    settlement_state = str(snapshot.get("settlement_state") or "unknown").lower()
+    calendar_status = str(snapshot.get("calendar_status") or "unknown").lower()
+    status = (
+        ContextFieldStatus.MISSING
+        if settlement_state == "unknown" or calendar_status == "unknown"
+        else ContextFieldStatus.AVAILABLE
+    )
+    warnings = [
+        str(item)
+        for item in snapshot.get("warnings") or []
+        if str(item).strip()
+    ]
+    exposed_keys = (
+        "snapshot_version",
+        "scope",
+        "account_count",
+        "position_lifecycle",
+        "settlement_state",
+        "total_quantity",
+        "sellable_quantity",
+        "unsettled_quantity",
+        "next_sellable_at",
+        "maximum_sell_quantity",
+        "calendar_status",
+    )
+    return AnalysisContextBlock(
+        status=status,
+        items={
+            key: AnalysisContextItem(status=status, value=snapshot.get(key))
+            for key in exposed_keys
+            if key in snapshot
+        },
+        source="deterministic_portfolio_ledger",
+        warnings=warnings,
+        metadata={
+            "auxiliary": True,
+            "quality_weighted": False,
+            "authoritative": True,
+        },
+    )
+
+
+def _build_settlement_risk_block(
+    artifacts: PipelineAnalysisArtifacts,
+) -> Optional[AnalysisContextBlock]:
+    risk = _to_dict(artifacts.settlement_risk)
+    if not risk:
+        return None
+    quality = str(risk.get("data_quality") or "insufficient").lower()
+    status = (
+        ContextFieldStatus.AVAILABLE
+        if quality == "good"
+        else ContextFieldStatus.PARTIAL
+        if quality == "limited"
+        else ContextFieldStatus.MISSING
+    )
+    warnings = [
+        str(item)
+        for item in risk.get("warnings") or []
+        if str(item).strip()
+    ]
+    return AnalysisContextBlock(
+        status=status,
+        items={
+            key: AnalysisContextItem(status=status, value=value)
+            for key, value in risk.items()
+            if key != "warnings" and value is not None
+        },
+        source="deterministic_settlement_risk_service",
+        warnings=warnings,
+        metadata={
+            "auxiliary": True,
+            "quality_weighted": False,
+            "authoritative": True,
+            "heuristic_not_probability": True,
+        },
     )
 
 

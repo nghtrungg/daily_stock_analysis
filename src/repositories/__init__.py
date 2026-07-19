@@ -13,6 +13,7 @@ from src.repositories.backtest_repo import BacktestRepository
 from src.repositories.decision_signal_repo import DecisionSignalRepository
 from src.repositories.decision_signal_outcome_repo import DecisionSignalOutcomeRepository
 from src.repositories.stock_repo import StockRepository
+from src.repositories.settlement_outcome_repo import SettlementOutcomeRepository
 
 __all__ = [
     "AnalysisRepository",
@@ -20,4 +21,5 @@ __all__ = [
     "DecisionSignalRepository",
     "DecisionSignalOutcomeRepository",
     "StockRepository",
+    "SettlementOutcomeRepository",
 ]

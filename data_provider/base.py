@@ -2226,6 +2226,31 @@ class DataFetcherManager:
                 return payload
         return {}
 
+    def get_vietnam_company_profile(self, stock_code: str) -> Dict[str, Any]:
+        """Return the VN company profile used for valuation fundamentals."""
+        normalized = normalize_stock_code(stock_code)
+        if _market_tag(normalized) != "vn":
+            return {}
+        for fetcher in self._get_fetchers_snapshot():
+            if not self._is_fetcher_available(fetcher, capability="company_profile"):
+                continue
+            method = getattr(fetcher, "get_company_profile", None)
+            if not callable(method):
+                continue
+            try:
+                payload = method(normalized)
+            except Exception as exc:
+                logger.warning(
+                    "[vn_company_profile] %s failed for %s: %s",
+                    type(fetcher).__name__,
+                    normalized,
+                    exc,
+                )
+                continue
+            if isinstance(payload, dict) and payload:
+                return payload
+        return {}
+
     def get_chip_distribution(self, stock_code: str):
         """
         获取筹码分布数据（带熔断和多数据源降级）
@@ -3289,20 +3314,43 @@ class DataFetcherManager:
 
         valuation_timeout = min(fetch_timeout, remaining_seconds)
         if valuation_timeout > 0:
-            quote_payload, valuation_err, valuation_ms = self._run_with_retry(
-                lambda: self.get_realtime_quote(stock_code),
-                valuation_timeout,
-                "fundamental_valuation",
-            )
+            if market == "vn":
+                quote_payload, valuation_err, valuation_ms = self._run_with_retry(
+                    lambda: self.get_vietnam_company_profile(stock_code),
+                    valuation_timeout,
+                    "vnstock_company_profile",
+                )
+            else:
+                quote_payload, valuation_err, valuation_ms = self._run_with_retry(
+                    lambda: self.get_realtime_quote(stock_code),
+                    valuation_timeout,
+                    "fundamental_valuation",
+                )
             _consume_budget(valuation_ms)
         else:
             quote_payload, valuation_err, valuation_ms = None, "fundamental stage timeout", 0
 
         valuation_payload = {
-            "pe_ratio": getattr(quote_payload, "pe_ratio", None) if quote_payload else None,
-            "pb_ratio": getattr(quote_payload, "pb_ratio", None) if quote_payload else None,
-            "total_mv": getattr(quote_payload, "total_mv", None) if quote_payload else None,
-            "circ_mv": getattr(quote_payload, "circ_mv", None) if quote_payload else None,
+            "pe_ratio": (
+                quote_payload.get("pe_ratio")
+                if isinstance(quote_payload, dict)
+                else getattr(quote_payload, "pe_ratio", None) if quote_payload else None
+            ),
+            "pb_ratio": (
+                quote_payload.get("pb_ratio")
+                if isinstance(quote_payload, dict)
+                else getattr(quote_payload, "pb_ratio", None) if quote_payload else None
+            ),
+            "total_mv": (
+                quote_payload.get("total_mv")
+                if isinstance(quote_payload, dict)
+                else getattr(quote_payload, "total_mv", None) if quote_payload else None
+            ),
+            "circ_mv": (
+                quote_payload.get("circ_mv")
+                if isinstance(quote_payload, dict)
+                else getattr(quote_payload, "circ_mv", None) if quote_payload else None
+            ),
         }
         valuation_status = self._infer_block_status(
             valuation_payload,
@@ -3314,8 +3362,12 @@ class DataFetcherManager:
             valuation_status,
             valuation_payload,
             self._normalize_source_chain(
-                [{"provider": "realtime_quote", "result": valuation_status, "duration_ms": valuation_ms}],
-                "realtime_quote",
+                [{
+                    "provider": "vnstock_company_profile" if market == "vn" else "realtime_quote",
+                    "result": valuation_status,
+                    "duration_ms": valuation_ms,
+                }],
+                "vnstock_company_profile" if market == "vn" else "realtime_quote",
                 valuation_status,
                 valuation_ms,
             ),

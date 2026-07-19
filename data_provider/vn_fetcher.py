@@ -36,6 +36,7 @@ class VnFetcher(BaseFetcher):
             "daily_data",
             "realtime_quote",
             "stock_name",
+            "company_profile",
             "ownership",
             "market_flow",
         }
@@ -115,8 +116,13 @@ class VnFetcher(BaseFetcher):
         symbol = self._local_symbol(stock_code)
         if not symbol:
             return None
-        profile = vn_provider.get_vietnam_company_profile(symbol)
+        profile = self.get_company_profile(stock_code)
         return profile.get("company_name") or profile.get("name") or symbol
+
+    def get_company_profile(self, stock_code: str) -> dict:
+        """Return Vietnam company profile and valuation ratios."""
+        symbol = self._local_symbol(stock_code)
+        return vn_provider.get_vietnam_company_profile(symbol) if symbol else {}
 
     def get_ownership_structure(self, stock_code: str) -> dict:
         """Return disclosed ownership records; never label them as order flow."""

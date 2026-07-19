@@ -1043,6 +1043,9 @@ class Config:
     enable_realtime_technical_indicators: bool = True
     # 技术指标历史窗口（日历日）；365 通常覆盖至少 200 个交易日
     technical_lookback_days: int = 365
+    # 越南结算等待期风险启发式；仅使用确定性的历史 OHLCV 与技术支撑位
+    settlement_risk_enabled: bool = True
+    settlement_risk_lookback_sessions: int = 120
     # 筹码分布开关（该接口不稳定，云端部署建议关闭）
     enable_chip_distribution: bool = True
     # 越南市场高级资金流（vnstock_data sponsor：外资/自营）；主动买卖仍使用免费逐笔数据
@@ -2038,6 +2041,17 @@ class Config:
                 365,
                 field_name='TECHNICAL_LOOKBACK_DAYS',
                 minimum=200,
+            ),
+            settlement_risk_enabled=parse_env_bool(
+                os.getenv('SETTLEMENT_RISK_ENABLED'),
+                default=True,
+            ),
+            settlement_risk_lookback_sessions=parse_env_int(
+                os.getenv('SETTLEMENT_RISK_LOOKBACK_SESSIONS'),
+                120,
+                field_name='SETTLEMENT_RISK_LOOKBACK_SESSIONS',
+                minimum=30,
+                maximum=500,
             ),
             enable_chip_distribution=os.getenv('ENABLE_CHIP_DISTRIBUTION', 'true').lower() == 'true',
             enable_vn_advanced_flow=os.getenv('ENABLE_VN_ADVANCED_FLOW', 'false').lower() == 'true',

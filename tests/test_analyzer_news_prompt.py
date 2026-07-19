@@ -159,6 +159,10 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
         self.assertIn("Vietnam Midday Break Mode", prompt)
         self.assertIn("This is a midday analysis of the morning session", prompt)
         self.assertIn("Action Checklist for the 13:00 reopening", prompt)
+        self.assertIn("sector_health", prompt)
+        self.assertIn("decision_scenarios", prompt)
+        self.assertIn("complete Vietnamese sentences", prompt)
+        self.assertIn("closing summary", prompt)
         self.assertNotIn("All human-readable JSON values must be written in English.", prompt)
 
     def test_format_prompt_for_vietnamese_market_forces_dashboard_values_to_vietnamese(self) -> None:

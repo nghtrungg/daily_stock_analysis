@@ -66,6 +66,9 @@ def build_decision_signal_payload_from_report(
     )
     raw_action = _raw_action_from_report(result)
     guardrail_reason = _extract_guardrail_reason(result, dashboard, score=score, raw_action=raw_action)
+    settlement_snapshot = _sanitized_settlement_snapshot(
+        getattr(result, "settlement_snapshot", None)
+    )
     action_fields = build_action_fields(
         operation_advice=getattr(result, "operation_advice", None),
         explicit_action=getattr(result, "action", None),
@@ -73,7 +76,7 @@ def build_decision_signal_payload_from_report(
         report_language=getattr(result, "report_language", None),
         sentiment_score=score,
         guardrail_reason=guardrail_reason,
-        align_with_score=True,
+        align_with_score=not bool(settlement_snapshot),
     )
     action = action_fields.get("action")
     if not action:
@@ -134,6 +137,13 @@ def build_decision_signal_payload_from_report(
             metadata["action_adjustment_reason"] = "canonical_score_alignment"
     if guardrail_reason:
         metadata["guardrail_reason"] = guardrail_reason
+    if settlement_snapshot:
+        metadata["settlement_snapshot"] = settlement_snapshot
+        metadata["settlement_reason_codes"] = [
+            str(item)
+            for item in (getattr(result, "reason_codes", None) or [])
+            if str(item).strip()
+        ][:5]
     market_phase_summary = _extract_market_phase_summary(context_snapshot, result)
     if market_phase_summary:
         metadata["market_phase_summary"] = market_phase_summary
@@ -386,6 +396,29 @@ def _extract_holding_state(portfolio_context: Optional[Mapping[str, Any]]) -> st
     if not math.isfinite(numeric_quantity):
         return "unknown"
     return "holding" if abs(numeric_quantity) > 0 else "empty"
+
+
+def _sanitized_settlement_snapshot(value: Any) -> Optional[Dict[str, Any]]:
+    snapshot = _as_mapping(value)
+    allowed_fields = (
+        "snapshot_version",
+        "scope",
+        "position_lifecycle",
+        "settlement_state",
+        "total_quantity",
+        "sellable_quantity",
+        "unsettled_quantity",
+        "next_sellable_at",
+        "maximum_sell_quantity",
+        "calendar_status",
+        "warnings",
+    )
+    sanitized = {
+        field: snapshot.get(field)
+        for field in allowed_fields
+        if field in snapshot
+    }
+    return sanitized or None
 
 
 def _risk_summary(result: AnalysisResult, dashboard: Mapping[str, Any]) -> Optional[Any]:

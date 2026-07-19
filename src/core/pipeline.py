@@ -20,6 +20,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import List, Dict, Any, Optional, Tuple, Callable
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -60,6 +61,18 @@ from src.analysis_context_pack_overview import render_analysis_context_pack_over
 from src.market_phase_summary import MARKET_PHASE_SUMMARY_KEY, render_market_phase_summary
 from src.daily_market_context_guardrail import apply_daily_market_context_guardrail
 from src.phase_decision_guardrail import apply_phase_decision_guardrails
+from src.settlement_decision_guardrail import (
+    apply_settlement_decision_guardrail,
+    resolve_analysis_settlement_context,
+)
+from src.settlement_risk_guardrail import apply_settlement_risk_guardrail
+from src.services.settlement_risk_service import (
+    SettlementRiskPolicy,
+    SettlementRiskService,
+)
+from src.services.vietnam_fundamental_fallback import (
+    apply_vietnam_fundamental_fallback,
+)
 from src.services.daily_market_context import (
     DailyMarketContext,
     DailyMarketContextService,
@@ -431,6 +444,18 @@ class StockAnalysisPipeline:
             portfolio_context = getattr(self, "portfolio_context", None)
             if not isinstance(portfolio_context, dict):
                 portfolio_context = None
+            if is_vn_market_symbol(code):
+                portfolio_context = resolve_analysis_settlement_context(
+                    code,
+                    portfolio_context=portfolio_context,
+                    as_of=(
+                        current_time.astimezone(
+                            ZoneInfo("Asia/Ho_Chi_Minh")
+                        ).date()
+                        if current_time is not None and current_time.tzinfo is not None
+                        else (current_time.date() if current_time is not None else None)
+                    ),
+                )
             market = get_market_for_stock(normalize_stock_code(code))
             market_phase_context = build_market_phase_context(
                 market=market,
@@ -542,6 +567,23 @@ class StockAnalysisPipeline:
             )
             if is_vn_market_symbol(code):
                 try:
+                    recent_fundamentals = self.db.get_recent_fundamental_snapshots(
+                        code,
+                        limit=25,
+                    )
+                except Exception as exc:
+                    logger.debug(
+                        "%s(%s) recent fundamental fallback read failed: %s",
+                        stock_name,
+                        code,
+                        exc,
+                    )
+                    recent_fundamentals = []
+                fundamental_context = apply_vietnam_fundamental_fallback(
+                    fundamental_context or {},
+                    recent_fundamentals,
+                )
+                try:
                     ownership = self.fetcher_manager.get_ownership_structure(code)
                 except Exception as exc:
                     logger.warning("%s(%s) ownership fetch failed: %s", stock_name, code, exc)
@@ -576,6 +618,8 @@ class StockAnalysisPipeline:
 
             # Step 3: 趋势分析（基于交易理念）— 在 Agent 分支之前执行，供两条路径共用
             trend_result: Optional[TrendAnalysisResult] = None
+            settlement_risk: Optional[Dict[str, Any]] = None
+            settlement_risk_df: Optional[pd.DataFrame] = None
             try:
                 from src.services.history_loader import get_frozen_target_date
                 _mkt = get_market_for_stock(normalize_stock_code(code))
@@ -587,6 +631,7 @@ class StockAnalysisPipeline:
                 historical_bars = self.db.get_data_range(code, start_date, end_date)
                 if historical_bars:
                     df = pd.DataFrame([bar.to_dict() for bar in historical_bars])
+                    settlement_risk_df = df.copy()
                     # Issue #234: Augment with realtime for intraday MA calculation
                     if self.config.enable_realtime_quote and realtime_quote:
                         df = self._augment_historical_with_realtime(df, realtime_quote, code)
@@ -595,6 +640,11 @@ class StockAnalysisPipeline:
                               f"买入信号={trend_result.buy_signal.value}, 评分={trend_result.signal_score}")
             except Exception as e:
                 logger.warning(f"{stock_name}({code}) 趋势分析失败: {e}", exc_info=True)
+            settlement_risk = self._calculate_settlement_risk(
+                code=code,
+                historical_df=settlement_risk_df,
+                trend_result=trend_result,
+            )
 
             if use_agent:
                 logger.info(f"{stock_name}({code}) 启用 Agent 模式进行分析")
@@ -612,6 +662,7 @@ class StockAnalysisPipeline:
                     market_phase_summary=market_phase_summary,
                     daily_market_context=daily_market_context,
                     portfolio_context=portfolio_context,
+                    settlement_risk=settlement_risk,
                 )
 
             # Step 4: 多维度情报搜索（最新消息+风险排查+业绩预期）
@@ -718,6 +769,8 @@ class StockAnalysisPipeline:
             )
             if portfolio_context is not None:
                 enhanced_context["portfolio_context"] = dict(portfolio_context)
+            if settlement_risk is not None:
+                enhanced_context["settlement_risk"] = dict(settlement_risk)
             
             # Step 7: 调用 AI 分析（传入增强的上下文和新闻）
             (
@@ -739,6 +792,7 @@ class StockAnalysisPipeline:
                     news_result_count=news_result_count,
                     query_id=query_id,
                     portfolio_context=portfolio_context,
+                    settlement_risk=settlement_risk,
                 ),
                 report_language=report_language,
                 code=code,
@@ -856,6 +910,30 @@ class StockAnalysisPipeline:
                     report_type=report_type.value,
                     previous_operation_advice=action_source_advice,
                 )
+                settlement_adjustments = (
+                    apply_settlement_decision_guardrail(
+                        result,
+                        (portfolio_context or {}).get("settlement_snapshot"),
+                    )
+                    if is_vn_market_symbol(code)
+                    else []
+                )
+                if settlement_adjustments:
+                    logger.info(
+                        "[settlement_decision_guardrail] Applied adjustments for %s: %s",
+                        code,
+                        settlement_adjustments,
+                    )
+                settlement_risk_adjustments = apply_settlement_risk_guardrail(
+                    result,
+                    settlement_risk,
+                )
+                if settlement_risk_adjustments:
+                    logger.info(
+                        "[settlement_risk_guardrail] Applied adjustments for %s: %s",
+                        code,
+                        settlement_risk_adjustments,
+                    )
 
             # Step 8: 保存分析历史记录
             if result and result.success:
@@ -1294,6 +1372,7 @@ class StockAnalysisPipeline:
         market_phase_summary: Optional[Dict[str, Any]] = None,
         daily_market_context: Optional[DailyMarketContext] = None,
         portfolio_context: Optional[Dict[str, Any]] = None,
+        settlement_risk: Optional[Dict[str, Any]] = None,
     ) -> Optional[AnalysisResult]:
         """
         使用 Agent 模式分析单只股票。
@@ -1323,6 +1402,8 @@ class StockAnalysisPipeline:
             }
             if isinstance(portfolio_context, dict):
                 initial_context["portfolio_context"] = dict(portfolio_context)
+            if isinstance(settlement_risk, dict):
+                initial_context["settlement_risk"] = dict(settlement_risk)
             if self.analysis_skills is not None:
                 initial_context["skills"] = self.analysis_skills
             if market_phase_context is not None:
@@ -1515,6 +1596,30 @@ class StockAnalysisPipeline:
                     report_type=report_type.value,
                     previous_operation_advice=action_source_advice,
                 )
+                settlement_adjustments = (
+                    apply_settlement_decision_guardrail(
+                        result,
+                        (portfolio_context or {}).get("settlement_snapshot"),
+                    )
+                    if is_vn_market_symbol(code)
+                    else []
+                )
+                if settlement_adjustments:
+                    logger.info(
+                        "[settlement_decision_guardrail] Applied agent adjustments for %s: %s",
+                        code,
+                        settlement_adjustments,
+                    )
+                settlement_risk_adjustments = apply_settlement_risk_guardrail(
+                    result,
+                    settlement_risk,
+                )
+                if settlement_risk_adjustments:
+                    logger.info(
+                        "[settlement_risk_guardrail] Applied agent adjustments for %s: %s",
+                        code,
+                        settlement_risk_adjustments,
+                    )
 
             resolved_stock_name = result.name if result and result.name else stock_name
 
@@ -2662,6 +2767,7 @@ class StockAnalysisPipeline:
         news_result_count: Optional[int],
         query_id: str,
         portfolio_context: Optional[Dict[str, Any]] = None,
+        settlement_risk: Optional[Dict[str, Any]] = None,
     ) -> PipelineAnalysisArtifacts:
         return PipelineAnalysisArtifacts(
             code=code,
@@ -2681,6 +2787,7 @@ class StockAnalysisPipeline:
                 "trigger_source": self.query_source,
             },
             portfolio_context=dict(portfolio_context) if isinstance(portfolio_context, dict) else None,
+            settlement_risk=dict(settlement_risk) if isinstance(settlement_risk, dict) else None,
         )
 
     def _build_agent_analysis_artifacts(
@@ -2731,7 +2838,79 @@ class StockAnalysisPipeline:
                 "trigger_source": self.query_source,
             },
             portfolio_context=dict(portfolio_context) if isinstance(portfolio_context, dict) else None,
+            settlement_risk=(
+                dict(initial_context["settlement_risk"])
+                if isinstance(initial_context.get("settlement_risk"), dict)
+                else None
+            ),
         )
+
+    def _calculate_settlement_risk(
+        self,
+        *,
+        code: str,
+        historical_df: Optional[pd.DataFrame],
+        trend_result: Optional[TrendAnalysisResult],
+    ) -> Optional[Dict[str, Any]]:
+        """Build the authoritative PR5 block without network or LLM input."""
+
+        if not is_vn_market_symbol(code):
+            return None
+        if not getattr(self.config, "settlement_risk_enabled", True):
+            return None
+        if historical_df is None or historical_df.empty:
+            return SettlementRiskService(
+                SettlementRiskPolicy(
+                    lookback_sessions=int(
+                        getattr(
+                            self.config,
+                            "settlement_risk_lookback_sessions",
+                            120,
+                        )
+                    )
+                )
+            ).assess(None).model_dump(mode="json")
+
+        support_level = None
+        risk_trend_result = trend_result
+        try:
+            # The main trend result may contain an incomplete realtime overlay.
+            # Recalculate only the deterministic technical levels from the same
+            # completed daily bars used by the risk estimate.
+            risk_trend_result = self.trend_analyzer.analyze(
+                historical_df.copy(),
+                code,
+            )
+        except Exception as exc:
+            logger.debug(
+                "[%s] completed-session support recalculation failed: %s",
+                code,
+                exc,
+            )
+        support_levels = (
+            getattr(risk_trend_result, "support_levels", None)
+            if risk_trend_result is not None
+            else None
+        )
+        if support_levels:
+            support_level = support_levels[0]
+        try:
+            policy = SettlementRiskPolicy(
+                lookback_sessions=int(
+                    getattr(
+                        self.config,
+                        "settlement_risk_lookback_sessions",
+                        120,
+                    )
+                )
+            )
+            return SettlementRiskService(policy).assess(
+                historical_df,
+                support_level=support_level,
+            ).model_dump(mode="json")
+        except Exception as exc:
+            logger.warning("[%s] settlement-risk calculation failed: %s", code, exc)
+            return None
 
     def _build_analysis_context_pack_outputs(
         self,

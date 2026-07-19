@@ -18,7 +18,7 @@ from src.config import (
 from src.notification_noise import NOTIFICATION_SEVERITIES
 from src.notification_routing import ROUTABLE_NOTIFICATION_CHANNELS
 
-SCHEMA_VERSION = "2026-06-29-claude-code-cli-backend"
+SCHEMA_VERSION = "2026-07-18-settlement-risk"
 
 _CATEGORY_DEFINITIONS: List[Dict[str, Any]] = [
     {
@@ -1190,6 +1190,58 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
             {
                 "label": "完整指南：数据源配置",
                 "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#数据源配置",
+            },
+        ],
+        "warning_codes": [],
+    },
+    "SETTLEMENT_RISK_ENABLED": {
+        "title": "Enable Settlement Risk",
+        "description": "Attach the deterministic Vietnam settlement-window risk heuristic to analysis reports.",
+        "category": "data_source",
+        "data_type": "boolean",
+        "ui_control": "switch",
+        "is_sensitive": False,
+        "is_required": False,
+        "is_editable": True,
+        "default_value": "true",
+        "options": [],
+        "validation": {},
+        "display_order": 23,
+        "help_key": "settings.data_source.realtime_quotes",
+        "examples": [
+            "SETTLEMENT_RISK_ENABLED=true",
+            "SETTLEMENT_RISK_ENABLED=false",
+        ],
+        "docs": [
+            {
+                "label": "Settlement-risk methodology",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/settlement-risk.md",
+            },
+        ],
+        "warning_codes": [],
+    },
+    "SETTLEMENT_RISK_LOOKBACK_SESSIONS": {
+        "title": "Settlement Risk Lookback Sessions",
+        "description": "Number of validated daily sessions retained for the Vietnam settlement-risk heuristic.",
+        "category": "data_source",
+        "data_type": "integer",
+        "ui_control": "number",
+        "is_sensitive": False,
+        "is_required": False,
+        "is_editable": True,
+        "default_value": "120",
+        "options": [],
+        "validation": {"minimum": 30, "maximum": 500},
+        "display_order": 24,
+        "help_key": "settings.data_source.realtime_quotes",
+        "examples": [
+            "SETTLEMENT_RISK_LOOKBACK_SESSIONS=120",
+            "SETTLEMENT_RISK_LOOKBACK_SESSIONS=180",
+        ],
+        "docs": [
+            {
+                "label": "Settlement-risk methodology",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/settlement-risk.md",
             },
         ],
         "warning_codes": [],

@@ -14,6 +14,8 @@ BLOCK_LABELS_ZH = {
     "chip": "筹码",
     "fundamentals": "基本面",
     "news": "新闻",
+    "portfolio": "持仓",
+    "settlement": "结算",
 }
 
 BLOCK_LABELS_EN = {
@@ -23,6 +25,8 @@ BLOCK_LABELS_EN = {
     "chip": "chip",
     "fundamentals": "fundamentals",
     "news": "news",
+    "portfolio": "portfolio",
+    "settlement": "settlement",
 }
 
 STATUS_LABELS_ZH = {
@@ -179,6 +183,7 @@ def _format_zh(payload: Dict[str, Any]) -> str:
     warnings = _list_strings(_nested(payload, "data_quality", "warnings"))
     if warnings:
         lines.append(f"- 数据质量提醒：{_join_text(warnings, lang='zh')}")
+    lines.extend(_settlement_constraint_lines(payload, lang="zh"))
     lines.extend(_data_limitation_lines(payload, lang="zh"))
     return "\n".join(lines) + "\n"
 
@@ -196,6 +201,7 @@ def _format_en(payload: Dict[str, Any]) -> str:
     warnings = _list_strings(_nested(payload, "data_quality", "warnings"))
     if warnings:
         lines.append(f"- Data quality notes: {_join_text(warnings, lang='en')}")
+    lines.extend(_settlement_constraint_lines(payload, lang="en"))
     lines.extend(_data_limitation_lines(payload, lang="en"))
     return "\n".join(lines) + "\n"
 
@@ -284,6 +290,51 @@ def _metadata_lines(payload: Dict[str, Any], *, lang: str) -> List[str]:
         f"- News result count: {news_count}"
         if lang == "en"
         else f"- 新闻结果数：{news_count}"
+    ]
+
+
+def _settlement_constraint_lines(
+    payload: Dict[str, Any],
+    *,
+    lang: str,
+) -> List[str]:
+    block = _nested(payload, "blocks", "settlement")
+    if not isinstance(block, Mapping):
+        return []
+    items = block.get("items")
+    if not isinstance(items, Mapping):
+        return []
+
+    def value(key: str) -> Any:
+        item = items.get(key)
+        return item.get("value") if isinstance(item, Mapping) else None
+
+    fields = (
+        "position_lifecycle",
+        "account_count",
+        "settlement_state",
+        "total_quantity",
+        "sellable_quantity",
+        "unsettled_quantity",
+        "next_sellable_at",
+        "maximum_sell_quantity",
+        "calendar_status",
+        "snapshot_version",
+    )
+    details = [f"{key}={value(key)}" for key in fields if value(key) is not None]
+    if not details:
+        return []
+    if lang == "en":
+        return [
+            "- Authoritative settlement constraint: " + "; ".join(details),
+            "- Settlement rule: these backend values are authoritative. Do not "
+            "calculate or replace quantities/dates, and never recommend selling "
+            "more than maximum_sell_quantity.",
+        ]
+    return [
+        "- 权威结算约束：" + "；".join(details),
+        "- 结算规则：以上后端数值为权威值；不得自行计算或替换数量/日期，"
+        "且不得建议卖出超过 maximum_sell_quantity。",
     ]
 
 

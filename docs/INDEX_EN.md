@@ -61,6 +61,11 @@ This is the entry point for project documentation. The README covers the project
 | Document | Contents |
 | --- | --- |
 | [API Spec](architecture/api_spec.json) | FastAPI OpenAPI artifact |
+| [Market Support Boundaries](market-support.md) | Market routing, Vietnam-local defaults, and provider degradation |
+| [Vietnam Settlement Calendar And Schema Migrations](settlement-calendar.md) | Versioned Vietnam closures, T+2 calculation status, migrations, and rollback |
+| [Vietnam Settlement-Window Risk Heuristic](settlement-risk.md) | Deterministic historical estimates, score policy, API fields, limitations, and rollback |
+| [DecisionSignal Trade Links And Settlement Alerts](settlement-signal-alerts.md) | Recommendation-to-purchase traceability, persistent lifecycle transitions, notifications, and rollback |
+| [Settlement-Aware Outcome Measurement](settlement-outcomes.md) | Versioned hypothetical and linked-execution outcomes, daily-bar ambiguity, aggregates, scheduler behavior, and rollback |
 | [Contributing Guide (EN)](CONTRIBUTING_EN.md) | Issues, pull requests, tests, documentation sync, and collaboration expectations |
 
 ## Languages

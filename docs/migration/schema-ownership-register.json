@@ -1,0 +1,110 @@
+{
+  "contract_version": 1,
+  "repositories": {
+    "daily_stock_analysis": {
+      "path": ".",
+      "role": "legacy SQLite and future private compute schema owner"
+    },
+    "personal_stock_tracking": {
+      "baseline_path": "personal-stock-tracking",
+      "status": "externalized/deleted in the active working tree",
+      "role": "dashboard and public Supabase contract owner"
+    }
+  },
+  "objects": [
+    {
+      "object_type": "table_set",
+      "names_from": "docs/migration/pr0-schema-inventory.json#tables",
+      "namespace": "legacy SQLite; future private dsa schema",
+      "owner": "daily_stock_analysis",
+      "migration_path": "src/storage.py and src/schema_migrations.py (legacy only)"
+    },
+    {
+      "object_type": "table",
+      "names": [
+        "public.analysis_runs",
+        "public.portfolio_cash_entries",
+        "public.portfolio_transactions",
+        "public.portfolio_wallets",
+        "public.watchlist_symbols"
+      ],
+      "owner": "personal_stock_tracking",
+      "migration_path": "personal-stock-tracking/supabase/migrations"
+    },
+    {
+      "object_type": "function",
+      "names": [
+        "private.enforce_analysis_cooldown",
+        "private.lock_portfolio_wallet",
+        "private.minimum_opening_balance",
+        "private.portfolio_ledger_snapshot",
+        "private.portfolio_trade_cash_effect",
+        "private.refresh_portfolio_wallet",
+        "private.replay_portfolio_ledger",
+        "public.delete_cash_entry",
+        "public.delete_portfolio_trade",
+        "public.record_cash_entry",
+        "public.record_portfolio_trade",
+        "public.update_cash_entry",
+        "public.update_portfolio_trade"
+      ],
+      "owner": "personal_stock_tracking",
+      "migration_path": "personal-stock-tracking/supabase/migrations"
+    },
+    {
+      "object_type": "trigger",
+      "names": [
+        "public.analysis_runs.analysis_runs_enforce_cooldown"
+      ],
+      "owner": "personal_stock_tracking",
+      "migration_path": "personal-stock-tracking/supabase/migrations"
+    },
+    {
+      "object_type": "rls_policy",
+      "names": [
+        "public.analysis_runs.analysis runs are visible to their owner",
+        "public.portfolio_cash_entries.portfolio cash entries are visible to their owner",
+        "public.portfolio_transactions.portfolio transactions are visible to their owner",
+        "public.portfolio_wallets.portfolio wallets are visible to their owner",
+        "public.watchlist_symbols.watchlist symbols are created by their owner",
+        "public.watchlist_symbols.watchlist symbols are deleted by their owner",
+        "public.watchlist_symbols.watchlist symbols are visible to their owner"
+      ],
+      "owner": "personal_stock_tracking",
+      "migration_path": "personal-stock-tracking/supabase/migrations"
+    },
+    {
+      "object_type": "view",
+      "names": [],
+      "owner": "none at baseline",
+      "migration_path": "not created"
+    },
+    {
+      "object_type": "enum",
+      "names": [],
+      "owner": "none at baseline",
+      "migration_path": "not created"
+    },
+    {
+      "object_type": "production_migration_workflow",
+      "names": [
+        "dashboard public schema deployment"
+      ],
+      "owner": "personal_stock_tracking",
+      "migration_path": "dashboard repository protected Supabase deployment path"
+    },
+    {
+      "object_type": "production_migration_workflow",
+      "names": [
+        "dsa private compute schema deployment"
+      ],
+      "owner": "daily_stock_analysis",
+      "migration_path": "future protected manual workflow; must not deploy dashboard-owned DDL"
+    }
+  ],
+  "review_gate": {
+    "duplicate_owner_count": 0,
+    "unowned_current_object_count": 0,
+    "external_confirmation_required_before_pr1": true
+  }
+}

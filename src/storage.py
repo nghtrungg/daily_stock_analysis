@@ -12,7 +12,7 @@ A股自选股智能分析系统 - 存储层
 """
 
 import atexit
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import hashlib
 import json
 import logging
@@ -57,12 +57,70 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 
 from src.agent.provider_trace import PROVIDER_TRACE_RETENTION_LIMIT
 from src.config import get_config
+from src.schema_migrations import SchemaMigration, run_ordered_migrations
 from src.utils.sniper_points import extract_sniper_points, parse_sniper_value
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
-CURRENT_SCHEMA_VERSION = "2026-06-05-create-all-baseline"
+BASELINE_SCHEMA_VERSION = "2026-06-05-create-all-baseline"
 INTELLIGENCE_ITEM_NULL_SCOPE_VALUE = "__dsa_null_scope__"
+
+
+def _record_create_all_baseline(_connection, _manager) -> None:
+    """Record the pre-runner create_all baseline without changing user data."""
+
+
+def _apply_ordered_migration_foundation(connection, manager) -> None:
+    """Bring legacy SQLite compatibility repairs under the ordered runner."""
+    manager._ensure_llm_usage_telemetry_columns(connection=connection)
+    manager._ensure_intelligence_item_scope_values(connection=connection)
+    manager._ensure_intelligence_items_unique_index(connection=connection)
+
+
+def _apply_settlement_aware_ledger_migration(connection, manager) -> None:
+    """Add nullable settlement-ledger fields without rewriting portfolio data."""
+    manager._ensure_portfolio_settlement_schema(connection=connection)
+
+
+def _apply_settlement_signal_alert_migration(connection, _manager) -> None:
+    """Add PR6 signal linkage and persistent settlement-alert state."""
+    DecisionSignalTradeLink.__table__.create(connection, checkfirst=True)
+    SettlementAlertStateRecord.__table__.create(connection, checkfirst=True)
+
+
+def _apply_settlement_outcome_migration(connection, _manager) -> None:
+    """Add PR7 versioned signal and execution outcome sidecars."""
+    SettlementOutcomeRecord.__table__.create(connection, checkfirst=True)
+
+
+ORDERED_SCHEMA_MIGRATIONS = (
+    SchemaMigration(
+        version=BASELINE_SCHEMA_VERSION,
+        description="Baseline schema created through SQLAlchemy metadata.create_all",
+        upgrade=_record_create_all_baseline,
+    ),
+    SchemaMigration(
+        version="2026-07-18-ordered-migration-foundation",
+        description="Adopt ordered migrations and apply existing SQLite compatibility repairs",
+        upgrade=_apply_ordered_migration_foundation,
+    ),
+    SchemaMigration(
+        version="2026-07-18-settlement-aware-ledger",
+        description="Add trade execution, settlement sidecar, and derived settlement cache fields",
+        upgrade=_apply_settlement_aware_ledger_migration,
+    ),
+    SchemaMigration(
+        version="2026-07-18-settlement-signal-alerts",
+        description="Add DecisionSignal trade links and settlement alert transition state",
+        upgrade=_apply_settlement_signal_alert_migration,
+    ),
+    SchemaMigration(
+        version="2026-07-18-settlement-z-outcomes",
+        description="Add versioned settlement-aware signal and execution outcomes",
+        upgrade=_apply_settlement_outcome_migration,
+    ),
+)
+CURRENT_SCHEMA_VERSION = ORDERED_SCHEMA_MIGRATIONS[-1].version
 
 # SQLAlchemy ORM 基类
 Base = declarative_base()
@@ -517,6 +575,9 @@ class PortfolioTrade(Base):
     market = Column(String(8), nullable=False, default='vn')
     currency = Column(String(8), nullable=False, default='VND')
     trade_date = Column(Date, nullable=False, index=True)
+    # UTC-naive persistence of an explicitly supplied execution timestamp.
+    # ``None`` preserves legacy/date-only records without fabricating precision.
+    executed_at = Column(DateTime, nullable=True)
     side = Column(String(8), nullable=False)  # buy/sell
     quantity = Column(Float, nullable=False)
     price = Column(Float, nullable=False)
@@ -530,6 +591,33 @@ class PortfolioTrade(Base):
         UniqueConstraint('account_id', 'trade_uid', name='uix_portfolio_trade_uid'),
         UniqueConstraint('account_id', 'dedup_hash', name='uix_portfolio_trade_dedup_hash'),
         Index('ix_portfolio_trade_account_date', 'account_id', 'trade_date'),
+    )
+
+
+class PortfolioTradeSettlement(Base):
+    """Frozen deterministic settlement provenance for one buy trade."""
+
+    __tablename__ = 'portfolio_trade_settlements'
+
+    trade_id = Column(
+        Integer,
+        ForeignKey('portfolio_trades.id', ondelete='CASCADE'),
+        primary_key=True,
+    )
+    settlement_date = Column(Date, nullable=False, index=True)
+    # UTC-naive values; service boundaries convert to Asia/Ho_Chi_Minh.
+    estimated_sellable_at = Column(DateTime, nullable=False, index=True)
+    actual_sellable_at = Column(DateTime, nullable=True, index=True)
+    calendar_version = Column(String(255), nullable=False)
+    policy_version = Column(String(64), nullable=False)
+    calculation_status = Column(String(16), nullable=False, index=True)
+    warnings_json = Column(Text, nullable=False, default='[]')
+    created_at = Column(DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = Column(
+        DateTime,
+        default=datetime.now,
+        onupdate=datetime.now,
+        nullable=False,
     )
 
 
@@ -592,6 +680,12 @@ class PortfolioPosition(Base):
     market_value_base = Column(Float, nullable=False, default=0.0)
     unrealized_pnl_base = Column(Float, nullable=False, default=0.0)
     valuation_currency = Column(String(8), nullable=False, default='VND')
+    position_lifecycle = Column(String(16), nullable=False, default='open')
+    settlement_state = Column(String(24), nullable=False, default='unknown')
+    sellable_quantity = Column(Float, nullable=False, default=0.0)
+    unsettled_quantity = Column(Float, nullable=False, default=0.0)
+    next_sellable_at = Column(DateTime, nullable=True)
+    settlement_calculation_status = Column(String(16), nullable=False, default='unknown')
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, index=True)
 
     __table_args__ = (
@@ -621,6 +715,10 @@ class PortfolioPositionLot(Base):
     remaining_quantity = Column(Float, nullable=False, default=0.0)
     unit_cost = Column(Float, nullable=False, default=0.0)
     source_trade_id = Column(Integer, ForeignKey('portfolio_trades.id'))
+    estimated_sellable_at = Column(DateTime, nullable=True)
+    actual_sellable_at = Column(DateTime, nullable=True)
+    settlement_state = Column(String(24), nullable=False, default='unknown')
+    calendar_status = Column(String(16), nullable=False, default='unknown')
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, index=True)
 
     __table_args__ = (
@@ -1044,6 +1142,88 @@ class DecisionSignalRecord(Base):
     )
 
 
+class DecisionSignalTradeLink(Base):
+    """Trace one executed entry trade to its source recommendation."""
+
+    __tablename__ = 'decision_signal_trade_links'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    signal_id = Column(
+        Integer,
+        ForeignKey('decision_signals.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    trade_id = Column(
+        Integer,
+        ForeignKey('portfolio_trades.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    link_type = Column(
+        String(32),
+        nullable=False,
+        default='source_recommendation',
+        index=True,
+    )
+    created_at = Column(DateTime, default=utc_naive_now, nullable=False, index=True)
+
+    __table_args__ = (
+        UniqueConstraint(
+            'signal_id',
+            'trade_id',
+            'link_type',
+            name='uix_decision_signal_trade_link',
+        ),
+        UniqueConstraint(
+            'trade_id',
+            'link_type',
+            name='uix_trade_source_recommendation_link',
+        ),
+    )
+
+
+class SettlementAlertStateRecord(Base):
+    """Latest deterministic state observed for one account/symbol position."""
+
+    __tablename__ = 'settlement_alert_states'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    account_id = Column(
+        Integer,
+        ForeignKey('portfolio_accounts.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    symbol = Column(String(16), nullable=False, index=True)
+    market = Column(String(8), nullable=False, default='vn', index=True)
+    settlement_state = Column(String(24), nullable=False, default='unknown')
+    total_quantity = Column(Float, nullable=False, default=0.0)
+    sellable_quantity = Column(Float, nullable=False, default=0.0)
+    unsettled_quantity = Column(Float, nullable=False, default=0.0)
+    thesis_invalidated = Column(Boolean, nullable=False, default=False)
+    source_signal_id = Column(Integer, nullable=True, index=True)
+    risk_level = Column(String(16), nullable=True)
+    risk_rank = Column(Integer, nullable=True)
+    risk_policy_version = Column(String(64), nullable=True)
+    observed_at = Column(DateTime, nullable=False, default=utc_naive_now, index=True)
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=utc_naive_now,
+        onupdate=utc_naive_now,
+        index=True,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            'account_id',
+            'symbol',
+            name='uix_settlement_alert_state_account_symbol',
+        ),
+    )
+
+
 class DecisionSignalOutcomeRecord(Base):
     """Signal-level forward outcome for Issue #1390 P5."""
 
@@ -1082,6 +1262,81 @@ class DecisionSignalOutcomeRecord(Base):
         UniqueConstraint('signal_id', 'horizon', 'engine_version', name='uix_decision_signal_outcome_key'),
         Index('ix_decision_signal_outcome_stats_action', 'engine_version', 'action', 'horizon'),
         Index('ix_decision_signal_outcome_stats_market', 'engine_version', 'market', 'horizon'),
+    )
+
+
+class SettlementOutcomeRecord(Base):
+    """Versioned settlement-aware outcome for a signal or linked execution."""
+
+    __tablename__ = 'settlement_outcomes'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    signal_id = Column(
+        Integer,
+        ForeignKey('decision_signals.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    source_trade_id = Column(
+        Integer,
+        ForeignKey('portfolio_trades.id', ondelete='CASCADE'),
+        nullable=True,
+        index=True,
+    )
+    outcome_type = Column(String(16), nullable=False, index=True)
+    record_key = Column(String(64), nullable=False)
+    engine_version = Column(String(64), nullable=False, index=True)
+    entry_policy_version = Column(String(64), nullable=False, index=True)
+    calendar_version = Column(String(255))
+    settlement_policy_version = Column(String(64))
+    anchor_date = Column(Date, index=True)
+    estimated_settlement_date = Column(Date, index=True)
+    estimated_first_sellable_at = Column(DateTime, index=True)
+    entry_price = Column(Float)
+    return_t1_pct = Column(Float)
+    return_t2_pct = Column(Float)
+    return_first_sellable_pct = Column(Float)
+    return_t5_pct = Column(Float)
+    return_t10_pct = Column(Float)
+    return_t20_pct = Column(Float)
+    mae_before_sellable_pct = Column(Float)
+    mfe_before_sellable_pct = Column(Float)
+    invalidation_before_sellable = Column(Boolean)
+    operationally_executable = Column(Boolean, nullable=False, default=False)
+    estimated_fee_pct = Column(Float)
+    estimated_slippage_pct = Column(Float)
+    net_return_first_sellable_pct = Column(Float)
+    data_quality = Column(String(24), nullable=False, default='unknown', index=True)
+    unavailable_reason = Column(String(64), index=True)
+    ambiguity_flags_json = Column(Text, nullable=False, default='[]')
+    settlement_risk_score = Column(Float)
+    survivability_bucket = Column(String(24), index=True)
+    liquidity_bucket = Column(String(24), index=True)
+    guarded_action = Column(String(16), index=True)
+    created_at = Column(DateTime, default=utc_naive_now, nullable=False, index=True)
+    updated_at = Column(
+        DateTime,
+        default=utc_naive_now,
+        onupdate=utc_naive_now,
+        nullable=False,
+        index=True,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            'signal_id',
+            'outcome_type',
+            'record_key',
+            'engine_version',
+            'entry_policy_version',
+            name='uix_settlement_outcome_versioned_key',
+        ),
+        Index(
+            'ix_settlement_outcome_stats',
+            'engine_version',
+            'outcome_type',
+            'guarded_action',
+        ),
     )
 
 
@@ -1180,10 +1435,7 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
 
             # 创建所有表
             Base.metadata.create_all(self._engine)
-            self._ensure_llm_usage_telemetry_columns()
-            self._ensure_intelligence_item_scope_values()
-            self._ensure_schema_migration_record()
-            self._ensure_intelligence_items_unique_index()
+            self._run_schema_migrations()
 
             self._initialized = True
             logger.info(f"数据库初始化完成: {db_url}")
@@ -1203,47 +1455,35 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
             raise
 
     def _ensure_schema_migration_record(self) -> None:
-        session = self._SessionLocal()
-        values = {
-            "version": CURRENT_SCHEMA_VERSION,
-            "description": "Baseline schema created through SQLAlchemy metadata.create_all",
-        }
-        try:
-            if self._is_sqlite_engine:
-                statement = sqlite_insert(DatabaseSchemaMigration).values(**values)
-                statement = statement.on_conflict_do_nothing(index_elements=["version"])
-                session.execute(statement)
-            else:
-                session.execute(DatabaseSchemaMigration.__table__.insert().values(**values))
-            session.commit()
-        except IntegrityError:
-            session.rollback()
-            with self._SessionLocal() as verify_session:
-                existing = verify_session.get(DatabaseSchemaMigration, CURRENT_SCHEMA_VERSION)
-            if existing is None:
-                raise
-        except Exception:
-            session.rollback()
-            raise
-        finally:
-            session.close()
+        """Compatibility alias for callers that previously recorded one marker."""
+        self._run_schema_migrations()
 
-    def _ensure_intelligence_items_unique_index(self) -> None:
+    def _run_schema_migrations(self) -> None:
+        run_ordered_migrations(
+            self._engine,
+            migration_table=DatabaseSchemaMigration.__tablename__,
+            migrations=ORDERED_SCHEMA_MIGRATIONS,
+            context=self,
+        )
+
+    def _ensure_intelligence_items_unique_index(self, *, connection=None) -> None:
         if not self._is_sqlite_engine:
             return
 
-        if not inspect(self._engine).has_table("intelligence_items"):
+        inspector_target = connection if connection is not None else self._engine
+        if not inspect(inspector_target).has_table("intelligence_items"):
             return
 
         try:
-            unique_indexes = self._list_sqlite_unique_indexes("intelligence_items")
-        except Exception as exc:
-            logger.warning(
-                "[Intelligence items] failed to inspect unique indexes; "
-                "skip migration/repair: %s",
-                exc,
+            unique_indexes = self._list_sqlite_unique_indexes(
+                "intelligence_items",
+                connection=connection,
             )
-            return
+        except Exception as exc:
+            raise RuntimeError(
+                "[Intelligence items] failed to inspect unique indexes; "
+                "cannot safely apply the required migration"
+            ) from exc
 
         target_columns = ("source_id", "url", "scope_type", "scope_value", "market")
         has_target_index = any(tuple(cols) == target_columns for cols in unique_indexes)
@@ -1254,12 +1494,14 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
         if unique_indexes and not has_legacy_url_unique:
             # Table has other unique index shapes; avoid aggressive changes and add
             # the expected scoped uniqueness directly.
-            self._ensure_intelligence_items_scoped_unique_index_once()
+            self._ensure_intelligence_items_scoped_unique_index_once(
+                connection=connection
+            )
             return
 
-        self._rebuild_intelligence_items_table()
+        self._rebuild_intelligence_items_table(connection=connection)
 
-    def _rebuild_intelligence_items_table(self) -> None:
+    def _rebuild_intelligence_items_table(self, *, connection=None) -> None:
         temporary_table = f"intelligence_items_recreate_tmp_{int(time.time() * 1_000_000_000)}"
         columns = [column.name for column in IntelligenceItem.__table__.columns]
         select_clause = ", ".join(f'"{column}"' for column in columns)
@@ -1273,46 +1515,52 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
             *(column.copy() for column in IntelligenceItem.__table__.columns),
         )
         logger.info("Rebuilding intelligence_items table to align composite uniqueness constraints.")
-        with self._engine.begin() as connection:
-            connection.execute(text(f'DROP TABLE IF EXISTS "{temporary_table}"'))
-            tmp_table.create(connection)
-            connection.execute(
+        owns_connection = connection is None
+        connection_context = self._engine.begin() if owns_connection else nullcontext(connection)
+        with connection_context as active_connection:
+            active_connection.execute(text(f'DROP TABLE IF EXISTS "{temporary_table}"'))
+            tmp_table.create(active_connection)
+            active_connection.execute(
                 text(
                     f"INSERT INTO \"{temporary_table}\" ({select_clause}) "
                     f"SELECT {select_clause} FROM intelligence_items"
                 )
             )
-            connection.execute(text('DROP TABLE "intelligence_items"'))
-            connection.execute(
+            active_connection.execute(text('DROP TABLE "intelligence_items"'))
+            active_connection.execute(
                 text(f'ALTER TABLE "{temporary_table}" RENAME TO intelligence_items')
             )
-            connection.execute(
+            active_connection.execute(
                 text(
                     f"CREATE UNIQUE INDEX IF NOT EXISTS {scoped_index_name} ON "
                     f"intelligence_items ({scoped_index_columns})"
                 )
             )
 
-    def _ensure_intelligence_items_scoped_unique_index_once(self) -> None:
+    def _ensure_intelligence_items_scoped_unique_index_once(self, *, connection=None) -> None:
         target_index_name = "uix_intel_item_scope"
-        with self._engine.begin() as connection:
-            rows = connection.execute(
+        owns_connection = connection is None
+        connection_context = self._engine.begin() if owns_connection else nullcontext(connection)
+        with connection_context as active_connection:
+            rows = active_connection.execute(
                 text("PRAGMA index_list(intelligence_items)")
             ).fetchall()
             for row in rows:
                 if row[1] == target_index_name:
                     return
             index_columns = ", ".join(["source_id", "url", "scope_type", "scope_value", "market"])
-            connection.execute(
+            active_connection.execute(
                 text(
                     f"CREATE UNIQUE INDEX IF NOT EXISTS {target_index_name} ON "
                     f"intelligence_items ({index_columns})"
                 )
             )
 
-    def _list_sqlite_unique_indexes(self, table_name: str):
-        with self._engine.connect() as connection:
-            rows = connection.execute(
+    def _list_sqlite_unique_indexes(self, table_name: str, *, connection=None):
+        owns_connection = connection is None
+        connection_context = self._engine.connect() if owns_connection else nullcontext(connection)
+        with connection_context as active_connection:
+            rows = active_connection.execute(
                 text(f"PRAGMA index_list({table_name})")
             ).fetchall()
             unique_indexes = []
@@ -1322,7 +1570,7 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
                     continue
                 index_name = row[1]
                 index_columns = []
-                for index_info in connection.execute(
+                for index_info in active_connection.execute(
                     text(f"PRAGMA index_xinfo({index_name})")
                 ).fetchall():
                     # index_xinfo: (seqno, cid, name, desc, coll, key, ... )
@@ -1333,79 +1581,112 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
                 unique_indexes.append(index_columns)
             return unique_indexes
 
-    def _ensure_llm_usage_telemetry_columns(self) -> None:
+    def _ensure_llm_usage_telemetry_columns(self, *, connection=None) -> None:
         """Add nullable P0a usage telemetry columns to existing SQLite DBs."""
         if not self._is_sqlite_engine:
             return
         try:
             existing = {
                 column["name"]
-                for column in inspect(self._engine).get_columns(LLMUsage.__tablename__)
+                for column in inspect(
+                    connection if connection is not None else self._engine
+                ).get_columns(LLMUsage.__tablename__)
             }
         except Exception as exc:
-            logger.warning(
+            raise RuntimeError(
                 "[LLM usage] failed to inspect telemetry columns; "
-                "skipping best-effort SQLite telemetry column backfill: %s",
-                exc,
-            )
-            return
+                "cannot safely apply the required migration"
+            ) from exc
 
-        max_retries = self._sqlite_write_retry_max
+        owns_connection = connection is None
         for column, column_type in _LLM_USAGE_TELEMETRY_COLUMN_SQL.items():
             if column in existing:
                 continue
-            for attempt in range(max_retries + 1):
-                try:
-                    with self._engine.begin() as connection:
-                        connection.exec_driver_sql(
-                            f"ALTER TABLE {LLMUsage.__tablename__} "
-                            f"ADD COLUMN {column} {column_type}"
-                        )
+            connection_context = self._engine.begin() if owns_connection else nullcontext(connection)
+            try:
+                with connection_context as active_connection:
+                    active_connection.exec_driver_sql(
+                        f"ALTER TABLE {LLMUsage.__tablename__} "
+                        f"ADD COLUMN {column} {column_type}"
+                    )
+                existing.add(column)
+            except OperationalError as exc:
+                if self._is_sqlite_duplicate_column_error(exc, column):
                     existing.add(column)
-                    break
-                except OperationalError as exc:
-                    if self._is_sqlite_duplicate_column_error(exc, column):
-                        existing.add(column)
-                        break
-                    if self._is_sqlite_locked_error(exc) and attempt < max_retries:
-                        delay = self._sqlite_write_retry_base_delay * (2 ** attempt)
-                        logger.warning(
-                            "[LLM usage] SQLite telemetry column backfill locked, "
-                            "retrying: %s (%s/%s, %.2fs)",
-                            column,
-                            attempt + 1,
-                            max_retries,
-                            delay,
-                        )
-                        if delay > 0:
-                            time.sleep(delay)
-                        continue
-                    raise
+                    continue
+                raise
 
-    def _ensure_intelligence_item_scope_values(self) -> None:
+    def _ensure_intelligence_item_scope_values(self, *, connection=None) -> None:
         """Backfill nullable intelligence item scopes so SQLite unique keys work."""
         if not self._is_sqlite_engine:
             return
         try:
             existing = {
                 column["name"]
-                for column in inspect(self._engine).get_columns(IntelligenceItem.__tablename__)
+                for column in inspect(
+                    connection if connection is not None else self._engine
+                ).get_columns(IntelligenceItem.__tablename__)
             }
         except Exception as exc:
-            logger.warning("资讯池 scope_value 回填检查失败，已跳过: %s", exc)
-            return
+            raise RuntimeError("资讯池 scope_value 回填检查失败") from exc
         if "scope_value" not in existing:
             return
-        try:
-            with self._engine.begin() as connection:
-                connection.exec_driver_sql(
+        owns_connection = connection is None
+        connection_context = self._engine.begin() if owns_connection else nullcontext(connection)
+        with connection_context as active_connection:
+            active_connection.exec_driver_sql(
                     f"UPDATE {IntelligenceItem.__tablename__} "
                     "SET scope_value = ? "
                     "WHERE scope_value IS NULL OR scope_value = ''",
                     (INTELLIGENCE_ITEM_NULL_SCOPE_VALUE,),
                 )
-        except Exception as exc:
-            logger.warning("资讯池 scope_value 回填失败，已跳过: %s", exc)
+
+    def _ensure_portfolio_settlement_schema(self, *, connection=None) -> None:
+        """Add PR 2 portfolio fields to an existing SQLite database."""
+        if not self._is_sqlite_engine:
+            return
+        active_connection = connection
+        if active_connection is None:
+            with self._engine.begin() as owned_connection:
+                self._ensure_portfolio_settlement_schema(connection=owned_connection)
+            return
+
+        PortfolioTradeSettlement.__table__.create(active_connection, checkfirst=True)
+        additions = {
+            PortfolioTrade.__tablename__: {
+                "executed_at": "DATETIME",
+            },
+            PortfolioPosition.__tablename__: {
+                "position_lifecycle": "VARCHAR(16) NOT NULL DEFAULT 'open'",
+                "settlement_state": "VARCHAR(24) NOT NULL DEFAULT 'unknown'",
+                "sellable_quantity": "FLOAT NOT NULL DEFAULT 0",
+                "unsettled_quantity": "FLOAT NOT NULL DEFAULT 0",
+                "next_sellable_at": "DATETIME",
+                "settlement_calculation_status": "VARCHAR(16) NOT NULL DEFAULT 'unknown'",
+            },
+            PortfolioPositionLot.__tablename__: {
+                "estimated_sellable_at": "DATETIME",
+                "actual_sellable_at": "DATETIME",
+                "settlement_state": "VARCHAR(24) NOT NULL DEFAULT 'unknown'",
+                "calendar_status": "VARCHAR(16) NOT NULL DEFAULT 'unknown'",
+            },
+        }
+        inspector = inspect(active_connection)
+        for table_name, table_additions in additions.items():
+            if not inspector.has_table(table_name):
+                continue
+            existing = {
+                column["name"]
+                for column in inspector.get_columns(table_name)
+            }
+            for column_name, column_sql in table_additions.items():
+                if column_name in existing:
+                    continue
+                active_connection.exec_driver_sql(
+                    f'ALTER TABLE "{table_name}" '
+                    f'ADD COLUMN "{column_name}" {column_sql}'
+                )
+                existing.add(column_name)
 
     @classmethod
     def get_instance(cls) -> 'DatabaseManager':
@@ -1850,6 +2131,51 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
                 return payload if isinstance(payload, dict) else None
             except Exception:
                 return None
+
+    def get_recent_fundamental_snapshots(
+        self,
+        code: str,
+        *,
+        limit: int = 25,
+    ) -> List[Dict[str, Any]]:
+        """Return recent fundamental payloads for deterministic stale fallback."""
+        normalized_code = str(code or "").strip()
+        if not normalized_code:
+            return []
+        safe_limit = max(1, min(int(limit), 100))
+        with self.get_session() as session:
+            try:
+                rows = session.execute(
+                    select(FundamentalSnapshot)
+                    .where(FundamentalSnapshot.code == normalized_code)
+                    .order_by(
+                        desc(FundamentalSnapshot.created_at),
+                        desc(FundamentalSnapshot.id),
+                    )
+                    .limit(safe_limit)
+                ).scalars().all()
+            except Exception as exc:
+                logger.debug(
+                    "Recent fundamental snapshot read failed (fail-open): code=%s err=%s",
+                    normalized_code,
+                    exc,
+                )
+                return []
+
+        snapshots: List[Dict[str, Any]] = []
+        for row in rows:
+            try:
+                payload = json.loads(row.payload or "{}")
+            except Exception:
+                continue
+            if not isinstance(payload, dict):
+                continue
+            snapshots.append({
+                "query_id": row.query_id,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+                "payload": payload,
+            })
+        return snapshots
 
     def get_recent_news(self, code: str, days: int = 7, limit: int = 20) -> List[NewsIntel]:
         """

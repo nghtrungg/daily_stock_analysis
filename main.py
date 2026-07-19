@@ -1535,6 +1535,12 @@ def main() -> int:
                     "run_immediately": True,
                     "name": "agent_event_monitor",
                 })
+            from src.services.runtime_scheduler import (
+                build_settlement_outcome_background_tasks,
+            )
+            background_tasks.extend(
+                build_settlement_outcome_background_tasks(config)
+            )
 
             schedule_kwargs = {
                 "task": scheduled_task,
