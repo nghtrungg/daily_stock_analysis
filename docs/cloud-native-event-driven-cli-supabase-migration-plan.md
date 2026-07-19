@@ -350,6 +350,12 @@ Exit criteria:
 - the JSON/timestamp inventory is reviewed;
 - the schema-ownership register has no unowned or multiply owned object.
 
+PR0 ownership continuation (2026-07-19): the versioned register and ownership
+contract are now mirrored in `daily_stock_analysis` and
+`personal-stock-tracking`. They reserve `dsa` for private compute objects,
+leave dashboard portfolio/run DDL with `personal-stock-tracking`, and define
+the coordinated change, compatibility, deployment, and rollback protocol.
+
 ### PR 1 — Add Supabase migrations and security boundaries
 
 Goal: create an empty, secured PostgreSQL schema without changing runtime.

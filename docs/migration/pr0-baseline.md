@@ -48,14 +48,17 @@ write-nothing/full-analysis contract belongs to PR4.
 
 [`schema-ownership-register.json`](schema-ownership-register.json) records one
 migration owner for all current SQLite/private-compute tables and the
-dashboard-owned Supabase objects found at the recorded baseline. The dashboard
-repository owns public portfolio/run DDL; this repository must not recreate
-those objects in PR1.
+dashboard-owned Supabase objects found at the recorded baseline. Its companion
+[`schema-ownership-contract.md`](schema-ownership-contract.md) defines the
+namespace boundary, consumer rights, change protocol, compatibility review,
+deployment authority, and rollback rules. Identical copies are recorded in
+both repositories.
 
-Before PR1 starts, the dashboard repository maintainer must confirm the
-recorded ownership boundary in its own repository or shared review. PR0 can
-freeze the observed contract locally, but it cannot manufacture external
-approval.
+The dashboard repository owns public portfolio/run DDL and its named private
+helpers; this repository must not recreate those objects in PR1. This
+repository owns the future `dsa` compute namespace. The mirrored register
+removes the former external-confirmation gate; merge review of the coordinated
+changes remains the approval boundary.
 
 ## PR0 validation set
 
@@ -64,6 +67,7 @@ The deterministic PR0 gate is:
 ```bat
 cmd.exe /d /c ".venv\Scripts\python.exe -m pytest -m \"not network\""
 cmd.exe /d /c ".venv\Scripts\python.exe scripts\generate_pr0_schema_inventory.py --check"
+cmd.exe /d /c ".venv\Scripts\python.exe scripts\check_schema_ownership_contract.py"
 cmd.exe /d /c ".venv\Scripts\python.exe scripts\check_ai_assets.py"
 ```
 

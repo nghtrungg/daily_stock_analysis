@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [docs] Formalize and mirror the Supabase schema ownership, consumer compatibility, migration deployment, rollback, and full-chain drift-validation contract with personal-stock-tracking.
 - [fix] Route Vietnam P/E and P/B through company-profile ratios and use explicitly stale recent-session fallbacks for missing valuation and capital-flow inputs.
 - [improvement] Add evidence-gated sector health, structured decision scenarios, hidden unavailable chip blocks, wrapped report tables, complete-sentence checks, and per-stock closing summaries to Vietnamese reports.
 - [test] Cover Vietnam valuation routing, distinct-session fallback averages, stale flow recovery, truncated Vietnamese narratives, and enhanced report rendering.

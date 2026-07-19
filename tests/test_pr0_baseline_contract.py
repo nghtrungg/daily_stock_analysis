@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from scripts.check_schema_ownership_contract import validate_register
 from scripts.generate_pr0_schema_inventory import build_inventory
 from src.core.pipeline import StockAnalysisPipeline
 
@@ -41,6 +42,9 @@ def test_schema_ownership_register_covers_every_current_orm_table_once():
     assert len(inventory["tables"]) == inventory["table_count"]
     assert register["review_gate"]["duplicate_owner_count"] == 0
     assert register["review_gate"]["unowned_current_object_count"] == 0
+    assert register["review_gate"]["joint_contract_recorded"] is True
+    assert register["review_gate"]["external_confirmation_required_before_pr1"] is False
+    validate_register(register, inventory)
 
 
 def test_representative_run_fixtures_are_complete_and_sanitized():
