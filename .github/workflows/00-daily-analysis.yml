@@ -39,14 +39,14 @@ on:
 # Concurrency control: run only one analysis job at a time.
 concurrency:
   group: stock-analysis
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   analyze:
     runs-on: ubuntu-latest
     # Support configurations that mistakenly put STOCK_LIST in same-name environment variables.
     # The recommended location remains Settings -> Secrets and variables -> Actions -> Repository variables.
-    environment: STOCK_LIST
+    # environment: STOCK_LIST
     # Add a timeout to prevent jobs from hanging.
     timeout-minutes: ${{ fromJSON(vars.ANALYSIS_TIMEOUT_MINUTES || '30') }}
     env:
