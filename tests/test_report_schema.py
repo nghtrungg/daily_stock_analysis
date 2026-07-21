@@ -112,6 +112,38 @@ class TestAnalysisReportSchema(unittest.TestCase):
             self.assertEqual(pp.current_price, "N/A")
             self.assertEqual(pp.bias_ma5, "2.5")
 
+    def test_schema_accepts_trading_plan_validation_metadata(self) -> None:
+        data = {
+            "decision_type": "buy",
+            "dashboard": {
+                "battle_plan": {
+                    "sniper_points": {
+                        "ideal_buy": 21500,
+                        "secondary_buy": 22000,
+                        "stop_loss": 20640,
+                        "take_profit": 24500,
+                    },
+                    "trading_plan_validation": {
+                        "quality_status": "auto_fixed",
+                        "warnings": ["stop_loss_not_below_ideal"],
+                        "risk_reward_ratio": 3.49,
+                        "display": {
+                            "stop_loss": "20.640 VND (-4.0%)",
+                            "take_profit": "24.500 VND (+14.0%)",
+                            "risk_reward": "R:R = 1 : 3.49",
+                        },
+                    },
+                }
+            },
+        }
+
+        schema = AnalysisReportSchema.model_validate(data)
+
+        validation = schema.dashboard.battle_plan.trading_plan_validation
+        self.assertEqual(validation.quality_status, "auto_fixed")
+        self.assertEqual(validation.risk_reward_ratio, 3.49)
+        self.assertEqual(validation.display.risk_reward, "R:R = 1 : 3.49")
+
     def test_schema_fails_on_invalid_sentiment_score(self) -> None:
         """Schema validation fails when sentiment_score out of range."""
         data = {

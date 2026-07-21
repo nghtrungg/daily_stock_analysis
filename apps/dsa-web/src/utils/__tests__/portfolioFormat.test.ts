@@ -48,6 +48,14 @@ describe('portfolioFormat', () => {
     expect(formatPositionPrice(missingPosition)).toBe('--');
     expect(formatPositionMoney(123, missingPosition)).toBe('--');
     expect(getPositionPriceLabel(missingPosition)).toBe('缺价');
+
+    const vndPosition = {
+      ...pricedPosition,
+      currency: 'VND',
+      valuationCurrency: 'VND',
+      lastPrice: 23_000,
+    };
+    expect(formatPositionPrice(vndPosition)).toBe('23.000');
   });
 
   it('formats broker labels and CSV result variants', () => {

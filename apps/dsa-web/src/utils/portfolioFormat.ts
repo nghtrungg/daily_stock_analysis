@@ -47,6 +47,12 @@ export function hasPositionPrice(row: PortfolioPositionItem): boolean {
 
 export function formatPositionPrice(row: PortfolioPositionItem): string {
   if (!hasPositionPrice(row)) return '--';
+  if (row.currency.trim().toUpperCase() === 'VND') {
+    return Number(row.lastPrice).toLocaleString('vi-VN', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    });
+  }
   return row.lastPrice.toFixed(4);
 }
 

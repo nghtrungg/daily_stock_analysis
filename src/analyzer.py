@@ -351,6 +351,10 @@ class _AllModelsFailedError(Exception):
 
 
 from src.utils.data_processing import normalize_report_signal_attribution
+from src.services.trading_plan_validator import (
+    TRADING_PLAN_CONSTRAINTS_PROMPT,
+    TradingPlanValidator,
+)
 
 
 _TRADE_PLAN_PLACEHOLDER_EXACT = {
@@ -472,6 +476,21 @@ def check_content_integrity(
             missing.append("dashboard.battle_plan.sniper_points.stop_loss")
         if _is_missing_trade_plan_value(sp.get("ideal_buy")):
             missing.append("dashboard.battle_plan.sniper_points.ideal_buy")
+        if _is_missing_trade_plan_value(sp.get("secondary_buy")):
+            missing.append("dashboard.battle_plan.sniper_points.secondary_buy")
+        if _is_missing_trade_plan_value(sp.get("take_profit")):
+            missing.append("dashboard.battle_plan.sniper_points.take_profit")
+        core_price_fields = ("ideal_buy", "secondary_buy", "stop_loss", "take_profit")
+        if not any(_is_missing_trade_plan_value(sp.get(field)) for field in core_price_fields):
+            try:
+                TradingPlanValidator.validate(
+                    ideal_buy=sp.get("ideal_buy"),
+                    secondary_buy=sp.get("secondary_buy"),
+                    stop_loss=sp.get("stop_loss"),
+                    take_profit=sp.get("take_profit"),
+                )
+            except (TypeError, ValueError):
+                missing.append("dashboard.battle_plan.sniper_points.trading_plan_geometry")
     if require_phase_decision:
         phase_decision = dash.get("phase_decision")
         phase_decision = phase_decision if isinstance(phase_decision, dict) else {}
@@ -3046,6 +3065,7 @@ prose and never move nested fields to a parent object:
 - Calculate `sector_health.score` only from supplied sector/peer evidence. Never invent peer performance; use `score=null` and `data_status=unavailable` when evidence is insufficient.
 - Provide 2-4 `decision_scenarios` that map explicit price/volume conditions to actions and invalidation conditions.
 """
+    ENGLISH_SYSTEM_PROMPT += "\n" + TRADING_PLAN_CONSTRAINTS_PROMPT
 
     TEXT_SYSTEM_PROMPT = """你是一位专业的股票分析助手。
 
@@ -5260,6 +5280,9 @@ prose and never move nested fields to a parent object:
                 "dashboard.intelligence.risk_alerts": "dashboard.intelligence.risk_alerts: danh sách cảnh báo rủi ro (có thể rỗng)",
                 "dashboard.battle_plan.sniper_points.ideal_buy": "dashboard.battle_plan.sniper_points.ideal_buy: giá mua có thể thực thi; không dùng N/A hoặc Cần bổ sung",
                 "dashboard.battle_plan.sniper_points.stop_loss": "dashboard.battle_plan.sniper_points.stop_loss: giá cắt lỗ có thể thực thi; không dùng N/A hoặc Cần bổ sung",
+                "dashboard.battle_plan.sniper_points.secondary_buy": "dashboard.battle_plan.sniper_points.secondary_buy: giá mua thứ hai; phải lớn hơn hoặc bằng ideal_buy",
+                "dashboard.battle_plan.sniper_points.take_profit": "dashboard.battle_plan.sniper_points.take_profit: giá mục tiêu; phải lớn hơn secondary_buy",
+                "dashboard.battle_plan.sniper_points.trading_plan_geometry": "dashboard.battle_plan.sniper_points: sửa toàn bộ mức giá để thỏa stop_loss < ideal_buy <= secondary_buy < take_profit và R:R >= 1.5",
                 "dashboard.phase_decision.phase_context": "dashboard.phase_decision.phase_context: tóm tắt trạng thái phiên",
                 "dashboard.phase_decision.action_window": "dashboard.phase_decision.action_window: cửa sổ hành động theo phiên",
                 "dashboard.phase_decision.immediate_action": "dashboard.phase_decision.immediate_action: hành động hiện tại",
@@ -5296,6 +5319,12 @@ prose and never move nested fields to a parent object:
                     lines.append("- dashboard.battle_plan.sniper_points.stop_loss: stop-loss level")
                 elif f == "dashboard.battle_plan.sniper_points.ideal_buy":
                     lines.append("- dashboard.battle_plan.sniper_points.ideal_buy: actionable entry price")
+                elif f == "dashboard.battle_plan.sniper_points.secondary_buy":
+                    lines.append("- dashboard.battle_plan.sniper_points.secondary_buy: second entry at or above ideal_buy")
+                elif f == "dashboard.battle_plan.sniper_points.take_profit":
+                    lines.append("- dashboard.battle_plan.sniper_points.take_profit: target above secondary_buy")
+                elif f == "dashboard.battle_plan.sniper_points.trading_plan_geometry":
+                    lines.append("- Fix all long price levels so stop_loss < ideal_buy <= secondary_buy < take_profit and R:R >= 1.5")
                 elif f == "dashboard.phase_decision.phase_context":
                     lines.append("- dashboard.phase_decision.phase_context: public market phase summary subset")
                 elif f == "dashboard.phase_decision.action_window":
@@ -5328,6 +5357,12 @@ prose and never move nested fields to a parent object:
                 lines.append("- dashboard.battle_plan.sniper_points.stop_loss: 止损价")
             elif f == "dashboard.battle_plan.sniper_points.ideal_buy":
                 lines.append("- dashboard.battle_plan.sniper_points.ideal_buy: 可执行买入价")
+            elif f == "dashboard.battle_plan.sniper_points.secondary_buy":
+                lines.append("- dashboard.battle_plan.sniper_points.secondary_buy: 不低于 ideal_buy 的次优买入价")
+            elif f == "dashboard.battle_plan.sniper_points.take_profit":
+                lines.append("- dashboard.battle_plan.sniper_points.take_profit: 高于 secondary_buy 的目标价")
+            elif f == "dashboard.battle_plan.sniper_points.trading_plan_geometry":
+                lines.append("- 修正全部多头价位，满足 stop_loss < ideal_buy <= secondary_buy < take_profit 且 R:R >= 1.5")
             elif f == "dashboard.phase_decision.phase_context":
                 lines.append("- dashboard.phase_decision.phase_context: 公开低敏市场阶段摘要子集")
             elif f == "dashboard.phase_decision.action_window":

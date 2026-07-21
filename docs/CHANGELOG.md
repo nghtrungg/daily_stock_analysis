@@ -49,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [feature] Expose idempotent settlement-outcome run, list, and aggregate APIs and evaluate them through the existing after-market runtime scheduler.
 - [test] Cover holiday-aware first sellability, no-look-ahead entry, daily MAE/MFE proxies, linked-trade-only executions, cost application, version separation, idempotency, empty metrics, API behavior, and scheduler repetition.
 - [docs] Document PR 7 outcome identities, versions, daily-bar limitations, cost assumptions, aggregate availability, API and scheduler contracts, compatibility, and rollback.
+- [fix] Display actual-VND amounts with Vietnamese dot thousands separators in the system UI and generated reports.
+- [fix] Validate and deterministically repair Vietnam long trading-plan geometry and risk/reward ratios, while preserving numeric prices for persistence and adding VND delta and R:R display metadata.
 - [improvement] Localize Personal Stock Tracking navigation, authentication, portfolio pages, metadata, offline state, and safe errors into Vietnamese.
 - [feature] Add wallet-ledger and tracked-quote contracts plus additive Supabase schema convergence that preserves existing portfolio data and exposes owner-only atomic cash and trade mutations.
 - [test] Cover wallet replay, weighted cost, realized sales, cash/share invariants, deterministic ordering, quote staleness, and incomplete valuation totals.
