@@ -34,6 +34,8 @@ from src.utils.data_processing import (
     signal_attribution_has_content,
     signal_attribution_weight_items,
 )
+from src.utils.sniper_points import parse_sniper_value
+from src.utils.vietnamese_numbers import format_vnd_amount
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +47,16 @@ def _escape_md(text: str) -> str:
     return text.replace("*", "\\*").replace("_", "\\_")
 
 
-def _clean_sniper_value(val: Any) -> str:
+def _clean_sniper_value(val: Any, stock_code: str = "") -> str:
     """Format sniper point value for display (strip label prefixes)."""
     if val is None:
         return "N/A"
     if isinstance(val, (int, float)):
-        return str(val)
+        return (
+            format_vnd_amount(val)
+            if is_vn_market_symbol(stock_code)
+            else str(val)
+        )
     s = str(val).strip() if val else ""
     if not s or s == "N/A":
         return s or "N/A"
@@ -61,7 +67,12 @@ def _clean_sniper_value(val: Any) -> str:
     ]
     for prefix in prefixes:
         if s.startswith(prefix):
-            return s[len(prefix):]
+            s = s[len(prefix):].strip()
+            break
+    if is_vn_market_symbol(stock_code):
+        parsed = parse_sniper_value(s)
+        if parsed is not None:
+            return format_vnd_amount(parsed)
     return s
 
 

@@ -33,6 +33,7 @@ from src.market_context import get_market_role, get_market_guidelines
 from src.market_phase_prompt import format_market_phase_prompt_section
 from src.services.daily_market_context import format_daily_market_context_prompt_section
 from src.services.market_symbol_utils import is_vn_market_symbol
+from src.services.trading_plan_validator import TRADING_PLAN_CONSTRAINTS_PROMPT_FORMAT
 
 logger = logging.getLogger(__name__)
 
@@ -516,6 +517,10 @@ Return one valid JSON object with these keys. Keep keys and enum values unchange
 Be conservative when data is stale, partial, missing, estimated, or when the market phase is uncertain.
 Include actionable prices only when the evidence supports them; otherwise state the limitation clearly.
 """
+
+LEGACY_DEFAULT_AGENT_SYSTEM_PROMPT += "\n" + TRADING_PLAN_CONSTRAINTS_PROMPT_FORMAT
+AGENT_SYSTEM_PROMPT += "\n" + TRADING_PLAN_CONSTRAINTS_PROMPT_FORMAT
+ENGLISH_AGENT_SYSTEM_PROMPT += "\n" + TRADING_PLAN_CONSTRAINTS_PROMPT_FORMAT
 
 ENGLISH_CHAT_SYSTEM_PROMPT = """
 You are a {market_role} investment-analysis agent with data tools and switchable trading skills.

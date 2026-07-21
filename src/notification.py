@@ -51,6 +51,7 @@ from src.report_language import (
     normalize_report_language,
 )
 from src.services.market_symbol_utils import is_vn_market_symbol
+from src.services.trading_plan_validator import get_trading_plan_display
 from bot.models import BotMessage
 from src.utils.sanitize import sanitize_diagnostic_text
 from src.utils.data_processing import (
@@ -1414,6 +1415,7 @@ class NotificationService(
                     ])
                     # 狙击点位
                     sniper = battle.get('sniper_points', {})
+                    plan_display = get_trading_plan_display(battle)
                     if sniper:
                         report_lines.extend([
                             f"**📍 {labels['action_points_heading']}**",
@@ -1422,8 +1424,9 @@ class NotificationService(
                             "|---------|------|",
                             f"| 🎯 {labels['ideal_buy_label']} | {self._clean_sniper_value(sniper.get('ideal_buy', 'N/A'))} |",
                             f"| 🔵 {labels['secondary_buy_label']} | {self._clean_sniper_value(sniper.get('secondary_buy', 'N/A'))} |",
-                            f"| 🛑 {labels['stop_loss_label']} | {self._clean_sniper_value(sniper.get('stop_loss', 'N/A'))} |",
-                            f"| 🎊 {labels['take_profit_label']} | {self._clean_sniper_value(sniper.get('take_profit', 'N/A'))} |",
+                            f"| 🛑 {labels['stop_loss_label']} | {plan_display.get('stop_loss') or self._clean_sniper_value(sniper.get('stop_loss', 'N/A'))} |",
+                            f"| 🎊 {labels['take_profit_label']} | {plan_display.get('take_profit') or self._clean_sniper_value(sniper.get('take_profit', 'N/A'))} |",
+                            *([f"**{plan_display['risk_reward']}**"] if plan_display.get('risk_reward') else []),
                             "",
                         ])
                     # 仓位策略
@@ -1645,19 +1648,24 @@ class NotificationService(
 
                 # 狙击点位
                 sniper = battle.get('sniper_points', {}) if battle else {}
+                plan_display = get_trading_plan_display(battle)
                 if sniper:
                     ideal_buy = str(sniper.get('ideal_buy', ''))
-                    stop_loss = str(sniper.get('stop_loss', ''))
-                    take_profit = str(sniper.get('take_profit', ''))
+                    stop_loss = plan_display.get('stop_loss') or str(sniper.get('stop_loss', ''))
+                    take_profit = plan_display.get('take_profit') or str(sniper.get('take_profit', ''))
                     points = []
                     if ideal_buy:
                         points.append(f"🎯{labels['ideal_buy_label']}:{ideal_buy[:15]}")
                     if stop_loss:
-                        points.append(f"🛑{labels['stop_loss_label']}:{stop_loss[:15]}")
+                        stop_text = stop_loss if plan_display.get('stop_loss') else stop_loss[:15]
+                        points.append(f"🛑{labels['stop_loss_label']}:{stop_text}")
                     if take_profit:
-                        points.append(f"🎊{labels['take_profit_label']}:{take_profit[:15]}")
+                        target_text = take_profit if plan_display.get('take_profit') else take_profit[:15]
+                        points.append(f"🎊{labels['take_profit_label']}:{target_text}")
                     if points:
                         lines.append(" | ".join(points))
+                        if plan_display.get('risk_reward'):
+                            lines.append(plan_display['risk_reward'])
                         lines.append("")
 
                 # 持仓建议
@@ -1928,6 +1936,7 @@ class NotificationService(
 
         # 狙击点位
         sniper = battle.get('sniper_points', {}) if battle else {}
+        plan_display = get_trading_plan_display(battle)
         if sniper:
             lines.extend([
                 f"### 🎯 {labels['action_points_heading']}",
@@ -1936,9 +1945,11 @@ class NotificationService(
                 "|------|------|------|",
             ])
             ideal_buy = sniper.get('ideal_buy', '-')
-            stop_loss = sniper.get('stop_loss', '-')
-            take_profit = sniper.get('take_profit', '-')
+            stop_loss = plan_display.get('stop_loss') or sniper.get('stop_loss', '-')
+            take_profit = plan_display.get('take_profit') or sniper.get('take_profit', '-')
             lines.append(f"| {ideal_buy} | {stop_loss} | {take_profit} |")
+            if plan_display.get('risk_reward'):
+                lines.append(f"**{plan_display['risk_reward']}**")
             lines.append("")
 
         # ========== 信号归因分析 ==========

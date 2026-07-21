@@ -32,6 +32,7 @@ from src.report_language import (
 )
 from src.storage import DatabaseManager
 from src.services.run_diagnostics import build_run_diagnostic_summary
+from src.services.trading_plan_validator import get_trading_plan_display
 from src.market_phase_summary import (
     extract_market_phase_summary,
     rebuild_market_phase_summary_for_stock_code,
@@ -1121,6 +1122,7 @@ class HistoryService:
             ])
             # 狙击点位
             sniper = battle.get('sniper_points', {})
+            plan_display = get_trading_plan_display(battle)
             if sniper:
                 report_lines.extend([
                     f"**📍 {labels['action_points_heading']}**",
@@ -1129,8 +1131,9 @@ class HistoryService:
                     "|---------|------|",
                     f"| 🎯 {labels['ideal_buy_label']} | {self._clean_sniper_value(sniper.get('ideal_buy', 'N/A'))} |",
                     f"| 🔵 {labels['secondary_buy_label']} | {self._clean_sniper_value(sniper.get('secondary_buy', 'N/A'))} |",
-                    f"| 🛑 {labels['stop_loss_label']} | {self._clean_sniper_value(sniper.get('stop_loss', 'N/A'))} |",
-                    f"| 🎊 {labels['take_profit_label']} | {self._clean_sniper_value(sniper.get('take_profit', 'N/A'))} |",
+                    f"| 🛑 {labels['stop_loss_label']} | {plan_display.get('stop_loss') or self._clean_sniper_value(sniper.get('stop_loss', 'N/A'))} |",
+                    f"| 🎊 {labels['take_profit_label']} | {plan_display.get('take_profit') or self._clean_sniper_value(sniper.get('take_profit', 'N/A'))} |",
+                    *([f"**{plan_display['risk_reward']}**"] if plan_display.get('risk_reward') else []),
                     "",
                 ])
             # 仓位策略

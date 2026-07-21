@@ -7,6 +7,7 @@ import pandas as pd
 
 from src.analyzer import (
     AnalysisResult,
+    GeminiAnalyzer,
     check_content_integrity,
     enforce_actionable_trade_plan,
     fill_vietnam_order_flow_if_needed,
@@ -14,6 +15,7 @@ from src.analyzer import (
 )
 from src.stock_analyzer import StockTrendAnalyzer
 from src.services.report_renderer import render
+from src.services.trading_plan_validator import apply_trading_plan_validation
 
 
 def _buy_result(*, ideal_buy="55.50", stop_loss="53.80") -> AnalysisResult:
@@ -107,6 +109,93 @@ def test_actionable_buy_plan_is_preserved() -> None:
     assert adjustments == []
     assert result.decision_type == "buy"
     assert result.operation_advice == "Mua"
+
+
+def test_trading_plan_gateway_repairs_geometry_and_records_metadata() -> None:
+    result = _buy_result(ideal_buy="21,500", stop_loss="22,500")
+    sniper = result.dashboard["battle_plan"]["sniper_points"]
+    sniper["secondary_buy"] = "22,000"
+    sniper["take_profit"] = "24,500"
+
+    warnings = apply_trading_plan_validation(result)
+
+    assert warnings == ["stop_loss_not_below_ideal"]
+    assert sniper == {
+        "ideal_buy": 21500,
+        "secondary_buy": 22000,
+        "stop_loss": 20640,
+        "take_profit": 24500,
+    }
+    validation = result.dashboard["battle_plan"]["trading_plan_validation"]
+    assert validation["quality_status"] == "auto_fixed"
+    assert validation["risk_reward_ratio"] == 3.49
+    assert validation["display"]["stop_loss"] == "20.640 VND (-4.0%)"
+    assert validation["display"]["take_profit"] == "24.500 VND (+14.0%)"
+
+
+def test_integrity_retry_detects_complete_but_invalid_long_geometry() -> None:
+    result = _buy_result(ideal_buy="21,500", stop_loss="22,500")
+    sniper = result.dashboard["battle_plan"]["sniper_points"]
+    sniper["secondary_buy"] = "22,000"
+    sniper["take_profit"] = "24,500"
+
+    ok, missing = check_content_integrity(result)
+
+    assert ok is False
+    assert missing == ["dashboard.battle_plan.sniper_points.trading_plan_geometry"]
+
+
+def test_integrity_retry_explains_long_geometry_in_vietnamese() -> None:
+    analyzer = GeminiAnalyzer.__new__(GeminiAnalyzer)
+
+    prompt = analyzer._build_integrity_complement_prompt(
+        ["dashboard.battle_plan.sniper_points.trading_plan_geometry"],
+        report_language="vi",
+    )
+
+    assert "stop_loss < ideal_buy <= secondary_buy < take_profit" in prompt
+    assert "R:R >= 1.5" in prompt
+
+
+def test_trading_plan_gateway_leaves_missing_anchor_for_existing_downgrade() -> None:
+    result = _buy_result(ideal_buy="N/A", stop_loss="21,000")
+
+    warnings = apply_trading_plan_validation(result)
+    adjustments = enforce_actionable_trade_plan(result)
+
+    assert warnings == ["ideal_buy_missing_or_invalid"]
+    assert adjustments == ["missing_entry"]
+    assert result.decision_type == "hold"
+    validation = result.dashboard["battle_plan"]["trading_plan_validation"]
+    assert validation["quality_status"] == "invalid"
+
+
+def test_standard_analyzer_prompt_contains_long_plan_numeric_constraints() -> None:
+    prompt = GeminiAnalyzer.ENGLISH_SYSTEM_PROMPT
+
+    assert "stop_loss < ideal_buy <= secondary_buy < take_profit" in prompt
+    assert "(take_profit - ideal_buy) / (ideal_buy - stop_loss) >= 1.5" in prompt
+
+
+def test_vietnamese_markdown_renders_validated_price_deltas_and_rr() -> None:
+    result = _buy_result(ideal_buy="21,500", stop_loss="22,500")
+    sniper = result.dashboard["battle_plan"]["sniper_points"]
+    sniper["secondary_buy"] = "22,000"
+    sniper["take_profit"] = "24,500"
+    apply_trading_plan_validation(result)
+
+    output = render("markdown", [result], summary_only=False)
+    wechat_output = render("wechat", [result], summary_only=False)
+
+    assert output is not None
+    assert wechat_output is not None
+    assert "21.500 VND" in output
+    assert "22.000 VND" in output
+    assert "20.640 VND (-4.0%)" in output
+    assert "24.500 VND (+14.0%)" in output
+    assert "R:R = 1 : 3.49" in output
+    assert "21.500 VND" in wechat_output
+    assert "20.640 VND (-4.0%)" in wechat_output
 
 
 def test_report_output_normalizes_price_precision_and_structured_news() -> None:

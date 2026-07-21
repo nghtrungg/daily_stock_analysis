@@ -180,6 +180,8 @@ def test_agent_system_prompts_require_phase_decision_contract() -> None:
         assert '"data_limitations"' in prompt
         assert "quote/daily_bars/technical 存在 stale、fallback、missing、fetch_failed、partial 或 estimated" in prompt
         assert "`confidence_level` 不得为高" in prompt
+        assert "stop_loss < ideal_buy <= secondary_buy < take_profit" in prompt
+        assert "(take_profit - ideal_buy) / (ideal_buy - stop_loss) >= 1.5" in prompt
 
 
 # ============================================================

@@ -10,7 +10,7 @@ Uses Optional for lenient parsing; business-layer integrity checks are separate.
 """
 
 import math
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -137,12 +137,30 @@ class PositionStrategy(BaseModel):
     risk_control: Optional[str] = None
 
 
+class TradingPlanValidationDisplay(BaseModel):
+    """Derived display values; canonical sniper prices remain numeric."""
+
+    stop_loss: Optional[str] = None
+    take_profit: Optional[str] = None
+    risk_reward: Optional[str] = None
+
+
+class TradingPlanValidation(BaseModel):
+    """Deterministic long-plan validation metadata."""
+
+    quality_status: Literal["valid", "auto_fixed", "invalid"] = "valid"
+    warnings: List[str] = Field(default_factory=list)
+    risk_reward_ratio: Optional[float] = Field(None, ge=0)
+    display: TradingPlanValidationDisplay = Field(default_factory=TradingPlanValidationDisplay)
+
+
 class BattlePlan(BaseModel):
     """Battle plan block."""
 
     sniper_points: Optional[SniperPoints] = None
     position_strategy: Optional[PositionStrategy] = None
     action_checklist: Optional[List[str]] = None
+    trading_plan_validation: Optional[TradingPlanValidation] = None
 
 
 class PhaseDecision(BaseModel):
