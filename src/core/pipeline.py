@@ -72,6 +72,7 @@ from src.services.analysis_context_builder import (
     AnalysisContextBuilder,
     PipelineAnalysisArtifacts,
 )
+from src.services.trading_plan_validator import apply_trading_plan_validation
 from src.services.run_diagnostics import (
     activate_run_diagnostic_context,
     current_diagnostic_snapshot,
@@ -847,6 +848,7 @@ class StockAnalysisPipeline:
                         code,
                         trade_plan_adjustments,
                     )
+                apply_trading_plan_validation(result)
                 if isinstance(fundamental_context, dict):
                     result.fundamental_context = fundamental_context
                 result.market_phase_summary = market_phase_summary
@@ -1506,6 +1508,7 @@ class StockAnalysisPipeline:
                         code,
                         trade_plan_adjustments,
                     )
+                apply_trading_plan_validation(result)
                 if isinstance(fundamental_context, dict):
                     result.fundamental_context = fundamental_context
                 result.market_phase_summary = market_phase_summary
