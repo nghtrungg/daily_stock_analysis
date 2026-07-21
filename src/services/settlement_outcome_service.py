@@ -353,10 +353,13 @@ class SettlementOutcomeService:
 
     @staticmethod
     def _signal_date(signal: DecisionSignalRecord) -> Optional[date]:
-        try:
-            metadata = json.loads(signal.metadata_json or "{}")
-        except (TypeError, json.JSONDecodeError):
-            metadata = {}
+        if isinstance(signal.metadata_json, dict):
+            metadata = signal.metadata_json
+        else:
+            try:
+                metadata = json.loads(signal.metadata_json or "{}")
+            except (TypeError, json.JSONDecodeError):
+                metadata = {}
         raw = (metadata.get("market_phase_summary") or {}).get("session_date")
         if raw:
             try:
@@ -367,10 +370,13 @@ class SettlementOutcomeService:
 
     @staticmethod
     def _risk_context(signal: DecisionSignalRecord) -> Dict[str, Any]:
-        try:
-            metadata = json.loads(signal.metadata_json or "{}")
-        except (TypeError, json.JSONDecodeError):
-            metadata = {}
+        if isinstance(signal.metadata_json, dict):
+            metadata = signal.metadata_json
+        else:
+            try:
+                metadata = json.loads(signal.metadata_json or "{}")
+            except (TypeError, json.JSONDecodeError):
+                metadata = {}
         risk = metadata.get("settlement_risk") or {}
         score = risk.get("survivability_score")
         return {
@@ -460,10 +466,13 @@ class SettlementOutcomeService:
 
     @staticmethod
     def _serialize(row: SettlementOutcomeRecord) -> Dict[str, Any]:
-        try:
-            flags = json.loads(row.ambiguity_flags_json or "[]")
-        except json.JSONDecodeError:
-            flags = ["invalid_ambiguity_flags_json"]
+        if isinstance(row.ambiguity_flags_json, list):
+            flags = list(row.ambiguity_flags_json)
+        else:
+            try:
+                flags = json.loads(row.ambiguity_flags_json or "[]")
+            except json.JSONDecodeError:
+                flags = ["invalid_ambiguity_flags_json"]
         return {
             "id": row.id,
             "signal_id": row.signal_id,

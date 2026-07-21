@@ -4,12 +4,20 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import logging
+import time
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from sqlalchemy import and_, delete, desc, func, or_, select
+from sqlalchemy import and_, case, cast, delete, desc, func, literal_column, or_, select
+from sqlalchemy.dialects.postgresql import insert as postgres_insert
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError
 
 from src.storage import DatabaseManager, IntelligenceItem, IntelligenceSource, INTELLIGENCE_ITEM_NULL_SCOPE_VALUE
+from src.repositories.bulk import chunk_mappings
+
+
+logger = logging.getLogger(__name__)
 
 
 class IntelligenceRepository:
@@ -106,16 +114,121 @@ class IntelligenceRepository:
             session.commit()
 
     def upsert_items(self, items: Iterable[Dict[str, Any]]) -> int:
+        normalized_by_key: Dict[Tuple[Any, ...], Dict[str, Any]] = {}
+        for fields in items:
+            url = (fields.get("url") or "").strip()
+            title = (fields.get("title") or "").strip()
+            if not url or not title:
+                continue
+            item_fields = dict(fields)
+            item_fields["url"] = url
+            item_fields["title"] = title
+            item_fields["source_type"] = item_fields.get("source_type") or "rss"
+            item_fields["scope_type"] = item_fields.get("scope_type") or "market"
+            item_fields["scope_value"] = self._normalize_scope_value(item_fields.get("scope_value"))
+            item_fields["market"] = item_fields.get("market") or "vn"
+            item_fields["fetched_at"] = item_fields.get("fetched_at") or datetime.now()
+            for field in ("summary", "source", "published_at"):
+                if not item_fields.get(field):
+                    item_fields[field] = None
+            source_id = item_fields.get("source_id")
+            key = (
+                source_id,
+                item_fields.get("source_name") if source_id is None else None,
+                item_fields["source_type"] if source_id is None else None,
+                url,
+                item_fields["scope_type"],
+                item_fields["scope_value"],
+                item_fields["market"],
+            )
+            previous = normalized_by_key.get(key)
+            if previous is None:
+                normalized_by_key[key] = item_fields
+                continue
+            for field in ("summary", "source", "published_at", "raw_payload"):
+                if item_fields.get(field) is not None:
+                    previous[field] = item_fields[field]
+            previous["fetched_at"] = item_fields["fetched_at"]
+
+        normalized_items = list(normalized_by_key.values())
+        if not normalized_items:
+            return 0
+
+        if not self.db.is_sqlite:
+            def _write(session: Any) -> int:
+                inserted_count = 0
+                chunk_count = 0
+                started_at = time.monotonic()
+                for source_is_null in (False, True):
+                    rows = [
+                        row for row in normalized_items
+                        if (row.get("source_id") is None) is source_is_null
+                    ]
+                    for chunk in chunk_mappings(rows):
+                        stmt = postgres_insert(IntelligenceItem).values(chunk)
+                        excluded = stmt.excluded
+                        updates = {
+                            "summary": func.coalesce(excluded.summary, IntelligenceItem.summary),
+                            "source": func.coalesce(excluded.source, IntelligenceItem.source),
+                            "published_at": func.coalesce(
+                                excluded.published_at, IntelligenceItem.published_at
+                            ),
+                            "fetched_at": excluded.fetched_at,
+                            "raw_payload": case(
+                                (
+                                    or_(
+                                        excluded.raw_payload.is_(None),
+                                        excluded.raw_payload == cast({}, JSONB),
+                                        excluded.raw_payload == cast([], JSONB),
+                                    ),
+                                    IntelligenceItem.raw_payload,
+                                ),
+                                else_=excluded.raw_payload,
+                            ),
+                        }
+                        if source_is_null:
+                            upsert = stmt.on_conflict_do_update(
+                                index_elements=[
+                                    func.coalesce(
+                                        IntelligenceItem.source_name,
+                                        literal_column("''"),
+                                    ),
+                                    IntelligenceItem.url,
+                                    IntelligenceItem.source_type,
+                                    IntelligenceItem.scope_type,
+                                    IntelligenceItem.scope_value,
+                                    IntelligenceItem.market,
+                                ],
+                                index_where=IntelligenceItem.source_id.is_(None),
+                                set_=updates,
+                            )
+                        else:
+                            upsert = stmt.on_conflict_do_update(
+                                constraint="uix_intel_item_source_scope_url",
+                                set_=updates,
+                            )
+                        result = session.execute(
+                            upsert.returning(
+                                literal_column("(xmax = 0)").label("inserted")
+                            )
+                        )
+                        inserted_count += sum(bool(flag) for flag in result.scalars())
+                        chunk_count += 1
+                logger.info(
+                    "Bulk write completed: operation=intelligence_items rows=%s chunks=%s duration_ms=%s",
+                    len(normalized_items),
+                    chunk_count,
+                    int((time.monotonic() - started_at) * 1000),
+                )
+                return inserted_count
+
+            return self.db.run_write_transaction("upsert_intelligence_items", _write)
+
         saved = 0
         with self.db.get_session() as session:
-            for fields in items:
-                url = (fields.get("url") or "").strip()
-                title = (fields.get("title") or "").strip()
-                if not url or not title:
-                    continue
-                item_fields = dict(fields)
-                scope_value = self._normalize_scope_value(item_fields.get("scope_value"))
-                item_fields["scope_value"] = scope_value
+            for item_fields in normalized_items:
+                url = item_fields["url"]
+                scope_value = item_fields["scope_value"]
                 source_id = item_fields.get("source_id")
                 conditions = [
                     IntelligenceItem.url == url,

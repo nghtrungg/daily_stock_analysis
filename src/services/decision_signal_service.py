@@ -856,6 +856,8 @@ class DecisionSignalService:
     def _metadata_for_invalidation(row: DecisionSignalRecord) -> Dict[str, Any]:
         if not row.metadata_json:
             return {}
+        if isinstance(row.metadata_json, dict):
+            return dict(row.metadata_json)
         try:
             value = json.loads(row.metadata_json)
         except json.JSONDecodeError as exc:
@@ -1115,9 +1117,11 @@ class DecisionSignalService:
         return json.dumps(sanitized, ensure_ascii=False, sort_keys=True, default=str)
 
     @staticmethod
-    def _json_loads(value: Optional[str], *, signal_id: int, field_name: str) -> Any:
+    def _json_loads(value: Any, *, signal_id: int, field_name: str) -> Any:
         if not value:
             return None
+        if isinstance(value, (dict, list)):
+            return value
         try:
             return json.loads(value)
         except json.JSONDecodeError as exc:

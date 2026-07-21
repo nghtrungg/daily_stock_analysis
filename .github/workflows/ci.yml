@@ -30,10 +30,15 @@ jobs:
               - 'apps/dsa-web/**'
             database:
               - 'supabase/**'
+              - '.github/workflows/ci.yml'
+              - 'requirements.txt'
               - 'scripts/generate_pr0_schema_inventory.py'
               - 'scripts/generate_pr1_supabase_migration.py'
               - 'docs/migration/pr0-schema-inventory.json'
               - 'src/storage.py'
+              - 'src/repositories/**'
+              - 'tests/test_database_runtime.py'
+              - 'tests/test_supabase_runtime_integration.py'
 
   ai-governance:
     name: ai-governance
@@ -137,6 +142,21 @@ jobs:
         run: supabase start
       - name: 🧱 Apply clean migration chain
         run: supabase db reset --local
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements.txt
+            .github/requirements-ci.txt
+      - name: 📦 Install runtime test dependencies
+        run: python -m pip install -r .github/requirements-ci.txt
+      - name: 🔌 Validate application PostgreSQL runtime
+        run: |
+          SUPABASE_DB_URL="$(supabase status -o json | python -c 'import json, sys; print(json.load(sys.stdin)["DB_URL"])')"
+          export SUPABASE_DB_URL
+          python -m pytest tests/test_supabase_runtime_integration.py
       - name: 🔐 Run database security tests
         run: supabase test db
       - name: 🔎 Lint database schema

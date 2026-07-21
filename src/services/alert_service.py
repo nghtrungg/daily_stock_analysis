@@ -1240,11 +1240,14 @@ class AlertService:
         }
         if not diagnostics:
             return result
-        try:
-            parsed = json.loads(diagnostics)
-        except (TypeError, ValueError, json.JSONDecodeError):
-            result["analysis_visibility_source"] = "legacy_text"
-            return result
+        if isinstance(diagnostics, dict):
+            parsed = diagnostics
+        else:
+            try:
+                parsed = json.loads(diagnostics)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                result["analysis_visibility_source"] = "legacy_text"
+                return result
         if not isinstance(parsed, dict):
             result["analysis_visibility_source"] = "legacy_text"
             return result
@@ -1320,9 +1323,11 @@ class AlertService:
         return self._dump_json(value)
 
     @staticmethod
-    def _load_json(raw: Optional[str], *, default: Any) -> Any:
+    def _load_json(raw: Any, *, default: Any) -> Any:
         if raw is None or raw == "":
             return default
+        if isinstance(raw, (dict, list)):
+            return raw
         try:
             return json.loads(raw)
         except (TypeError, json.JSONDecodeError):

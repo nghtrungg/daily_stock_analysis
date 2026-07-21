@@ -6,6 +6,11 @@ Ready for staged implementation beginning with PR 0. This document is an
 implementation plan, not an applied migration. No later PR should begin until
 the preceding PR's exit criteria and the review gates below are satisfied.
 
+Implementation update (2026-07-21): PR 0 through PR 2 are complete on the
+current migration baseline. PR 3 repository batching is in progress; its local
+deterministic checks pass, while the disposable PostgreSQL statement-count and
+concurrency gate remains required before PR 3 is ready to merge.
+
 ## Feasibility decision
 
 The migration is feasible, and the computational core can remain behaviorally

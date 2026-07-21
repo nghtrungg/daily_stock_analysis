@@ -83,14 +83,22 @@ def _column_default(table_name: str, column: Any) -> str | None:
     if default is None or default.is_sequence:
         return None
     if default.is_callable:
-        return "now()" if isinstance(column.type, DateTime) else None
+        return "now()" if _is_datetime_type(column.type) else None
     return _quote_literal(default.arg)
+
+
+def _is_datetime_type(column_type: Any) -> bool:
+    """Recognize direct and TypeDecorator-wrapped SQLAlchemy datetimes."""
+    return isinstance(column_type, DateTime) or isinstance(
+        getattr(column_type, "impl", None),
+        DateTime,
+    )
 
 
 def _column_type(table_name: str, column: Any) -> str:
     if f"{table_name}.{column.name}" in JSON_FIELD_CONTRACTS:
         return "jsonb"
-    if isinstance(column.type, DateTime):
+    if _is_datetime_type(column.type):
         return "timestamptz"
     if isinstance(column.type, Date):
         return "date"

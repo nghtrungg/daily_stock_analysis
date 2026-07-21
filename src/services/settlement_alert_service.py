@@ -372,10 +372,13 @@ class SettlementAlertService:
     def _risk_from_history(cls, history: Optional[AnalysisHistory]) -> Dict[str, Any]:
         if history is None or not history.raw_result:
             return {}
-        try:
-            payload = json.loads(history.raw_result)
-        except (TypeError, ValueError, json.JSONDecodeError):
-            return {}
+        if isinstance(history.raw_result, dict):
+            payload = history.raw_result
+        else:
+            try:
+                payload = json.loads(history.raw_result)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return {}
         if not isinstance(payload, dict):
             return {}
         risk = payload.get("settlement_risk")

@@ -905,7 +905,10 @@ class TestStorage(unittest.TestCase):
             return engine
 
         try:
-            with patch("src.storage.create_engine", side_effect=create_engine_with_failing_dispose):
+            with patch(
+                "src.repositories.database.create_engine",
+                side_effect=create_engine_with_failing_dispose,
+            ):
                 with patch.object(Base.metadata, "create_all", side_effect=original_error):
                     with self.assertRaisesRegex(RuntimeError, "create all failed") as ctx:
                         DatabaseManager.get_instance()

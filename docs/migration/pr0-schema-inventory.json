@@ -109,11 +109,6 @@
           "name": "created_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -229,11 +224,6 @@
           "name": "last_triggered_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -241,11 +231,6 @@
           "name": "cooldown_until",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -267,11 +252,6 @@
           "name": "updated_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -418,11 +398,6 @@
           "name": "created_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -562,11 +537,6 @@
           "name": "created_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -574,11 +544,6 @@
           "name": "updated_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -706,11 +671,6 @@
           "name": "data_timestamp",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -718,11 +678,6 @@
           "name": "triggered_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -919,11 +874,6 @@
           "name": "created_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -1026,11 +976,6 @@
           "name": "evaluated_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -1273,11 +1218,6 @@
           "name": "computed_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -1492,11 +1432,6 @@
           "name": "created_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -1567,11 +1502,6 @@
           "name": "created_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -1579,11 +1509,6 @@
           "name": "updated_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -1661,11 +1586,6 @@
           "name": "created_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -1673,11 +1593,6 @@
           "name": "updated_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -1903,11 +1818,6 @@
           "name": "created_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -1915,11 +1825,6 @@
           "name": "updated_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -2119,11 +2024,6 @@
           "name": "created_at",
           "nullable": false,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -2386,11 +2286,6 @@
           "name": "expires_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -2398,11 +2293,6 @@
           "name": "created_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -2410,11 +2300,6 @@
           "name": "updated_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -2636,11 +2521,6 @@
           "name": "created_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -2749,11 +2629,6 @@
           "name": "published_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -2761,11 +2636,6 @@
           "name": "fetched_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -2980,11 +2850,6 @@
           "name": "last_fetched_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -2992,11 +2857,6 @@
           "name": "created_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -3004,11 +2864,6 @@
           "name": "updated_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -3446,11 +3301,6 @@
           "name": "called_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -3556,11 +3406,6 @@
           "name": "published_date",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -3568,11 +3413,6 @@
           "name": "fetched_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -3749,11 +3589,6 @@
           "name": "created_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -3761,11 +3596,6 @@
           "name": "updated_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -3868,11 +3698,6 @@
           "name": "created_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -3989,11 +3814,6 @@
           "name": "created_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -4149,11 +3969,6 @@
           "name": "created_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -4161,11 +3976,6 @@
           "name": "updated_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -4260,11 +4070,6 @@
           "name": "updated_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -4384,11 +4189,6 @@
           "name": "estimated_sellable_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -4396,11 +4196,6 @@
           "name": "actual_sellable_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -4422,11 +4217,6 @@
           "name": "updated_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -4598,11 +4388,6 @@
           "name": "next_sellable_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -4617,11 +4402,6 @@
           "name": "updated_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -4685,11 +4465,6 @@
           "name": "estimated_sellable_at",
           "nullable": false,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -4697,11 +4472,6 @@
           "name": "actual_sellable_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -4741,11 +4511,6 @@
           "name": "created_at",
           "nullable": false,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -4753,11 +4518,6 @@
           "name": "updated_at",
           "nullable": false,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -4859,11 +4619,6 @@
           "name": "executed_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -4920,11 +4675,6 @@
           "name": "created_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -5011,11 +4761,6 @@
           "name": "applied_at",
           "nullable": false,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -5130,11 +4875,6 @@
           "name": "observed_at",
           "nullable": false,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -5142,11 +4882,6 @@
           "name": "updated_at",
           "nullable": false,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -5294,11 +5029,6 @@
           "name": "estimated_first_sellable_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -5457,11 +5187,6 @@
           "name": "created_at",
           "nullable": false,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -5469,11 +5194,6 @@
           "name": "updated_at",
           "nullable": false,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],
@@ -5719,11 +5439,6 @@
           "name": "created_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         },
         {
@@ -5731,11 +5446,6 @@
           "name": "updated_at",
           "nullable": true,
           "primary_key": false,
-          "timestamp_semantic": {
-            "legacy_sqlite": "naive DATETIME; timezone meaning requires per-column import review",
-            "postgres_target": "TIMESTAMP WITH TIME ZONE stored in UTC",
-            "presentation": "Asia/Ho_Chi_Minh at user-visible boundaries"
-          },
           "type": "DATETIME"
         }
       ],

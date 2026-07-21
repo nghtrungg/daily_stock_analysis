@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [improvement] Replace PostgreSQL daily-bar, news, intelligence, backtest-result, summary, and decision-outcome row loops with bind- and payload-bounded SQLAlchemy 2.x bulk writes while preserving SQLite compatibility and repository return contracts.
+- [fix] Enforce concurrent nullable-source intelligence deduplication with an additive partial unique index and retry only transient PostgreSQL connection, serialization, and deadlock failures.
+- [test] Cover batch sizing, native JSON mappings, retry classification, PostgreSQL statement counts, immutable provenance, idempotency, and concurrent nullable-source writers.
+- [docs] Document PR3 bulk-write, retry, telemetry, compatibility, validation, and rollback contracts.
+- [feature] Make the least-privilege Supabase PostgreSQL runtime selectable through an extracted engine/session boundary while retaining SQLite as the local default and stable `src.storage` imports.
+- [improvement] Extract SQLAlchemy models and add PostgreSQL JSONB/timestamptz compatibility with field-aware legacy JSON handling, bounded timeouts, secret-safe failures, health checks, and explicit disposal.
+- [test] Cover Supabase configuration failures, pool strategies, schema translation, JSONB/timestamptz DDL, Unicode and null JSON semantics, invalid legacy JSON quarantine, SQLite compatibility, storage export identity, and real runtime behavior in disposable Supabase CI.
+- [fix] Make SQLite telemetry schema repair retry bounded lock conflicts and close test database handles before Windows cleanup.
+- [docs] Document PR2 database selection, secret handling, connection policy, compatibility boundaries, disposable integration validation, and additive rollback.
 - [feature] Add the empty PostgreSQL 17 `dsa` compute schema with JSONB/timestamptz contracts, Vietnam constraints, least-privilege worker access, and private-table RLS.
 - [test] Add deterministic migration drift checks and a disposable Supabase CI gate with pgTAP coverage for worker access, anonymous denial, two-user private-schema isolation, ownership boundaries, and Vietnam constraints.
 - [docs] Document PR1 Supabase schema ownership, generation, security, validation, credential, advisor, and rollback boundaries.

@@ -1873,10 +1873,13 @@ class PortfolioService:
 
         estimated = cls._from_utc_naive(settlement.estimated_sellable_at)
         actual = cls._from_utc_naive(settlement.actual_sellable_at)
-        try:
-            warnings = json.loads(settlement.warnings_json or "[]")
-        except (TypeError, ValueError):
-            warnings = ["settlement_warnings_invalid"]
+        if isinstance(settlement.warnings_json, list):
+            warnings = list(settlement.warnings_json)
+        else:
+            try:
+                warnings = json.loads(settlement.warnings_json or "[]")
+            except (TypeError, ValueError):
+                warnings = ["settlement_warnings_invalid"]
         if not isinstance(warnings, list):
             warnings = ["settlement_warnings_invalid"]
         return {

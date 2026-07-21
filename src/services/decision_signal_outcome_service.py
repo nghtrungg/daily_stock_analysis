@@ -125,26 +125,40 @@ class DecisionSignalOutcomeService:
         created_count = 0
         updated_count = 0
         skipped_count = 0
+        existing_rows = self.repo.list_outcomes_for_signals(
+            signal_ids=[signal.id for signal in signals],
+            engine_version=DECISION_SIGNAL_OUTCOME_ENGINE_VERSION,
+        )
+        existing_by_key = {
+            (row.signal_id, row.horizon): row for row in existing_rows
+        }
+        pending_fields: List[Dict[str, Any]] = []
+        ordered_entries: List[Tuple[str, Any]] = []
 
         for signal in signals:
             for horizon in self._horizons_for_signal(signal, horizons_norm):
-                existing = self.repo.get_outcome(
-                    signal_id=signal.id,
-                    horizon=horizon,
-                    engine_version=DECISION_SIGNAL_OUTCOME_ENGINE_VERSION,
-                )
+                existing = existing_by_key.get((signal.id, horizon))
                 if existing is not None and not force and not self._should_recompute_outcome(existing):
                     skipped_count += 1
-                    items.append(self._serialize_outcome(existing))
+                    ordered_entries.append(("existing", existing))
                     continue
 
                 fields = self._evaluate_signal_horizon(signal, horizon)
-                row, created = self.repo.upsert_outcome(fields)
-                if created:
-                    created_count += 1
-                else:
-                    updated_count += 1
-                items.append(self._serialize_outcome(row))
+                ordered_entries.append(("pending", len(pending_fields)))
+                pending_fields.append(fields)
+
+        persisted = self.repo.upsert_outcomes(pending_fields)
+        for entry_type, value in ordered_entries:
+            if entry_type == "existing":
+                row = value
+                created = None
+            else:
+                row, created = persisted[value]
+            if created is True:
+                created_count += 1
+            elif created is False:
+                updated_count += 1
+            items.append(self._serialize_outcome(row))
 
         return {
             "items": items,
@@ -592,9 +606,11 @@ class DecisionSignalOutcomeService:
         return text[:24] or "unknown"
 
     @staticmethod
-    def _json_loads(value: Optional[str]) -> Any:
+    def _json_loads(value: Any) -> Any:
         if not value:
             return None
+        if isinstance(value, (dict, list)):
+            return value
         try:
             return json.loads(value)
         except json.JSONDecodeError as exc:
