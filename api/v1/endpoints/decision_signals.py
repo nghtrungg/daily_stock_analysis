@@ -21,6 +21,10 @@ from api.v1.schemas.decision_signals import (
     DecisionSignalOutcomeRunRequest,
     DecisionSignalOutcomeRunResponse,
     DecisionSignalOutcomeStatsResponse,
+    SettlementOutcomeListResponse,
+    SettlementOutcomeRunRequest,
+    SettlementOutcomeRunResponse,
+    SettlementOutcomeStatsResponse,
     DecisionSignalMarket,
     DecisionSignalSourceType,
     DecisionSignalReassessRequest,
@@ -34,6 +38,7 @@ from src.services.decision_signal_service import (
     DecisionSignalStorageError,
 )
 from src.services.decision_signal_outcome_service import DecisionSignalOutcomeService
+from src.services.settlement_outcome_service import SettlementOutcomeService
 from src.services.decision_signal_reassess_service import (
     DecisionSignalReassessService,
     DecisionSignalReassessUnsupportedOperationError,
@@ -319,6 +324,88 @@ def get_outcome_stats(
         raise _bad_request(exc)
     except Exception as exc:
         raise _internal_error("Get decision signal outcome stats failed", exc)
+
+
+@router.post(
+    "/settlement-outcomes/run",
+    response_model=SettlementOutcomeRunResponse,
+    summary="Run versioned settlement-aware outcomes",
+    description=(
+        "Calculate hypothetical signal outcomes separately from linked execution "
+        "outcomes. Repeated runs reuse the same versioned sidecar."
+    ),
+    operation_id="runSettlementAwareOutcomes",
+)
+def run_settlement_outcomes(
+    request: SettlementOutcomeRunRequest,
+) -> SettlementOutcomeRunResponse:
+    try:
+        return SettlementOutcomeRunResponse(
+            **SettlementOutcomeService().run(
+                signal_id=request.signal_id,
+                outcome_types=request.outcome_types,
+                force=request.force,
+                limit=request.limit,
+            )
+        )
+    except DecisionSignalNotFoundError as exc:
+        raise _not_found(exc)
+    except ValueError as exc:
+        raise _bad_request(exc)
+    except Exception as exc:
+        raise _internal_error("Run settlement-aware outcomes failed", exc)
+
+
+@router.get(
+    "/settlement-outcomes",
+    response_model=SettlementOutcomeListResponse,
+    summary="List versioned settlement-aware outcomes",
+    operation_id="listSettlementAwareOutcomes",
+)
+def list_settlement_outcomes(
+    signal_id: Optional[int] = Query(None, gt=0),
+    outcome_type: Optional[str] = Query(None),
+    engine_version: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+) -> SettlementOutcomeListResponse:
+    try:
+        return SettlementOutcomeListResponse(
+            **SettlementOutcomeService().list(
+                signal_id=signal_id,
+                outcome_type=outcome_type,
+                engine_version=engine_version,
+                page=page,
+                page_size=page_size,
+            )
+        )
+    except ValueError as exc:
+        raise _bad_request(exc)
+    except Exception as exc:
+        raise _internal_error("List settlement-aware outcomes failed", exc)
+
+
+@router.get(
+    "/settlement-outcomes/stats",
+    response_model=SettlementOutcomeStatsResponse,
+    summary="Get settlement-aware outcome aggregates",
+    operation_id="getSettlementAwareOutcomeStats",
+)
+def get_settlement_outcome_stats(
+    outcome_type: Optional[str] = Query(None),
+    engine_version: Optional[str] = Query(None),
+) -> SettlementOutcomeStatsResponse:
+    try:
+        return SettlementOutcomeStatsResponse(
+            **SettlementOutcomeService().stats(
+                outcome_type=outcome_type,
+                engine_version=engine_version,
+            )
+        )
+    except ValueError as exc:
+        raise _bad_request(exc)
+    except Exception as exc:
+        raise _internal_error("Get settlement-aware outcome stats failed", exc)
 
 
 @router.post(

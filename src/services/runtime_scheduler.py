@@ -13,6 +13,7 @@ from typing import Any, Callable, Dict, List, Optional, Set
 
 from src.config import Config, get_config
 from src.scheduler import Scheduler, normalize_schedule_times
+from src.core.trading_calendar import MarketPhase, infer_market_phase
 
 logger = logging.getLogger(__name__)
 CLI_SCHEDULER_OWNER_ENV = "DSA_CLI_SCHEDULER_OWNS_SCHEDULE"
@@ -93,6 +94,42 @@ def build_agent_event_monitor_background_tasks(
         "interval_seconds": interval_seconds,
         "run_immediately": True,
         "name": "agent_event_monitor",
+    }]
+
+
+def build_settlement_outcome_background_tasks(
+    config: Config,
+    *,
+    service_factory: Optional[Callable[[], Any]] = None,
+    now_provider: Callable[[], datetime] = datetime.now,
+) -> List[Dict[str, Any]]:
+    """Build the idempotent Vietnam after-market outcome evaluator."""
+
+    def settlement_outcome_task() -> None:
+        current = now_provider()
+        if infer_market_phase("vn", current_time=current) != MarketPhase.POSTMARKET:
+            return
+        try:
+            if service_factory is None:
+                from src.services.settlement_outcome_service import SettlementOutcomeService
+
+                service = SettlementOutcomeService()
+            else:
+                service = service_factory()
+            result = service.run(limit=100)
+            if result.get("evaluated"):
+                logger.info(
+                    "[SettlementOutcomes] evaluated %d outcome(s)",
+                    result["evaluated"],
+                )
+        except Exception as exc:  # noqa: BLE001 - background work must not stop scheduling.
+            logger.exception("Settlement-aware outcome job failed: %s", exc)
+
+    return [{
+        "task": settlement_outcome_task,
+        "interval_seconds": 30 * 60,
+        "run_immediately": False,
+        "name": "settlement_outcomes_after_market",
     }]
 
 
@@ -211,7 +248,10 @@ class RuntimeSchedulerService:
     def _current_background_tasks(self, config: Config) -> List[Dict[str, Any]]:
         if self._background_tasks_provider is not None:
             return self._background_tasks_provider(config)
-        return self._current_agent_event_monitor_background_tasks(config)
+        return [
+            *self._current_agent_event_monitor_background_tasks(config),
+            *build_settlement_outcome_background_tasks(config),
+        ]
 
     def _current_agent_event_monitor_background_tasks(self, config: Config) -> List[Dict[str, Any]]:
         name = "agent_event_monitor"

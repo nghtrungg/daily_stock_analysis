@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date
-from typing import Optional
+from typing import Optional, Union
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
@@ -29,20 +29,25 @@ from api.v1.schemas.portfolio import (
     PortfolioImportCommitResponse,
     PortfolioImportParseResponse,
     PortfolioImportTradeItem,
+    InsufficientSellableQuantityErrorResponse,
     PortfolioPositionAnalysisRequest,
+    PortfolioPositionSettlementResponse,
     PortfolioRiskResponse,
     PortfolioSnapshotResponse,
     PortfolioTradeListResponse,
     PortfolioTradeCreateRequest,
+    PortfolioTradeCreatedResponse,
 )
 from src.services.task_queue import get_task_queue
 from src.services.portfolio_import_service import PortfolioImportService
 from src.services.portfolio_risk_service import PortfolioRiskService
 from src.services.portfolio_service import (
+    PortfolioAmbiguousPositionError,
     PortfolioBusyError,
     PortfolioConflictError,
     PortfolioOversellError,
     PortfolioService,
+    PortfolioUnsettledSaleError,
 )
 
 logger = logging.getLogger(__name__)
@@ -162,11 +167,22 @@ def delete_account(account_id: int):
 
 @router.post(
     "/trades",
-    response_model=PortfolioEventCreatedResponse,
-    responses={400: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    response_model=PortfolioTradeCreatedResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        409: {
+            "model": Union[
+                InsufficientSellableQuantityErrorResponse,
+                ErrorResponse,
+            ]
+        },
+        500: {"model": ErrorResponse},
+    },
     summary="Record trade event",
 )
-def create_trade(request: PortfolioTradeCreateRequest) -> PortfolioEventCreatedResponse:
+def create_trade(
+    request: PortfolioTradeCreateRequest,
+) -> PortfolioTradeCreatedResponse | JSONResponse:
     service = PortfolioService()
     try:
         data = service.record_trade(
@@ -181,11 +197,32 @@ def create_trade(request: PortfolioTradeCreateRequest) -> PortfolioEventCreatedR
             market=request.market,
             currency=request.currency,
             trade_uid=request.trade_uid,
+            source_decision_signal_id=request.source_decision_signal_id,
             note=request.note,
+            executed_at=request.executed_at,
         )
-        return PortfolioEventCreatedResponse(**data)
+        return PortfolioTradeCreatedResponse(**data)
     except PortfolioBusyError as exc:
         raise _conflict_error(error="portfolio_busy", message=str(exc))
+    except PortfolioUnsettledSaleError as exc:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": "insufficient_sellable_quantity",
+                "message": (
+                    "The requested quantity exceeds the currently sellable quantity."
+                ),
+                "requested_quantity": exc.requested_quantity,
+                "held_quantity": exc.held_quantity,
+                "sellable_quantity": exc.sellable_quantity,
+                "unsettled_quantity": exc.unsettled_quantity,
+                "next_sellable_at": (
+                    exc.next_sellable_at.isoformat()
+                    if exc.next_sellable_at is not None
+                    else None
+                ),
+            },
+        )
     except PortfolioOversellError as exc:
         raise _conflict_error(error="portfolio_oversell", message=str(exc))
     except PortfolioConflictError as exc:
@@ -441,6 +478,46 @@ def get_snapshot(
         raise _internal_error("Get snapshot failed", exc)
 
 
+@router.get(
+    "/positions/{symbol}/settlement",
+    response_model=PortfolioPositionSettlementResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+    summary="Get settlement details for a held portfolio position",
+)
+def get_position_settlement(
+    symbol: str,
+    account_id: Optional[int] = Query(
+        None,
+        description="Optional account id; required when a symbol is held in multiple accounts",
+    ),
+    as_of: Optional[date] = Query(None, description="Projection date, default today"),
+    cost_method: str = Query("fifo", description="Cost method: fifo or avg"),
+) -> PortfolioPositionSettlementResponse:
+    service = PortfolioService()
+    try:
+        data = service.get_position_settlement(
+            symbol=symbol,
+            account_id=account_id,
+            as_of=as_of,
+            cost_method=cost_method,
+        )
+        if data is None:
+            raise api_error(404, "not_found", f"No non-zero portfolio position for {symbol}")
+        return PortfolioPositionSettlementResponse(**data)
+    except HTTPException:
+        raise
+    except PortfolioAmbiguousPositionError as exc:
+        raise api_error(400, "ambiguous_position_account", str(exc))
+    except ValueError as exc:
+        raise _bad_request(exc)
+    except Exception as exc:
+        raise _internal_error("Get position settlement failed", exc)
+
+
 @router.post(
     "/positions/{symbol}/analysis",
     status_code=202,
@@ -542,6 +619,13 @@ def _resolve_position_analysis_context(
         "market": position.get("market"),
         "currency": position.get("currency"),
         "quantity": position.get("quantity"),
+        "total_quantity": position.get("quantity"),
+        "settlement_state": position.get("settlement_state"),
+        "sellable_quantity": position.get("sellable_quantity"),
+        "unsettled_quantity": position.get("unsettled_quantity"),
+        "next_sellable_at": position.get("next_sellable_at"),
+        "calculation_status": position.get("settlement_calculation_status"),
+        "warnings": position.get("settlement_warnings") or [],
         "avg_cost": position.get("avg_cost"),
         "total_cost": position.get("total_cost"),
         "unrealized_pnl_base": position.get("unrealized_pnl_base"),

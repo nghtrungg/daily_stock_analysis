@@ -400,9 +400,13 @@ class MainScheduleModeTestCase(unittest.TestCase):
             {
                 "schedule_time": "18:00",
                 "run_immediately": True,
-                "background_tasks": [],
+                "background_tasks": [unittest.mock.ANY],
                 "resolved_schedule_time": "18:00",
             },
+        )
+        self.assertEqual(
+            scheduled_call["background_tasks"][0]["name"],
+            "settlement_outcomes_after_market",
         )
         run_full_analysis.assert_called_once_with(config, args, None)
         warning_log.assert_any_call(
@@ -515,7 +519,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
         self.assertEqual(scheduled_call["schedule_time"], "18:00")
         self.assertEqual(scheduled_call["run_immediately"], True)
         self.assertEqual(scheduled_call["resolved_schedule_time"], "18:00")
-        self.assertEqual(len(scheduled_call["background_tasks"]), 1)
+        self.assertEqual(len(scheduled_call["background_tasks"]), 2)
         background_task = scheduled_call["background_tasks"][0]
         self.assertEqual(background_task["name"], "agent_event_monitor")
         self.assertEqual(background_task["interval_seconds"], 7 * 60)
@@ -560,8 +564,12 @@ class MainScheduleModeTestCase(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         worker_cls.assert_called_once()
         run_full_analysis.assert_not_called()
-        self.assertEqual(len(scheduled_call["background_tasks"]), 1)
+        self.assertEqual(len(scheduled_call["background_tasks"]), 2)
         self.assertEqual(scheduled_call["background_tasks"][0]["name"], "agent_event_monitor")
+        self.assertEqual(
+            scheduled_call["background_tasks"][1]["name"],
+            "settlement_outcomes_after_market",
+        )
 
     def test_check_notify_returns_before_other_modes(self) -> None:
         args = self._make_args(check_notify=True, serve=True, schedule=True, market_review=True)
@@ -682,7 +690,11 @@ class MainScheduleModeTestCase(unittest.TestCase):
         run_full_analysis.assert_called_once_with(config, args, None)
         self.assertEqual(scheduled_call["schedule_time"], "18:00")
         self.assertEqual(scheduled_call["run_immediately"], True)
-        self.assertEqual(scheduled_call["background_tasks"], [])
+        self.assertEqual(len(scheduled_call["background_tasks"]), 1)
+        self.assertEqual(
+            scheduled_call["background_tasks"][0]["name"],
+            "settlement_outcomes_after_market",
+        )
         error_log.assert_called_once()
 
     def test_serve_with_enabled_schedule_uses_api_runtime_scheduler(self) -> None:

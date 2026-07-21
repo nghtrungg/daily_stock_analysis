@@ -1064,6 +1064,7 @@ class NotificationService(
             return True
         return bool(
             cls._phase_decision_list(phase_decision.get("watch_conditions"))
+            or phase_decision.get("decision_scenarios")
             or cls._phase_decision_list(phase_decision.get("data_limitations"))
         )
 
@@ -1099,6 +1100,30 @@ class NotificationService(
             for condition in watch_conditions:
                 report_lines.append(f"- {condition}")
             report_lines.append("")
+
+        decision_scenarios = phase_decision.get("decision_scenarios")
+        if isinstance(decision_scenarios, list):
+            valid_scenarios = [
+                scenario for scenario in decision_scenarios
+                if isinstance(scenario, dict) and any(
+                    str(scenario.get(key) or "").strip()
+                    for key in ("condition", "action", "invalidation")
+                )
+            ]
+            if valid_scenarios:
+                report_lines.extend([
+                    f"**{labels['decision_scenarios_heading']}**:",
+                    "",
+                    f"| {labels['scenario_condition_label']} | {labels['scenario_action_label']} | {labels['scenario_invalidation_label']} |",
+                    "|---------|---------|---------|",
+                ])
+                for scenario in valid_scenarios:
+                    report_lines.append(
+                        f"| {scenario.get('condition') or 'N/A'} | "
+                        f"{scenario.get('action') or 'N/A'} | "
+                        f"{scenario.get('invalidation') or 'N/A'} |"
+                    )
+                report_lines.append("")
 
         confidence_reason = str(phase_decision.get("confidence_reason") or "").strip()
         if confidence_reason:
@@ -1365,6 +1390,24 @@ class NotificationService(
                             f"💡 *{money_flow_data.get('note', '')}*",
                             "",
                         ])
+                    sector_health = data_persp.get("sector_health")
+                    if isinstance(sector_health, dict) and sector_health:
+                        score = sector_health.get("score")
+                        report_lines.append(f"**{labels['sector_health_heading']}**:")
+                        if score is None:
+                            report_lines.append(f"- {labels['sector_health_unavailable']}")
+                        else:
+                            report_lines.append(
+                                f"- **{score}/100** · {sector_health.get('label') or ''}"
+                            )
+                        peers = sector_health.get("peer_symbols")
+                        if isinstance(peers, list) and peers:
+                            report_lines.append(
+                                f"- {labels['sector_health_peers_label']}: {', '.join(str(peer) for peer in peers)}"
+                            )
+                        if sector_health.get("rationale"):
+                            report_lines.append(f"- {sector_health['rationale']}")
+                        report_lines.append("")
                     if isinstance(order_flow, dict) and order_flow:
                         report_lines.extend([
                             f"**{labels['order_flow_label']}**: "
@@ -1385,10 +1428,11 @@ class NotificationService(
                     # 筹码结构
                     if chip_data:
                         if is_chip_structure_unavailable(chip_data):
-                            report_lines.extend([
-                                f"**{labels['chip_label']}**: {get_chip_unavailable_reason(chip_data, report_language)}",
-                                "",
-                            ])
+                            if report_language != "vi":
+                                report_lines.extend([
+                                    f"**{labels['chip_label']}**: {get_chip_unavailable_reason(chip_data, report_language)}",
+                                    "",
+                                ])
                         else:
                             chip_health = localize_chip_health(chip_data.get('chip_health', 'N/A'), report_language)
                             report_lines.extend([
@@ -1398,7 +1442,7 @@ class NotificationService(
                             ])
                     else:
                         chip_unavailable_reason = get_chip_unavailable_reason(data_persp, report_language)
-                        if chip_unavailable_reason:
+                        if chip_unavailable_reason and report_language != "vi":
                             report_lines.extend([
                                 f"**{labels['chip_label']}**: {chip_unavailable_reason}",
                                 "",
@@ -1512,6 +1556,14 @@ class NotificationService(
                             f"{result.news_summary}",
                             "",
                         ])
+
+                if result.analysis_summary:
+                    report_lines.extend([
+                        f"### 🧾 {labels['closing_summary_heading']}",
+                        "",
+                        result.analysis_summary,
+                        "",
+                    ])
 
                 report_lines.extend([
                     "---",

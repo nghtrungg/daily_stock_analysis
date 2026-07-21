@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
@@ -46,6 +46,13 @@ class PortfolioTradeCreateRequest(BaseModel):
     account_id: int
     symbol: str = Field(..., min_length=1, max_length=16)
     trade_date: date
+    executed_at: Optional[datetime] = Field(
+        None,
+        description=(
+            "ISO execution time. Naive values are interpreted in "
+            "Asia/Ho_Chi_Minh; aware values must resolve to trade_date there."
+        ),
+    )
     side: Literal["buy", "sell"]
     quantity: float = Field(..., gt=0)
     price: float = Field(..., gt=0)
@@ -54,6 +61,11 @@ class PortfolioTradeCreateRequest(BaseModel):
     market: Optional[Literal["cn", "hk", "us", "jp", "kr", "tw", "vn"]] = None
     currency: Optional[str] = Field(None, min_length=3, max_length=8)
     trade_uid: Optional[str] = Field(None, max_length=128)
+    source_decision_signal_id: Optional[int] = Field(
+        None,
+        gt=0,
+        description="Optional active buy/add DecisionSignal that sourced this purchase.",
+    )
     note: Optional[str] = Field(None, max_length=255)
 
 
@@ -82,6 +94,11 @@ class PortfolioEventCreatedResponse(BaseModel):
     id: int
 
 
+class PortfolioTradeCreatedResponse(PortfolioEventCreatedResponse):
+    source_decision_signal_id: Optional[int] = None
+    link_type: Optional[str] = None
+
+
 class PortfolioDeleteResponse(BaseModel):
     deleted: int
 
@@ -101,6 +118,8 @@ class PortfolioTradeListItem(BaseModel):
     tax: float
     note: Optional[str] = None
     created_at: Optional[str] = None
+    source_decision_signal_id: Optional[int] = None
+    link_type: Optional[str] = None
 
 
 class PortfolioTradeListResponse(BaseModel):
@@ -168,6 +187,49 @@ class PortfolioPositionItem(BaseModel):
     price_available: bool = True
     data_quality: str = "ok"
     limitations: List[str] = Field(default_factory=list)
+    position_lifecycle: Optional[str] = None
+    settlement_state: Optional[str] = None
+    sellable_quantity: Optional[float] = None
+    unsettled_quantity: Optional[float] = None
+    next_sellable_at: Optional[str] = None
+    settlement_calculation_status: Optional[str] = None
+    settlement_warnings: List[str] = Field(default_factory=list)
+
+
+class PortfolioSettlementLotItem(BaseModel):
+    source_trade_id: Optional[int] = None
+    acquired_at: Optional[str] = None
+    remaining_quantity: float
+    unit_cost: float
+    settlement_state: str
+    estimated_sellable_at: Optional[str] = None
+    actual_sellable_at: Optional[str] = None
+    calculation_status: str
+    warnings: List[str] = Field(default_factory=list)
+
+
+class PortfolioPositionSettlementResponse(BaseModel):
+    account_id: int
+    symbol: str
+    as_of: str
+    total_quantity: float
+    sellable_quantity: float
+    unsettled_quantity: float
+    settlement_state: str
+    next_sellable_at: Optional[str] = None
+    calculation_status: str
+    warnings: List[str] = Field(default_factory=list)
+    lots: List[PortfolioSettlementLotItem] = Field(default_factory=list)
+
+
+class InsufficientSellableQuantityErrorResponse(BaseModel):
+    error: Literal["insufficient_sellable_quantity"]
+    message: str
+    requested_quantity: float
+    held_quantity: float
+    sellable_quantity: float
+    unsettled_quantity: float
+    next_sellable_at: Optional[str] = None
 
 
 class PortfolioPositionAnalysisRequest(BaseModel):

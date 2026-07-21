@@ -158,6 +158,87 @@ class DecisionSignalOutcomeListResponse(BaseModel):
     page_size: int
 
 
+class SettlementOutcomeRunRequest(BaseModel):
+    signal_id: Optional[int] = Field(None, gt=0)
+    outcome_types: Optional[List[Literal["signal", "execution"]]] = None
+    force: bool = False
+    limit: int = Field(100, ge=1, le=500)
+
+
+class SettlementOutcomeItem(BaseModel):
+    id: int
+    signal_id: int
+    source_trade_id: Optional[int] = None
+    outcome_type: Literal["signal", "execution"]
+    engine_version: str
+    entry_policy_version: str
+    calendar_version: Optional[str] = None
+    settlement_policy_version: Optional[str] = None
+    anchor_date: Optional[str] = None
+    estimated_settlement_date: Optional[str] = None
+    estimated_first_sellable_at: Optional[str] = None
+    entry_price: Optional[float] = None
+    return_t1_pct: Optional[float] = None
+    return_t2_pct: Optional[float] = None
+    return_first_sellable_pct: Optional[float] = None
+    return_t5_pct: Optional[float] = None
+    return_t10_pct: Optional[float] = None
+    return_t20_pct: Optional[float] = None
+    mae_before_sellable_pct: Optional[float] = None
+    mfe_before_sellable_pct: Optional[float] = None
+    invalidation_before_sellable: Optional[bool] = None
+    operationally_executable: bool
+    estimated_fee_pct: Optional[float] = None
+    estimated_slippage_pct: Optional[float] = None
+    net_return_first_sellable_pct: Optional[float] = None
+    data_quality: str
+    unavailable_reason: Optional[str] = None
+    ambiguity_flags: List[str] = Field(default_factory=list)
+    settlement_risk_score: Optional[float] = None
+    survivability_bucket: Optional[str] = None
+    liquidity_bucket: Optional[str] = None
+    guarded_action: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class SettlementOutcomeRunResponse(BaseModel):
+    items: List[SettlementOutcomeItem] = Field(default_factory=list)
+    evaluated: int
+    created: int
+    updated: int
+    skipped: int
+    engine_version: str
+
+
+class SettlementOutcomeListResponse(BaseModel):
+    items: List[SettlementOutcomeItem] = Field(default_factory=list)
+    total: int
+    page: int
+    page_size: int
+
+
+class SettlementOutcomeMetric(BaseModel):
+    value: Optional[float] = None
+    sample_count: int
+    unavailable_reason: Optional[str] = None
+
+
+class SettlementOutcomeBreakdown(BaseModel):
+    value: str
+    sample_count: int
+    expected_return_pct: Optional[float] = None
+    unavailable_reason: Optional[str] = None
+
+
+class SettlementOutcomeStatsResponse(BaseModel):
+    engine_version: str
+    outcome_type: Optional[Literal["signal", "execution"]] = None
+    sample_count: int
+    metrics: Dict[str, SettlementOutcomeMetric] = Field(default_factory=dict)
+    breakdowns: Dict[str, List[SettlementOutcomeBreakdown]] = Field(default_factory=dict)
+
+
 class DecisionSignalOutcomeStatsBucket(BaseModel):
     dimension: str
     value: str

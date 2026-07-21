@@ -270,6 +270,29 @@ class TestCheckContentIntegrity(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("dashboard.battle_plan.sniper_points.stop_loss", missing)
 
+    def test_vietnamese_mid_word_fragments_trigger_integrity_retry(self) -> None:
+        """Vietnamese renderer-facing text must not stop in the middle of a word."""
+        result = AnalysisResult(
+            code="VCB.VN",
+            name="Vietcombank",
+            report_language="vi",
+            trend_prediction="Đi ngang",
+            sentiment_score=55,
+            operation_advice="Theo dõi",
+            analysis_summary="Định giá đang cải thiện nhưng chỉ số cơ b",
+            decision_type="hold",
+            dashboard={
+                "core_conclusion": {"one_sentence": "Tiếp tục theo dõi."},
+                "intelligence": {"risk_alerts": []},
+                "battle_plan": {"sniper_points": {}},
+            },
+        )
+
+        ok, missing = check_content_integrity(result)
+
+        self.assertFalse(ok)
+        self.assertIn("truncated:analysis_summary", missing)
+
 
 class TestApplyPlaceholderFill(unittest.TestCase):
     """Placeholder fill tests."""

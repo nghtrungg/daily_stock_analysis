@@ -995,7 +995,19 @@ class Config:
     prefetch_realtime_quotes: bool = True
 
     # === 数据库配置 ===
+    database_backend: str = "sqlite"
     database_path: str = "./data/stock_analysis.db"
+    supabase_db_url: Optional[str] = None
+    database_pool_strategy: str = "null"
+    database_pool_size: int = 1
+    database_max_overflow: int = 0
+    database_pool_timeout_seconds: int = 10
+    database_pool_recycle_seconds: int = 300
+    database_connect_timeout_seconds: int = 10
+    database_statement_timeout_ms: int = 120000
+    database_idle_transaction_timeout_ms: int = 30000
+    postgres_write_retry_max: int = 2
+    postgres_write_retry_base_delay: float = 0.2
     sqlite_wal_enabled: bool = True
     sqlite_busy_timeout_ms: int = 5000
     sqlite_write_retry_max: int = 3
@@ -1043,6 +1055,9 @@ class Config:
     enable_realtime_technical_indicators: bool = True
     # 技术指标历史窗口（日历日）；365 通常覆盖至少 200 个交易日
     technical_lookback_days: int = 365
+    # 越南结算等待期风险启发式；仅使用确定性的历史 OHLCV 与技术支撑位
+    settlement_risk_enabled: bool = True
+    settlement_risk_lookback_sessions: int = 120
     # 筹码分布开关（该接口不稳定，云端部署建议关闭）
     enable_chip_distribution: bool = True
     # 越南市场高级资金流（vnstock_data sponsor：外资/自营）；主动买卖仍使用免费逐笔数据
@@ -1939,7 +1954,64 @@ class Config:
             ),
             md2img_engine=cls._parse_md2img_engine(os.getenv('MD2IMG_ENGINE', 'wkhtmltoimage')),
             prefetch_realtime_quotes=os.getenv('PREFETCH_REALTIME_QUOTES', 'true').lower() == 'true',
+            database_backend=os.getenv('DATABASE_BACKEND', 'sqlite').strip().lower(),
             database_path=os.getenv('DATABASE_PATH', './data/stock_analysis.db'),
+            supabase_db_url=os.getenv('SUPABASE_DB_URL') or None,
+            database_pool_strategy=os.getenv('DATABASE_POOL_STRATEGY', 'null').strip().lower(),
+            database_pool_size=parse_env_int(
+                os.getenv('DATABASE_POOL_SIZE'),
+                1,
+                field_name='DATABASE_POOL_SIZE',
+                minimum=1,
+            ),
+            database_max_overflow=parse_env_int(
+                os.getenv('DATABASE_MAX_OVERFLOW'),
+                0,
+                field_name='DATABASE_MAX_OVERFLOW',
+                minimum=0,
+            ),
+            database_pool_timeout_seconds=parse_env_int(
+                os.getenv('DATABASE_POOL_TIMEOUT_SECONDS'),
+                10,
+                field_name='DATABASE_POOL_TIMEOUT_SECONDS',
+                minimum=1,
+            ),
+            database_pool_recycle_seconds=parse_env_int(
+                os.getenv('DATABASE_POOL_RECYCLE_SECONDS'),
+                300,
+                field_name='DATABASE_POOL_RECYCLE_SECONDS',
+                minimum=1,
+            ),
+            database_connect_timeout_seconds=parse_env_int(
+                os.getenv('DATABASE_CONNECT_TIMEOUT_SECONDS'),
+                10,
+                field_name='DATABASE_CONNECT_TIMEOUT_SECONDS',
+                minimum=1,
+            ),
+            database_statement_timeout_ms=parse_env_int(
+                os.getenv('DATABASE_STATEMENT_TIMEOUT_MS'),
+                120000,
+                field_name='DATABASE_STATEMENT_TIMEOUT_MS',
+                minimum=1,
+            ),
+            database_idle_transaction_timeout_ms=parse_env_int(
+                os.getenv('DATABASE_IDLE_TRANSACTION_TIMEOUT_MS'),
+                30000,
+                field_name='DATABASE_IDLE_TRANSACTION_TIMEOUT_MS',
+                minimum=1,
+            ),
+            postgres_write_retry_max=parse_env_int(
+                os.getenv('POSTGRES_WRITE_RETRY_MAX'),
+                2,
+                field_name='POSTGRES_WRITE_RETRY_MAX',
+                minimum=0,
+            ),
+            postgres_write_retry_base_delay=parse_env_float(
+                os.getenv('POSTGRES_WRITE_RETRY_BASE_DELAY'),
+                0.2,
+                field_name='POSTGRES_WRITE_RETRY_BASE_DELAY',
+                minimum=0.0,
+            ),
             sqlite_wal_enabled=os.getenv('SQLITE_WAL_ENABLED', 'true').lower() == 'true',
             sqlite_busy_timeout_ms=parse_env_int(
                 os.getenv('SQLITE_BUSY_TIMEOUT_MS'),
@@ -2038,6 +2110,17 @@ class Config:
                 365,
                 field_name='TECHNICAL_LOOKBACK_DAYS',
                 minimum=200,
+            ),
+            settlement_risk_enabled=parse_env_bool(
+                os.getenv('SETTLEMENT_RISK_ENABLED'),
+                default=True,
+            ),
+            settlement_risk_lookback_sessions=parse_env_int(
+                os.getenv('SETTLEMENT_RISK_LOOKBACK_SESSIONS'),
+                120,
+                field_name='SETTLEMENT_RISK_LOOKBACK_SESSIONS',
+                minimum=30,
+                maximum=500,
             ),
             enable_chip_distribution=os.getenv('ENABLE_CHIP_DISTRIBUTION', 'true').lower() == 'true',
             enable_vn_advanced_flow=os.getenv('ENABLE_VN_ADVANCED_FLOW', 'false').lower() == 'true',
@@ -3414,6 +3497,27 @@ class Config:
         
         自动创建数据库目录（如果不存在）
         """
+        if self.database_backend not in {"sqlite", "supabase"}:
+            raise ValueError(
+                "DATABASE_BACKEND must be either 'sqlite' or 'supabase'."
+            )
+        if self.database_pool_strategy not in {"null", "queue"}:
+            raise ValueError(
+                "DATABASE_POOL_STRATEGY must be either 'null' or 'queue'."
+            )
+        if self.database_backend == "supabase":
+            if not self.supabase_db_url:
+                raise ValueError(
+                    "SUPABASE_DB_URL is required when DATABASE_BACKEND=supabase."
+                )
+            if not self.supabase_db_url.startswith(
+                ("postgresql://", "postgresql+psycopg2://")
+            ):
+                raise ValueError(
+                    "SUPABASE_DB_URL must use PostgreSQL with the psycopg2 driver."
+                )
+            return self.supabase_db_url
+
         db_path = Path(self.database_path)
         db_path.parent.mkdir(parents=True, exist_ok=True)
         return f"sqlite:///{db_path.absolute()}"

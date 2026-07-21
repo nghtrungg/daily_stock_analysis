@@ -3,9 +3,14 @@
 
 from __future__ import annotations
 
+import logging
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import and_, desc, func, select
+from sqlalchemy import and_, desc, func, literal_column, select
+from sqlalchemy.dialects.postgresql import insert as postgres_insert
+
+from src.repositories.bulk import chunk_mappings
 
 from src.storage import (
     DatabaseManager,
@@ -14,6 +19,9 @@ from src.storage import (
     DecisionSignalRecord,
     utc_naive_now,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class DecisionSignalOutcomeRepository:
@@ -97,32 +105,97 @@ class DecisionSignalOutcomeRepository:
             ).scalar_one_or_none()
 
     def upsert_outcome(self, fields: Dict[str, Any]) -> Tuple[DecisionSignalOutcomeRecord, bool]:
-        now = utc_naive_now()
-        with self.db.get_session() as session:
-            existing = session.execute(
-                select(DecisionSignalOutcomeRecord)
-                .where(
-                    DecisionSignalOutcomeRecord.signal_id == fields["signal_id"],
-                    DecisionSignalOutcomeRecord.horizon == fields["horizon"],
-                    DecisionSignalOutcomeRecord.engine_version == fields["engine_version"],
-                )
-                .limit(1)
-            ).scalar_one_or_none()
-            if existing is None:
-                row = DecisionSignalOutcomeRecord(**fields)
-                session.add(row)
-                session.commit()
-                session.refresh(row)
-                return row, True
+        return self.upsert_outcomes([fields])[0]
 
-            for key, value in fields.items():
-                if key in {"id", "created_at"}:
-                    continue
-                setattr(existing, key, value)
-            existing.updated_at = now
-            session.commit()
-            session.refresh(existing)
-            return existing, False
+    def upsert_outcomes(
+        self,
+        fields_list: List[Dict[str, Any]],
+    ) -> List[Tuple[DecisionSignalOutcomeRecord, bool]]:
+        """Upsert one evaluated outcome batch while preserving input order."""
+        if not fields_list:
+            return []
+        keys = [
+            (fields["signal_id"], fields["horizon"], fields["engine_version"])
+            for fields in fields_list
+        ]
+        now = utc_naive_now()
+
+        if self.db.is_sqlite:
+            results: List[Tuple[DecisionSignalOutcomeRecord, bool]] = []
+            with self.db.get_session() as session:
+                try:
+                    for fields, key in zip(fields_list, keys):
+                        existing = session.execute(
+                            select(DecisionSignalOutcomeRecord).where(
+                                DecisionSignalOutcomeRecord.signal_id == key[0],
+                                DecisionSignalOutcomeRecord.horizon == key[1],
+                                DecisionSignalOutcomeRecord.engine_version == key[2],
+                            )
+                        ).scalar_one_or_none()
+                        if existing is None:
+                            existing = DecisionSignalOutcomeRecord(**fields)
+                            session.add(existing)
+                            results.append((existing, True))
+                        else:
+                            for field, value in fields.items():
+                                if field not in {"id", "created_at"}:
+                                    setattr(existing, field, value)
+                            existing.updated_at = now
+                            results.append((existing, False))
+                    session.commit()
+                    for row, _created in results:
+                        session.refresh(row)
+                    return results
+                except Exception:
+                    session.rollback()
+                    raise
+
+        mappings_by_key: Dict[Tuple[Any, ...], Dict[str, Any]] = {}
+        for fields, key in zip(fields_list, keys):
+            mapping = dict(fields)
+            mapping.setdefault("created_at", now)
+            mapping["updated_at"] = now
+            mappings_by_key[key] = mapping
+        mutable_fields = [
+            column.name
+            for column in DecisionSignalOutcomeRecord.__table__.columns
+            if column.name not in {"id", "signal_id", "horizon", "engine_version", "created_at"}
+        ]
+
+        def _write(session: Any) -> Dict[Tuple[Any, ...], Tuple[DecisionSignalOutcomeRecord, bool]]:
+            rows_by_key: Dict[
+                Tuple[Any, ...], Tuple[DecisionSignalOutcomeRecord, bool]
+            ] = {}
+            chunk_count = 0
+            started_at = time.monotonic()
+            for chunk in chunk_mappings(mappings_by_key.values()):
+                stmt = postgres_insert(DecisionSignalOutcomeRecord).values(chunk)
+                excluded = stmt.excluded
+                returned = session.execute(
+                    stmt.on_conflict_do_update(
+                        constraint="uix_decision_signal_outcome_key",
+                        set_={field: getattr(excluded, field) for field in mutable_fields},
+                    ).returning(
+                        DecisionSignalOutcomeRecord,
+                        literal_column("(xmax = 0)").label("inserted"),
+                    )
+                ).all()
+                for row, inserted in returned:
+                    row_key = (row.signal_id, row.horizon, row.engine_version)
+                    rows_by_key[row_key] = (row, bool(inserted))
+                chunk_count += 1
+            logger.info(
+                "Bulk write completed: operation=decision_signal_outcomes rows=%s chunks=%s duration_ms=%s",
+                len(mappings_by_key),
+                chunk_count,
+                int((time.monotonic() - started_at) * 1000),
+            )
+            return rows_by_key
+
+        rows_by_key = self.db.run_write_transaction(
+            "upsert_decision_signal_outcomes", _write
+        )
+        return [rows_by_key[key] for key in keys]
 
     def list_outcomes(
         self,

@@ -548,10 +548,13 @@ class HistoryService:
 
         context_snapshot = None
         if record.context_snapshot:
-            try:
-                context_snapshot = json.loads(record.context_snapshot)
-            except json.JSONDecodeError:
-                context_snapshot = record.context_snapshot
+            if isinstance(record.context_snapshot, dict):
+                context_snapshot = dict(record.context_snapshot)
+            else:
+                try:
+                    context_snapshot = json.loads(record.context_snapshot)
+                except json.JSONDecodeError:
+                    context_snapshot = record.context_snapshot
 
         market_review_content = None
         if getattr(record, "report_type", None) == "market_review":

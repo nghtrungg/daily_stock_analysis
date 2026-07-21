@@ -291,3 +291,58 @@ def test_outcome_run_uses_hk_alias_stock_code_filter(client_and_db) -> None:
     assert force_data["evaluated"] == 1
     assert force_data["updated"] == 1
     assert force_data["items"][0]["signal_id"] == signal_id
+
+
+def test_settlement_outcome_api_keeps_signal_and_execution_contracts_separate(
+    client_and_db,
+) -> None:
+    client, db = client_and_db
+    payload = _payload(
+        stock_code="MBB.VN",
+        stock_name="MBB",
+        market="vn",
+        trace_id="trace-settlement-outcome-api",
+        metadata={"market_phase_summary": {"session_date": "2026-07-13"}},
+    )
+    created = client.post("/api/v1/decision-signals", json=payload)
+    assert created.status_code == 200, created.text
+    signal_id = created.json()["item"]["id"]
+    with db.session_scope() as session:
+        for day, open_, high, low, close in [
+            (date(2026, 7, 13), 99, 101, 98, 100),
+            (date(2026, 7, 14), 100, 102, 99, 101),
+            (date(2026, 7, 15), 101, 104, 100, 103),
+            (date(2026, 7, 16), 103, 105, 102, 104),
+        ]:
+            session.add(
+                StockDaily(
+                    code="MBB.VN",
+                    date=day,
+                    open=open_,
+                    high=high,
+                    low=low,
+                    close=close,
+                )
+            )
+
+    run = client.post(
+        "/api/v1/decision-signals/settlement-outcomes/run",
+        json={"signal_id": signal_id},
+    )
+    assert run.status_code == 200, run.text
+    assert [item["outcome_type"] for item in run.json()["items"]] == ["signal"]
+    assert run.json()["items"][0]["estimated_settlement_date"] == "2026-07-16"
+
+    listed = client.get(
+        "/api/v1/decision-signals/settlement-outcomes",
+        params={"signal_id": signal_id, "outcome_type": "signal"},
+    )
+    assert listed.status_code == 200, listed.text
+    assert listed.json()["total"] == 1
+
+    stats = client.get(
+        "/api/v1/decision-signals/settlement-outcomes/stats",
+        params={"outcome_type": "signal"},
+    )
+    assert stats.status_code == 200, stats.text
+    assert stats.json()["sample_count"] == 1

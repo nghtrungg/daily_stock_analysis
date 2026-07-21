@@ -99,6 +99,16 @@ class OrderFlow(BaseModel):
     coverage: Optional[Dict[str, Any]] = None
 
 
+class SectorHealth(BaseModel):
+    """Peer/sector health score with explicit evidence availability."""
+
+    score: Optional[float] = Field(None, ge=0, le=100)
+    label: Optional[str] = None
+    peer_symbols: List[str] = Field(default_factory=list)
+    rationale: Optional[str] = None
+    data_status: Optional[str] = None
+
+
 class DataPerspective(BaseModel):
     """Data perspective block."""
 
@@ -108,6 +118,7 @@ class DataPerspective(BaseModel):
     chip_structure: Optional[ChipStructure] = None
     money_flow_indicators: Optional[MoneyFlowIndicators] = None
     order_flow: Optional[OrderFlow] = None
+    sector_health: Optional[SectorHealth] = None
 
 
 class Intelligence(BaseModel):
@@ -163,6 +174,14 @@ class BattlePlan(BaseModel):
     trading_plan_validation: Optional[TradingPlanValidation] = None
 
 
+class DecisionScenario(BaseModel):
+    """One price-triggered branch in the report decision table."""
+
+    condition: Optional[str] = None
+    action: Optional[str] = None
+    invalidation: Optional[str] = None
+
+
 class PhaseDecision(BaseModel):
     """Market-phase-aware intraday decision guardrail output."""
 
@@ -170,6 +189,7 @@ class PhaseDecision(BaseModel):
     action_window: Optional[str] = None
     immediate_action: Optional[str] = None
     watch_conditions: List[str] = Field(default_factory=list)
+    decision_scenarios: List[DecisionScenario] = Field(default_factory=list)
     next_check_time: Optional[str] = None
     confidence_reason: Optional[str] = None
     data_limitations: List[str] = Field(default_factory=list)
@@ -274,6 +294,8 @@ class Dashboard(BaseModel):
     battle_plan: Optional[BattlePlan] = None
     phase_decision: Optional[PhaseDecision] = None
     signal_attribution: Optional[SignalAttribution] = None
+    settlement_constraint: Optional[Dict[str, Any]] = None
+    settlement_risk: Optional[Dict[str, Any]] = None
 
 
 class AnalysisReportSchema(BaseModel):
@@ -290,6 +312,13 @@ class AnalysisReportSchema(BaseModel):
     operation_advice: Optional[str] = None
     decision_type: Optional[str] = None
     confidence_level: Optional[str] = None
+    action: Optional[str] = None
+    action_label: Optional[str] = None
+    settlement_constraint: Optional[str] = None
+    maximum_sell_quantity: Optional[float] = Field(None, ge=0)
+    reason_codes: List[str] = Field(default_factory=list)
+    settlement_snapshot: Optional[Dict[str, Any]] = None
+    settlement_risk: Optional[Dict[str, Any]] = None
 
     dashboard: Optional[Dashboard] = None
 

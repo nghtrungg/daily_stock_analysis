@@ -16,6 +16,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 
 from src.storage import (
     DatabaseManager,
+    DecisionSignalTradeLink,
     PortfolioAccount,
     PortfolioCashLedger,
     PortfolioCorporateAction,
@@ -24,6 +25,7 @@ from src.storage import (
     PortfolioPosition,
     PortfolioPositionLot,
     PortfolioTrade,
+    PortfolioTradeSettlement,
     StockDaily,
 )
 
@@ -172,6 +174,7 @@ class PortfolioRepository:
         price: float,
         fee: float,
         tax: float,
+        executed_at: Optional[datetime] = None,
         note: Optional[str] = None,
         dedup_hash: Optional[str] = None,
     ) -> PortfolioTrade:
@@ -184,6 +187,7 @@ class PortfolioRepository:
                 market=market,
                 currency=currency,
                 trade_date=trade_date,
+                executed_at=executed_at,
                 side=side,
                 quantity=quantity,
                 price=price,
@@ -316,6 +320,7 @@ class PortfolioRepository:
         price: float,
         fee: float,
         tax: float,
+        executed_at: Optional[datetime] = None,
         note: Optional[str] = None,
         dedup_hash: Optional[str] = None,
     ) -> PortfolioTrade:
@@ -326,6 +331,7 @@ class PortfolioRepository:
             market=market,
             currency=currency,
             trade_date=trade_date,
+            executed_at=executed_at,
             side=side,
             quantity=quantity,
             price=price,
@@ -349,6 +355,34 @@ class PortfolioRepository:
                 trade_uid=trade_uid,
                 dedup_hash=dedup_hash,
             ) from exc
+        session.refresh(row)
+        return row
+
+    def add_trade_settlement_in_session(
+        self,
+        *,
+        session: Any,
+        trade_id: int,
+        settlement_date: date,
+        estimated_sellable_at: datetime,
+        actual_sellable_at: Optional[datetime],
+        calendar_version: str,
+        policy_version: str,
+        calculation_status: str,
+        warnings_json: str,
+    ) -> PortfolioTradeSettlement:
+        row = PortfolioTradeSettlement(
+            trade_id=trade_id,
+            settlement_date=settlement_date,
+            estimated_sellable_at=estimated_sellable_at,
+            actual_sellable_at=actual_sellable_at,
+            calendar_version=calendar_version,
+            policy_version=policy_version,
+            calculation_status=calculation_status,
+            warnings_json=warnings_json,
+        )
+        session.add(row)
+        session.flush()
         session.refresh(row)
         return row
 
@@ -427,6 +461,16 @@ class PortfolioRepository:
             account_id=int(row.account_id),
             from_date=row.trade_date,
         )
+        session.execute(
+            delete(PortfolioTradeSettlement).where(
+                PortfolioTradeSettlement.trade_id == trade_id
+            )
+        )
+        session.execute(
+            delete(DecisionSignalTradeLink).where(
+                DecisionSignalTradeLink.trade_id == trade_id
+            )
+        )
         session.delete(row)
         session.flush()
         return True
@@ -486,6 +530,33 @@ class PortfolioRepository:
             .order_by(PortfolioTrade.trade_date.asc(), PortfolioTrade.id.asc())
         ).scalars().all()
         return list(rows)
+
+    def list_trade_settlements_in_session(
+        self,
+        *,
+        session: Any,
+        trade_ids: Iterable[int],
+    ) -> Dict[int, PortfolioTradeSettlement]:
+        normalized_ids = sorted({int(trade_id) for trade_id in trade_ids})
+        if not normalized_ids:
+            return {}
+        rows = session.execute(
+            select(PortfolioTradeSettlement).where(
+                PortfolioTradeSettlement.trade_id.in_(normalized_ids)
+            )
+        ).scalars().all()
+        return {int(row.trade_id): row for row in rows}
+
+    def list_trade_settlements(
+        self,
+        *,
+        trade_ids: Iterable[int],
+    ) -> Dict[int, PortfolioTradeSettlement]:
+        with self.db.get_session() as session:
+            return self.list_trade_settlements_in_session(
+                session=session,
+                trade_ids=trade_ids,
+            )
 
     def list_cash_ledger(self, account_id: int, as_of: date) -> List[PortfolioCashLedger]:
         with self.db.get_session() as session:
@@ -905,6 +976,15 @@ class PortfolioRepository:
                         market_value_base=float(item["market_value_base"]),
                         unrealized_pnl_base=float(item["unrealized_pnl_base"]),
                         valuation_currency=valuation_currency,
+                        position_lifecycle=item.get("position_lifecycle", "open"),
+                        settlement_state=item.get("settlement_state", "unknown"),
+                        sellable_quantity=float(item.get("sellable_quantity", 0.0)),
+                        unsettled_quantity=float(item.get("unsettled_quantity", 0.0)),
+                        next_sellable_at=item.get("next_sellable_at_utc"),
+                        settlement_calculation_status=item.get(
+                            "settlement_calculation_status",
+                            "unknown",
+                        ),
                     )
                 )
 
@@ -920,6 +1000,10 @@ class PortfolioRepository:
                         remaining_quantity=float(lot["remaining_quantity"]),
                         unit_cost=float(lot["unit_cost"]),
                         source_trade_id=lot.get("source_trade_id"),
+                        estimated_sellable_at=lot.get("estimated_sellable_at_utc"),
+                        actual_sellable_at=lot.get("actual_sellable_at_utc"),
+                        settlement_state=lot.get("settlement_state", "unknown"),
+                        calendar_status=lot.get("calendar_status", "unknown"),
                     )
                 )
 
@@ -1090,6 +1174,15 @@ class PortfolioRepository:
                         market_value_base=float(item["market_value_base"]),
                         unrealized_pnl_base=float(item["unrealized_pnl_base"]),
                         valuation_currency=valuation_currency,
+                        position_lifecycle=item.get("position_lifecycle", "open"),
+                        settlement_state=item.get("settlement_state", "unknown"),
+                        sellable_quantity=float(item.get("sellable_quantity", 0.0)),
+                        unsettled_quantity=float(item.get("unsettled_quantity", 0.0)),
+                        next_sellable_at=item.get("next_sellable_at_utc"),
+                        settlement_calculation_status=item.get(
+                            "settlement_calculation_status",
+                            "unknown",
+                        ),
                     )
                 )
 
@@ -1105,6 +1198,10 @@ class PortfolioRepository:
                         remaining_quantity=float(lot["remaining_quantity"]),
                         unit_cost=float(lot["unit_cost"]),
                         source_trade_id=lot.get("source_trade_id"),
+                        estimated_sellable_at=lot.get("estimated_sellable_at_utc"),
+                        actual_sellable_at=lot.get("actual_sellable_at_utc"),
+                        settlement_state=lot.get("settlement_state", "unknown"),
+                        calendar_status=lot.get("calendar_status", "unknown"),
                     )
                 )
 

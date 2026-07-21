@@ -61,6 +61,14 @@ This is the entry point for project documentation. The README covers the project
 | Document | Contents |
 | --- | --- |
 | [API Spec](architecture/api_spec.json) | FastAPI OpenAPI artifact |
+| [Market Support Boundaries](market-support.md) | Market routing, Vietnam-local defaults, and provider degradation |
+| [PR1 Supabase Private Schema](migration/pr1-supabase-schema.md) | Private `dsa` PostgreSQL contract, worker grants, RLS, validation, and rollback |
+| [PR2 Supabase Database Runtime](migration/pr2-database-runtime.md) | Backend selection, engine/session ownership, pool and timeout policy, stable storage exports, JSON compatibility, validation, and rollback |
+| [PR3 PostgreSQL Bulk Repository Writes](migration/pr3-bulk-repositories.md) | Bounded daily/news/intelligence/metric batches, conflict contracts, transient retries, concurrency validation, and rollback |
+| [Vietnam Settlement Calendar And Schema Migrations](settlement-calendar.md) | Versioned Vietnam closures, T+2 calculation status, migrations, and rollback |
+| [Vietnam Settlement-Window Risk Heuristic](settlement-risk.md) | Deterministic historical estimates, score policy, API fields, limitations, and rollback |
+| [DecisionSignal Trade Links And Settlement Alerts](settlement-signal-alerts.md) | Recommendation-to-purchase traceability, persistent lifecycle transitions, notifications, and rollback |
+| [Settlement-Aware Outcome Measurement](settlement-outcomes.md) | Versioned hypothetical and linked-execution outcomes, daily-bar ambiguity, aggregates, scheduler behavior, and rollback |
 | [Contributing Guide (EN)](CONTRIBUTING_EN.md) | Issues, pull requests, tests, documentation sync, and collaboration expectations |
 
 ## Languages

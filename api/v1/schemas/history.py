@@ -159,6 +159,10 @@ class ReportSummary(BaseModel):
         description="情绪评分（历史数据可能超出 0-100 范围，读取时不做约束）",
     )
     sentiment_label: Optional[str] = Field(None, description="情绪标签")
+    settlement_risk: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Deterministic Vietnam settlement-window risk heuristic",
+    )
 
 
 class ReportStrategy(BaseModel):

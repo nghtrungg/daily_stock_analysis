@@ -1,0 +1,5487 @@
+{
+  "baseline": {
+    "capture_basis": "HEAD plus the intentionally preserved active settlement/portfolio working baseline",
+    "commit": "2966d4a53608aa0bc1f7bc714b68ac13939192b0",
+    "runtime_schema_version": "2026-07-18-settlement-z-outcomes"
+  },
+  "contract_version": 1,
+  "table_count": 32,
+  "tables": {
+    "agent_provider_turns": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "session_id",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(100)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "run_id",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "provider",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "model",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(160)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "anchor_user_message_id",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "anchor_assistant_message_id",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "json_contract": {
+            "empty": "[]",
+            "null": "not allowed"
+          },
+          "name": "messages_json",
+          "nullable": false,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "contains_reasoning",
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        {
+          "foreign_keys": [],
+          "name": "contains_tool_calls",
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        {
+          "foreign_keys": [],
+          "name": "contains_thinking_blocks",
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        {
+          "foreign_keys": [],
+          "name": "must_roundtrip",
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        {
+          "foreign_keys": [],
+          "name": "estimated_tokens",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "created_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "session_id",
+            "provider",
+            "model",
+            "must_roundtrip"
+          ],
+          "name": "ix_agent_provider_turn_bucket",
+          "unique": false
+        },
+        {
+          "columns": [
+            "anchor_assistant_message_id"
+          ],
+          "name": "ix_agent_provider_turns_anchor_assistant_message_id",
+          "unique": false
+        },
+        {
+          "columns": [
+            "anchor_user_message_id"
+          ],
+          "name": "ix_agent_provider_turns_anchor_user_message_id",
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "name": "ix_agent_provider_turns_created_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "model"
+          ],
+          "name": "ix_agent_provider_turns_model",
+          "unique": false
+        },
+        {
+          "columns": [
+            "must_roundtrip"
+          ],
+          "name": "ix_agent_provider_turns_must_roundtrip",
+          "unique": false
+        },
+        {
+          "columns": [
+            "provider"
+          ],
+          "name": "ix_agent_provider_turns_provider",
+          "unique": false
+        },
+        {
+          "columns": [
+            "run_id"
+          ],
+          "name": "ix_agent_provider_turns_run_id",
+          "unique": false
+        },
+        {
+          "columns": [
+            "session_id"
+          ],
+          "name": "ix_agent_provider_turns_session_id",
+          "unique": false
+        }
+      ],
+      "unique_constraints": []
+    },
+    "alert_cooldowns": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "rule_id",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "rule_key",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(255)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "target",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "severity",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "last_triggered_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "cooldown_until",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "reason",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "state",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "updated_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "cooldown_until"
+          ],
+          "name": "ix_alert_cooldowns_cooldown_until",
+          "unique": false
+        },
+        {
+          "columns": [
+            "last_triggered_at"
+          ],
+          "name": "ix_alert_cooldowns_last_triggered_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "rule_id"
+          ],
+          "name": "ix_alert_cooldowns_rule_id",
+          "unique": false
+        },
+        {
+          "columns": [
+            "rule_key"
+          ],
+          "name": "ix_alert_cooldowns_rule_key",
+          "unique": false
+        },
+        {
+          "columns": [
+            "severity"
+          ],
+          "name": "ix_alert_cooldowns_severity",
+          "unique": false
+        },
+        {
+          "columns": [
+            "state"
+          ],
+          "name": "ix_alert_cooldowns_state",
+          "unique": false
+        },
+        {
+          "columns": [
+            "target"
+          ],
+          "name": "ix_alert_cooldowns_target",
+          "unique": false
+        },
+        {
+          "columns": [
+            "updated_at"
+          ],
+          "name": "ix_alert_cooldowns_updated_at",
+          "unique": false
+        }
+      ],
+      "unique_constraints": [
+        {
+          "columns": [
+            "rule_id",
+            "target",
+            "severity"
+          ],
+          "name": "uix_alert_cooldown_rule_target_severity"
+        }
+      ]
+    },
+    "alert_notifications": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "trigger_id",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "channel",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "attempt",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "success",
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        {
+          "foreign_keys": [],
+          "name": "error_code",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "retryable",
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        {
+          "foreign_keys": [],
+          "name": "latency_ms",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "json_contract": {
+            "empty": "{}",
+            "null": "allowed"
+          },
+          "name": "diagnostics",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "created_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "trigger_id",
+            "channel"
+          ],
+          "name": "ix_alert_notification_trigger_channel",
+          "unique": false
+        },
+        {
+          "columns": [
+            "channel"
+          ],
+          "name": "ix_alert_notifications_channel",
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "name": "ix_alert_notifications_created_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "success"
+          ],
+          "name": "ix_alert_notifications_success",
+          "unique": false
+        },
+        {
+          "columns": [
+            "trigger_id"
+          ],
+          "name": "ix_alert_notifications_trigger_id",
+          "unique": false
+        }
+      ],
+      "unique_constraints": []
+    },
+    "alert_rules": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "name",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "target_scope",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "target",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "alert_type",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "json_contract": {
+            "empty": "{}",
+            "null": "not allowed"
+          },
+          "name": "parameters",
+          "nullable": false,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "severity",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "enabled",
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        {
+          "foreign_keys": [],
+          "name": "source",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "json_contract": {
+            "empty": "{}",
+            "null": "allowed"
+          },
+          "name": "cooldown_policy",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "json_contract": {
+            "empty": "{}",
+            "null": "allowed"
+          },
+          "name": "notification_policy",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "created_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "updated_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "alert_type",
+            "target"
+          ],
+          "name": "ix_alert_rule_type_target",
+          "unique": false
+        },
+        {
+          "columns": [
+            "alert_type"
+          ],
+          "name": "ix_alert_rules_alert_type",
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "name": "ix_alert_rules_created_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "enabled"
+          ],
+          "name": "ix_alert_rules_enabled",
+          "unique": false
+        },
+        {
+          "columns": [
+            "severity"
+          ],
+          "name": "ix_alert_rules_severity",
+          "unique": false
+        },
+        {
+          "columns": [
+            "source"
+          ],
+          "name": "ix_alert_rules_source",
+          "unique": false
+        },
+        {
+          "columns": [
+            "target"
+          ],
+          "name": "ix_alert_rules_target",
+          "unique": false
+        },
+        {
+          "columns": [
+            "target_scope"
+          ],
+          "name": "ix_alert_rules_target_scope",
+          "unique": false
+        },
+        {
+          "columns": [
+            "updated_at"
+          ],
+          "name": "ix_alert_rules_updated_at",
+          "unique": false
+        }
+      ],
+      "unique_constraints": []
+    },
+    "alert_triggers": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "rule_id",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "target",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "observed_value",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "threshold",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "reason",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "data_source",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "data_timestamp",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "triggered_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "status",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "json_contract": {
+            "empty": "{}",
+            "null": "allowed"
+          },
+          "name": "diagnostics",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "rule_id",
+            "triggered_at"
+          ],
+          "name": "ix_alert_trigger_rule_time",
+          "unique": false
+        },
+        {
+          "columns": [
+            "data_timestamp"
+          ],
+          "name": "ix_alert_triggers_data_timestamp",
+          "unique": false
+        },
+        {
+          "columns": [
+            "rule_id"
+          ],
+          "name": "ix_alert_triggers_rule_id",
+          "unique": false
+        },
+        {
+          "columns": [
+            "status"
+          ],
+          "name": "ix_alert_triggers_status",
+          "unique": false
+        },
+        {
+          "columns": [
+            "target"
+          ],
+          "name": "ix_alert_triggers_target",
+          "unique": false
+        },
+        {
+          "columns": [
+            "triggered_at"
+          ],
+          "name": "ix_alert_triggers_triggered_at",
+          "unique": false
+        }
+      ],
+      "unique_constraints": []
+    },
+    "analysis_history": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "query_id",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "code",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(10)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "name",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(50)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "report_type",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "sentiment_score",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "operation_advice",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(20)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "trend_prediction",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(50)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "analysis_summary",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "json_contract": {
+            "empty": "{}",
+            "null": "allowed"
+          },
+          "name": "raw_result",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "news_content",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "json_contract": {
+            "empty": "{}",
+            "null": "allowed",
+            "sensitivity": "sanitized analysis_context_pack_overview only"
+          },
+          "name": "context_snapshot",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "ideal_buy",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "secondary_buy",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "stop_loss",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "take_profit",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "created_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "code",
+            "created_at"
+          ],
+          "name": "ix_analysis_code_time",
+          "unique": false
+        },
+        {
+          "columns": [
+            "code"
+          ],
+          "name": "ix_analysis_history_code",
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "name": "ix_analysis_history_created_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "query_id"
+          ],
+          "name": "ix_analysis_history_query_id",
+          "unique": false
+        },
+        {
+          "columns": [
+            "report_type"
+          ],
+          "name": "ix_analysis_history_report_type",
+          "unique": false
+        }
+      ],
+      "unique_constraints": []
+    },
+    "backtest_results": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [
+            "analysis_history.id"
+          ],
+          "name": "analysis_history_id",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "code",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(10)"
+        },
+        {
+          "date_semantic": "Vietnam trading/calendar date; remains DATE unless the domain contract says otherwise",
+          "foreign_keys": [],
+          "name": "analysis_date",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATE"
+        },
+        {
+          "foreign_keys": [],
+          "name": "eval_window_days",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "engine_version",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "eval_status",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "evaluated_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "operation_advice",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(20)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "position_recommendation",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(8)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "start_price",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "end_close",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "max_high",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "min_low",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "stock_return_pct",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "direction_expected",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "direction_correct",
+          "nullable": true,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        {
+          "foreign_keys": [],
+          "name": "outcome",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "stop_loss",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "take_profit",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "hit_stop_loss",
+          "nullable": true,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        {
+          "foreign_keys": [],
+          "name": "hit_take_profit",
+          "nullable": true,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        {
+          "foreign_keys": [],
+          "name": "first_hit",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "date_semantic": "Vietnam trading/calendar date; remains DATE unless the domain contract says otherwise",
+          "foreign_keys": [],
+          "name": "first_hit_date",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATE"
+        },
+        {
+          "foreign_keys": [],
+          "name": "first_hit_trading_days",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "simulated_entry_price",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "simulated_exit_price",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "simulated_exit_reason",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(24)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "simulated_return_pct",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "code",
+            "analysis_date"
+          ],
+          "name": "ix_backtest_code_date",
+          "unique": false
+        },
+        {
+          "columns": [
+            "analysis_date"
+          ],
+          "name": "ix_backtest_results_analysis_date",
+          "unique": false
+        },
+        {
+          "columns": [
+            "analysis_history_id"
+          ],
+          "name": "ix_backtest_results_analysis_history_id",
+          "unique": false
+        },
+        {
+          "columns": [
+            "code"
+          ],
+          "name": "ix_backtest_results_code",
+          "unique": false
+        },
+        {
+          "columns": [
+            "evaluated_at"
+          ],
+          "name": "ix_backtest_results_evaluated_at",
+          "unique": false
+        }
+      ],
+      "unique_constraints": [
+        {
+          "columns": [
+            "analysis_history_id",
+            "eval_window_days",
+            "engine_version"
+          ],
+          "name": "uix_backtest_analysis_window_version"
+        }
+      ]
+    },
+    "backtest_summaries": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "scope",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "code",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "eval_window_days",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "engine_version",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "computed_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "total_evaluations",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "completed_count",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "insufficient_count",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "long_count",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "cash_count",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "win_count",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "loss_count",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "neutral_count",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "direction_accuracy_pct",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "win_rate_pct",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "neutral_rate_pct",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "avg_stock_return_pct",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "avg_simulated_return_pct",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "stop_loss_trigger_rate",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "take_profit_trigger_rate",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "ambiguous_rate",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "avg_days_to_first_hit",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "json_contract": {
+            "empty": "{}",
+            "null": "allowed"
+          },
+          "name": "advice_breakdown_json",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "json_contract": {
+            "empty": "{}",
+            "null": "allowed"
+          },
+          "name": "diagnostics_json",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "code"
+          ],
+          "name": "ix_backtest_summaries_code",
+          "unique": false
+        },
+        {
+          "columns": [
+            "computed_at"
+          ],
+          "name": "ix_backtest_summaries_computed_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "scope"
+          ],
+          "name": "ix_backtest_summaries_scope",
+          "unique": false
+        }
+      ],
+      "unique_constraints": [
+        {
+          "columns": [
+            "scope",
+            "code",
+            "eval_window_days",
+            "engine_version"
+          ],
+          "name": "uix_backtest_summary_scope_code_window_version"
+        }
+      ]
+    },
+    "conversation_messages": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "session_id",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(100)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "role",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(20)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "content",
+          "nullable": false,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "created_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "created_at"
+          ],
+          "name": "ix_conversation_messages_created_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "session_id"
+          ],
+          "name": "ix_conversation_messages_session_id",
+          "unique": false
+        }
+      ],
+      "unique_constraints": []
+    },
+    "conversation_summaries": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "session_id",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(100)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "summary",
+          "nullable": false,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "covered_message_id",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "source_message_count",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "estimated_tokens",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "created_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "updated_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "created_at"
+          ],
+          "name": "ix_conversation_summaries_created_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "session_id"
+          ],
+          "name": "ix_conversation_summaries_session_id",
+          "unique": true
+        },
+        {
+          "columns": [
+            "updated_at"
+          ],
+          "name": "ix_conversation_summaries_updated_at",
+          "unique": false
+        }
+      ],
+      "unique_constraints": []
+    },
+    "decision_signal_feedback": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "signal_id",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "feedback_value",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "reason_code",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "note",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "source",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "created_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "updated_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "created_at"
+          ],
+          "name": "ix_decision_signal_feedback_created_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "feedback_value"
+          ],
+          "name": "ix_decision_signal_feedback_feedback_value",
+          "unique": false
+        },
+        {
+          "columns": [
+            "reason_code"
+          ],
+          "name": "ix_decision_signal_feedback_reason_code",
+          "unique": false
+        },
+        {
+          "columns": [
+            "signal_id"
+          ],
+          "name": "ix_decision_signal_feedback_signal_id",
+          "unique": true
+        },
+        {
+          "columns": [
+            "source"
+          ],
+          "name": "ix_decision_signal_feedback_source",
+          "unique": false
+        },
+        {
+          "columns": [
+            "updated_at"
+          ],
+          "name": "ix_decision_signal_feedback_updated_at",
+          "unique": false
+        }
+      ],
+      "unique_constraints": []
+    },
+    "decision_signal_outcomes": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "signal_id",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "horizon",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "engine_version",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "eval_status",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(24)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "outcome",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "direction_expected",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "direction_correct",
+          "nullable": true,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        {
+          "foreign_keys": [],
+          "name": "unable_reason",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "date_semantic": "Vietnam trading/calendar date; remains DATE unless the domain contract says otherwise",
+          "foreign_keys": [],
+          "name": "anchor_date",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATE"
+        },
+        {
+          "foreign_keys": [],
+          "name": "eval_window_days",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "start_price",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "end_close",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "max_high",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "min_low",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "stock_return_pct",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "action",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "market",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(8)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "market_phase",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(24)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "source_type",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "source_agent",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "plan_quality",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "data_quality_level",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(24)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "holding_state",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "created_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "updated_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "engine_version",
+            "action",
+            "horizon"
+          ],
+          "name": "ix_decision_signal_outcome_stats_action",
+          "unique": false
+        },
+        {
+          "columns": [
+            "engine_version",
+            "market",
+            "horizon"
+          ],
+          "name": "ix_decision_signal_outcome_stats_market",
+          "unique": false
+        },
+        {
+          "columns": [
+            "action"
+          ],
+          "name": "ix_decision_signal_outcomes_action",
+          "unique": false
+        },
+        {
+          "columns": [
+            "anchor_date"
+          ],
+          "name": "ix_decision_signal_outcomes_anchor_date",
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "name": "ix_decision_signal_outcomes_created_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "data_quality_level"
+          ],
+          "name": "ix_decision_signal_outcomes_data_quality_level",
+          "unique": false
+        },
+        {
+          "columns": [
+            "direction_expected"
+          ],
+          "name": "ix_decision_signal_outcomes_direction_expected",
+          "unique": false
+        },
+        {
+          "columns": [
+            "engine_version"
+          ],
+          "name": "ix_decision_signal_outcomes_engine_version",
+          "unique": false
+        },
+        {
+          "columns": [
+            "eval_status"
+          ],
+          "name": "ix_decision_signal_outcomes_eval_status",
+          "unique": false
+        },
+        {
+          "columns": [
+            "holding_state"
+          ],
+          "name": "ix_decision_signal_outcomes_holding_state",
+          "unique": false
+        },
+        {
+          "columns": [
+            "horizon"
+          ],
+          "name": "ix_decision_signal_outcomes_horizon",
+          "unique": false
+        },
+        {
+          "columns": [
+            "market"
+          ],
+          "name": "ix_decision_signal_outcomes_market",
+          "unique": false
+        },
+        {
+          "columns": [
+            "market_phase"
+          ],
+          "name": "ix_decision_signal_outcomes_market_phase",
+          "unique": false
+        },
+        {
+          "columns": [
+            "outcome"
+          ],
+          "name": "ix_decision_signal_outcomes_outcome",
+          "unique": false
+        },
+        {
+          "columns": [
+            "plan_quality"
+          ],
+          "name": "ix_decision_signal_outcomes_plan_quality",
+          "unique": false
+        },
+        {
+          "columns": [
+            "signal_id"
+          ],
+          "name": "ix_decision_signal_outcomes_signal_id",
+          "unique": false
+        },
+        {
+          "columns": [
+            "source_agent"
+          ],
+          "name": "ix_decision_signal_outcomes_source_agent",
+          "unique": false
+        },
+        {
+          "columns": [
+            "source_type"
+          ],
+          "name": "ix_decision_signal_outcomes_source_type",
+          "unique": false
+        },
+        {
+          "columns": [
+            "unable_reason"
+          ],
+          "name": "ix_decision_signal_outcomes_unable_reason",
+          "unique": false
+        },
+        {
+          "columns": [
+            "updated_at"
+          ],
+          "name": "ix_decision_signal_outcomes_updated_at",
+          "unique": false
+        }
+      ],
+      "unique_constraints": [
+        {
+          "columns": [
+            "signal_id",
+            "horizon",
+            "engine_version"
+          ],
+          "name": "uix_decision_signal_outcome_key"
+        }
+      ]
+    },
+    "decision_signal_trade_links": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [
+            "decision_signals.id"
+          ],
+          "name": "signal_id",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [
+            "portfolio_trades.id"
+          ],
+          "name": "trade_id",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "link_type",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "created_at"
+          ],
+          "name": "ix_decision_signal_trade_links_created_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "link_type"
+          ],
+          "name": "ix_decision_signal_trade_links_link_type",
+          "unique": false
+        },
+        {
+          "columns": [
+            "signal_id"
+          ],
+          "name": "ix_decision_signal_trade_links_signal_id",
+          "unique": false
+        },
+        {
+          "columns": [
+            "trade_id"
+          ],
+          "name": "ix_decision_signal_trade_links_trade_id",
+          "unique": false
+        }
+      ],
+      "unique_constraints": [
+        {
+          "columns": [
+            "signal_id",
+            "trade_id",
+            "link_type"
+          ],
+          "name": "uix_decision_signal_trade_link"
+        },
+        {
+          "columns": [
+            "trade_id",
+            "link_type"
+          ],
+          "name": "uix_trade_source_recommendation_link"
+        }
+      ]
+    },
+    "decision_signals": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "stock_code",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "stock_name",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "market",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(8)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "source_type",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "source_agent",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "source_report_id",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "trace_id",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "market_phase",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(24)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "trigger_source",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "action",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "action_label",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "confidence",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "score",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "horizon",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "entry_low",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "entry_high",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "stop_loss",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "target_price",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "invalidation",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "watch_conditions",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "reason",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "risk_summary",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "catalyst_summary",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "json_contract": {
+            "empty": "[]",
+            "null": "allowed"
+          },
+          "name": "evidence_json",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "json_contract": {
+            "empty": "{}",
+            "null": "allowed"
+          },
+          "name": "data_quality_summary_json",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "plan_quality",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "status",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "expires_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "created_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "updated_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "json_contract": {
+            "empty": "{}",
+            "null": "allowed"
+          },
+          "name": "metadata_json",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "market",
+            "status",
+            "created_at"
+          ],
+          "name": "ix_decision_signal_market_status_time",
+          "unique": false
+        },
+        {
+          "columns": [
+            "source_report_id",
+            "source_type",
+            "market",
+            "stock_code",
+            "action",
+            "horizon",
+            "market_phase"
+          ],
+          "name": "ix_decision_signal_report_type_market_stock_action_horizon_phase",
+          "unique": false
+        },
+        {
+          "columns": [
+            "stock_code",
+            "status",
+            "created_at"
+          ],
+          "name": "ix_decision_signal_stock_status_time",
+          "unique": false
+        },
+        {
+          "columns": [
+            "trace_id",
+            "source_type",
+            "market",
+            "stock_code",
+            "action",
+            "horizon",
+            "market_phase"
+          ],
+          "name": "ix_decision_signal_trace_type_market_stock_action_horizon_phase",
+          "unique": false
+        },
+        {
+          "columns": [
+            "action"
+          ],
+          "name": "ix_decision_signals_action",
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "name": "ix_decision_signals_created_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "expires_at"
+          ],
+          "name": "ix_decision_signals_expires_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "horizon"
+          ],
+          "name": "ix_decision_signals_horizon",
+          "unique": false
+        },
+        {
+          "columns": [
+            "market"
+          ],
+          "name": "ix_decision_signals_market",
+          "unique": false
+        },
+        {
+          "columns": [
+            "market_phase"
+          ],
+          "name": "ix_decision_signals_market_phase",
+          "unique": false
+        },
+        {
+          "columns": [
+            "plan_quality"
+          ],
+          "name": "ix_decision_signals_plan_quality",
+          "unique": false
+        },
+        {
+          "columns": [
+            "source_report_id"
+          ],
+          "name": "ix_decision_signals_source_report_id",
+          "unique": false
+        },
+        {
+          "columns": [
+            "source_type"
+          ],
+          "name": "ix_decision_signals_source_type",
+          "unique": false
+        },
+        {
+          "columns": [
+            "status"
+          ],
+          "name": "ix_decision_signals_status",
+          "unique": false
+        },
+        {
+          "columns": [
+            "stock_code"
+          ],
+          "name": "ix_decision_signals_stock_code",
+          "unique": false
+        },
+        {
+          "columns": [
+            "trace_id"
+          ],
+          "name": "ix_decision_signals_trace_id",
+          "unique": false
+        },
+        {
+          "columns": [
+            "trigger_source"
+          ],
+          "name": "ix_decision_signals_trigger_source",
+          "unique": false
+        },
+        {
+          "columns": [
+            "updated_at"
+          ],
+          "name": "ix_decision_signals_updated_at",
+          "unique": false
+        }
+      ],
+      "unique_constraints": []
+    },
+    "fundamental_snapshot": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "query_id",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "code",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(10)"
+        },
+        {
+          "foreign_keys": [],
+          "json_contract": {
+            "empty": "{}",
+            "null": "not allowed"
+          },
+          "name": "payload",
+          "nullable": false,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "json_contract": {
+            "empty": "[]",
+            "null": "allowed"
+          },
+          "name": "source_chain",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "json_contract": {
+            "empty": "{}",
+            "null": "allowed"
+          },
+          "name": "coverage",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "created_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "code"
+          ],
+          "name": "ix_fundamental_snapshot_code",
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "name": "ix_fundamental_snapshot_created",
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "name": "ix_fundamental_snapshot_created_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "query_id",
+            "code"
+          ],
+          "name": "ix_fundamental_snapshot_query_code",
+          "unique": false
+        },
+        {
+          "columns": [
+            "query_id"
+          ],
+          "name": "ix_fundamental_snapshot_query_id",
+          "unique": false
+        }
+      ],
+      "unique_constraints": []
+    },
+    "intelligence_items": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [
+            "intelligence_sources.id"
+          ],
+          "name": "source_id",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "source_name",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(100)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "source_type",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "title",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(300)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "summary",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "url",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(1000)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "source",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(100)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "published_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "fetched_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "scope_type",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "scope_value",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "market",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "json_contract": {
+            "empty": "{}",
+            "null": "allowed"
+          },
+          "name": "raw_payload",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "fetched_at"
+          ],
+          "name": "ix_intel_item_fetch_time",
+          "unique": false
+        },
+        {
+          "columns": [
+            "scope_type",
+            "scope_value",
+            "market",
+            "published_at"
+          ],
+          "name": "ix_intel_item_scope_time",
+          "unique": false
+        },
+        {
+          "columns": [
+            "fetched_at"
+          ],
+          "name": "ix_intelligence_items_fetched_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "market"
+          ],
+          "name": "ix_intelligence_items_market",
+          "unique": false
+        },
+        {
+          "columns": [
+            "published_at"
+          ],
+          "name": "ix_intelligence_items_published_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "scope_type"
+          ],
+          "name": "ix_intelligence_items_scope_type",
+          "unique": false
+        },
+        {
+          "columns": [
+            "scope_value"
+          ],
+          "name": "ix_intelligence_items_scope_value",
+          "unique": false
+        },
+        {
+          "columns": [
+            "source_id"
+          ],
+          "name": "ix_intelligence_items_source_id",
+          "unique": false
+        },
+        {
+          "columns": [
+            "source_name"
+          ],
+          "name": "ix_intelligence_items_source_name",
+          "unique": false
+        },
+        {
+          "columns": [
+            "source_type"
+          ],
+          "name": "ix_intelligence_items_source_type",
+          "unique": false
+        },
+        {
+          "columns": [
+            "url"
+          ],
+          "name": "ix_intelligence_items_url",
+          "unique": false
+        }
+      ],
+      "unique_constraints": [
+        {
+          "columns": [
+            "source_id",
+            "url",
+            "scope_type",
+            "scope_value",
+            "market"
+          ],
+          "name": "uix_intel_item_source_scope_url"
+        }
+      ]
+    },
+    "intelligence_sources": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "name",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(100)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "source_type",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "url",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(1000)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "enabled",
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        {
+          "foreign_keys": [],
+          "name": "scope_type",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "scope_value",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "market",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "description",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "last_status",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "last_error",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "last_fetched_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "created_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "updated_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "scope_type",
+            "scope_value",
+            "market"
+          ],
+          "name": "ix_intel_source_scope",
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "name": "ix_intelligence_sources_created_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "enabled"
+          ],
+          "name": "ix_intelligence_sources_enabled",
+          "unique": false
+        },
+        {
+          "columns": [
+            "last_fetched_at"
+          ],
+          "name": "ix_intelligence_sources_last_fetched_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "market"
+          ],
+          "name": "ix_intelligence_sources_market",
+          "unique": false
+        },
+        {
+          "columns": [
+            "name"
+          ],
+          "name": "ix_intelligence_sources_name",
+          "unique": true
+        },
+        {
+          "columns": [
+            "scope_type"
+          ],
+          "name": "ix_intelligence_sources_scope_type",
+          "unique": false
+        },
+        {
+          "columns": [
+            "scope_value"
+          ],
+          "name": "ix_intelligence_sources_scope_value",
+          "unique": false
+        },
+        {
+          "columns": [
+            "source_type"
+          ],
+          "name": "ix_intelligence_sources_source_type",
+          "unique": false
+        },
+        {
+          "columns": [
+            "updated_at"
+          ],
+          "name": "ix_intelligence_sources_updated_at",
+          "unique": false
+        }
+      ],
+      "unique_constraints": []
+    },
+    "llm_usage": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "call_type",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "model",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "stock_code",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "provider",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "prompt_tokens",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "completion_tokens",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "total_tokens",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "json_contract": {
+            "empty": "{}",
+            "null": "allowed"
+          },
+          "name": "provider_usage_json",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "provider_usage_schema_name",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "provider_usage_schema_version",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "provider_usage_observed_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "normalized_prompt_tokens",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "normalized_completion_tokens",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "normalized_total_tokens",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "normalized_cache_read_tokens",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "normalized_cache_write_tokens",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "normalized_cache_miss_tokens",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "normalized_uncached_input_tokens",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "normalized_cache_eligible_input_tokens",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "normalized_cache_hit_ratio",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "normalized_cache_write_ratio",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "cache_capability",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "cache_eligibility",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "cache_observation",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "estimated_prefix_tokens",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "provider_reported_prompt_tokens",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "provider_reported_cached_tokens",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "provider_min_cache_tokens",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "eligibility_confidence",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "tokenizer_name",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "tokenizer_version",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "messages_hmac",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "system_message_hmac",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "user_message_hmac",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "hmac_key_version",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "hmac_domain",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "hash_scope",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "language",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "market_group",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "analysis_mode",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "legacy_prompt_mode",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "skill_config_hmac",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "transport",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "message_count",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "estimated_total_prompt_tokens",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "approx_common_prefix_chars",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "approx_common_prefix_tokens",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "json_contract": {
+            "empty": "[]",
+            "null": "allowed"
+          },
+          "name": "known_dynamic_marker_positions",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "called_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "call_type"
+          ],
+          "name": "ix_llm_usage_call_type",
+          "unique": false
+        },
+        {
+          "columns": [
+            "called_at"
+          ],
+          "name": "ix_llm_usage_called_at",
+          "unique": false
+        }
+      ],
+      "unique_constraints": []
+    },
+    "news_intel": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "query_id",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "code",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(10)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "name",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(50)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "dimension",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "query",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(255)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "provider",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "title",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(300)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "snippet",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "url",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(1000)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "source",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(100)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "published_date",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "fetched_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "query_source",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "requester_platform",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(20)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "requester_user_id",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "requester_user_name",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "requester_chat_id",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "requester_message_id",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "requester_query",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(255)"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "code",
+            "published_date"
+          ],
+          "name": "ix_news_code_pub",
+          "unique": false
+        },
+        {
+          "columns": [
+            "code"
+          ],
+          "name": "ix_news_intel_code",
+          "unique": false
+        },
+        {
+          "columns": [
+            "dimension"
+          ],
+          "name": "ix_news_intel_dimension",
+          "unique": false
+        },
+        {
+          "columns": [
+            "fetched_at"
+          ],
+          "name": "ix_news_intel_fetched_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "provider"
+          ],
+          "name": "ix_news_intel_provider",
+          "unique": false
+        },
+        {
+          "columns": [
+            "published_date"
+          ],
+          "name": "ix_news_intel_published_date",
+          "unique": false
+        },
+        {
+          "columns": [
+            "query_id"
+          ],
+          "name": "ix_news_intel_query_id",
+          "unique": false
+        },
+        {
+          "columns": [
+            "query_source"
+          ],
+          "name": "ix_news_intel_query_source",
+          "unique": false
+        }
+      ],
+      "unique_constraints": [
+        {
+          "columns": [
+            "url"
+          ],
+          "name": "uix_news_url"
+        }
+      ]
+    },
+    "portfolio_accounts": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "owner_id",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "name",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "broker",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "market",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(8)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "base_currency",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(8)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "is_active",
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        {
+          "foreign_keys": [],
+          "name": "created_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "updated_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "owner_id",
+            "is_active"
+          ],
+          "name": "ix_portfolio_account_owner_active",
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "name": "ix_portfolio_accounts_created_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "is_active"
+          ],
+          "name": "ix_portfolio_accounts_is_active",
+          "unique": false
+        },
+        {
+          "columns": [
+            "market"
+          ],
+          "name": "ix_portfolio_accounts_market",
+          "unique": false
+        },
+        {
+          "columns": [
+            "owner_id"
+          ],
+          "name": "ix_portfolio_accounts_owner_id",
+          "unique": false
+        }
+      ],
+      "unique_constraints": []
+    },
+    "portfolio_cash_ledger": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [
+            "portfolio_accounts.id"
+          ],
+          "name": "account_id",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "date_semantic": "Vietnam trading/calendar date; remains DATE unless the domain contract says otherwise",
+          "foreign_keys": [],
+          "name": "event_date",
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATE"
+        },
+        {
+          "foreign_keys": [],
+          "name": "direction",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(8)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "amount",
+          "nullable": false,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "currency",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(8)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "note",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(255)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "created_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "account_id",
+            "event_date"
+          ],
+          "name": "ix_portfolio_cash_account_date",
+          "unique": false
+        },
+        {
+          "columns": [
+            "account_id"
+          ],
+          "name": "ix_portfolio_cash_ledger_account_id",
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "name": "ix_portfolio_cash_ledger_created_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "event_date"
+          ],
+          "name": "ix_portfolio_cash_ledger_event_date",
+          "unique": false
+        }
+      ],
+      "unique_constraints": []
+    },
+    "portfolio_corporate_actions": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [
+            "portfolio_accounts.id"
+          ],
+          "name": "account_id",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "symbol",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "market",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(8)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "currency",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(8)"
+        },
+        {
+          "date_semantic": "Vietnam trading/calendar date; remains DATE unless the domain contract says otherwise",
+          "foreign_keys": [],
+          "name": "effective_date",
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATE"
+        },
+        {
+          "foreign_keys": [],
+          "name": "action_type",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(24)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "cash_dividend_per_share",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "split_ratio",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "note",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(255)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "created_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "account_id",
+            "effective_date"
+          ],
+          "name": "ix_portfolio_ca_account_date",
+          "unique": false
+        },
+        {
+          "columns": [
+            "account_id"
+          ],
+          "name": "ix_portfolio_corporate_actions_account_id",
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "name": "ix_portfolio_corporate_actions_created_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "effective_date"
+          ],
+          "name": "ix_portfolio_corporate_actions_effective_date",
+          "unique": false
+        },
+        {
+          "columns": [
+            "symbol"
+          ],
+          "name": "ix_portfolio_corporate_actions_symbol",
+          "unique": false
+        }
+      ],
+      "unique_constraints": []
+    },
+    "portfolio_daily_snapshots": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [
+            "portfolio_accounts.id"
+          ],
+          "name": "account_id",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "date_semantic": "Vietnam trading/calendar date; remains DATE unless the domain contract says otherwise",
+          "foreign_keys": [],
+          "name": "snapshot_date",
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATE"
+        },
+        {
+          "foreign_keys": [],
+          "name": "cost_method",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(8)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "base_currency",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(8)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "total_cash",
+          "nullable": false,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "total_market_value",
+          "nullable": false,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "total_equity",
+          "nullable": false,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "unrealized_pnl",
+          "nullable": false,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "realized_pnl",
+          "nullable": false,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "fee_total",
+          "nullable": false,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "tax_total",
+          "nullable": false,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "fx_stale",
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        {
+          "foreign_keys": [],
+          "json_contract": {
+            "empty": "{}",
+            "null": "allowed"
+          },
+          "name": "payload",
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "created_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "updated_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "account_id"
+          ],
+          "name": "ix_portfolio_daily_snapshots_account_id",
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "name": "ix_portfolio_daily_snapshots_created_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "snapshot_date"
+          ],
+          "name": "ix_portfolio_daily_snapshots_snapshot_date",
+          "unique": false
+        }
+      ],
+      "unique_constraints": [
+        {
+          "columns": [
+            "account_id",
+            "snapshot_date",
+            "cost_method"
+          ],
+          "name": "uix_portfolio_snapshot_account_date_method"
+        }
+      ]
+    },
+    "portfolio_fx_rates": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "from_currency",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(8)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "to_currency",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(8)"
+        },
+        {
+          "date_semantic": "Vietnam trading/calendar date; remains DATE unless the domain contract says otherwise",
+          "foreign_keys": [],
+          "name": "rate_date",
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATE"
+        },
+        {
+          "foreign_keys": [],
+          "name": "rate",
+          "nullable": false,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "source",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "is_stale",
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        {
+          "foreign_keys": [],
+          "name": "updated_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "from_currency"
+          ],
+          "name": "ix_portfolio_fx_rates_from_currency",
+          "unique": false
+        },
+        {
+          "columns": [
+            "rate_date"
+          ],
+          "name": "ix_portfolio_fx_rates_rate_date",
+          "unique": false
+        },
+        {
+          "columns": [
+            "to_currency"
+          ],
+          "name": "ix_portfolio_fx_rates_to_currency",
+          "unique": false
+        }
+      ],
+      "unique_constraints": [
+        {
+          "columns": [
+            "from_currency",
+            "to_currency",
+            "rate_date"
+          ],
+          "name": "uix_portfolio_fx_pair_date"
+        }
+      ]
+    },
+    "portfolio_position_lots": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [
+            "portfolio_accounts.id"
+          ],
+          "name": "account_id",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "cost_method",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(8)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "symbol",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "market",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(8)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "currency",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(8)"
+        },
+        {
+          "date_semantic": "Vietnam trading/calendar date; remains DATE unless the domain contract says otherwise",
+          "foreign_keys": [],
+          "name": "open_date",
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATE"
+        },
+        {
+          "foreign_keys": [],
+          "name": "remaining_quantity",
+          "nullable": false,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "unit_cost",
+          "nullable": false,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [
+            "portfolio_trades.id"
+          ],
+          "name": "source_trade_id",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "estimated_sellable_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "actual_sellable_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "settlement_state",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(24)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "calendar_status",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "updated_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "account_id",
+            "symbol"
+          ],
+          "name": "ix_portfolio_lot_account_symbol",
+          "unique": false
+        },
+        {
+          "columns": [
+            "account_id"
+          ],
+          "name": "ix_portfolio_position_lots_account_id",
+          "unique": false
+        },
+        {
+          "columns": [
+            "open_date"
+          ],
+          "name": "ix_portfolio_position_lots_open_date",
+          "unique": false
+        },
+        {
+          "columns": [
+            "symbol"
+          ],
+          "name": "ix_portfolio_position_lots_symbol",
+          "unique": false
+        },
+        {
+          "columns": [
+            "updated_at"
+          ],
+          "name": "ix_portfolio_position_lots_updated_at",
+          "unique": false
+        }
+      ],
+      "unique_constraints": []
+    },
+    "portfolio_positions": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [
+            "portfolio_accounts.id"
+          ],
+          "name": "account_id",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "cost_method",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(8)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "symbol",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "market",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(8)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "currency",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(8)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "quantity",
+          "nullable": false,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "avg_cost",
+          "nullable": false,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "total_cost",
+          "nullable": false,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "last_price",
+          "nullable": false,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "market_value_base",
+          "nullable": false,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "unrealized_pnl_base",
+          "nullable": false,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "valuation_currency",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(8)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "position_lifecycle",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "settlement_state",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(24)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "sellable_quantity",
+          "nullable": false,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "unsettled_quantity",
+          "nullable": false,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "next_sellable_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "settlement_calculation_status",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "updated_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "account_id"
+          ],
+          "name": "ix_portfolio_positions_account_id",
+          "unique": false
+        },
+        {
+          "columns": [
+            "symbol"
+          ],
+          "name": "ix_portfolio_positions_symbol",
+          "unique": false
+        },
+        {
+          "columns": [
+            "updated_at"
+          ],
+          "name": "ix_portfolio_positions_updated_at",
+          "unique": false
+        }
+      ],
+      "unique_constraints": [
+        {
+          "columns": [
+            "account_id",
+            "symbol",
+            "market",
+            "currency",
+            "cost_method"
+          ],
+          "name": "uix_portfolio_position_account_symbol_market_currency"
+        }
+      ]
+    },
+    "portfolio_trade_settlements": {
+      "columns": [
+        {
+          "foreign_keys": [
+            "portfolio_trades.id"
+          ],
+          "name": "trade_id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "date_semantic": "Vietnam trading/calendar date; remains DATE unless the domain contract says otherwise",
+          "foreign_keys": [],
+          "name": "settlement_date",
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATE"
+        },
+        {
+          "foreign_keys": [],
+          "name": "estimated_sellable_at",
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "actual_sellable_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "calendar_version",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(255)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "policy_version",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "calculation_status",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "json_contract": {
+            "empty": "[]",
+            "null": "not allowed"
+          },
+          "name": "warnings_json",
+          "nullable": false,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "actual_sellable_at"
+          ],
+          "name": "ix_portfolio_trade_settlements_actual_sellable_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "calculation_status"
+          ],
+          "name": "ix_portfolio_trade_settlements_calculation_status",
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "name": "ix_portfolio_trade_settlements_created_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "estimated_sellable_at"
+          ],
+          "name": "ix_portfolio_trade_settlements_estimated_sellable_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "settlement_date"
+          ],
+          "name": "ix_portfolio_trade_settlements_settlement_date",
+          "unique": false
+        }
+      ],
+      "unique_constraints": []
+    },
+    "portfolio_trades": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [
+            "portfolio_accounts.id"
+          ],
+          "name": "account_id",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "trade_uid",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "symbol",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "market",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(8)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "currency",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(8)"
+        },
+        {
+          "date_semantic": "Vietnam trading/calendar date; remains DATE unless the domain contract says otherwise",
+          "foreign_keys": [],
+          "name": "trade_date",
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATE"
+        },
+        {
+          "foreign_keys": [],
+          "name": "executed_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "side",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(8)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "quantity",
+          "nullable": false,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "price",
+          "nullable": false,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "fee",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "tax",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "note",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(255)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "dedup_hash",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "created_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "account_id",
+            "trade_date"
+          ],
+          "name": "ix_portfolio_trade_account_date",
+          "unique": false
+        },
+        {
+          "columns": [
+            "account_id"
+          ],
+          "name": "ix_portfolio_trades_account_id",
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "name": "ix_portfolio_trades_created_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "dedup_hash"
+          ],
+          "name": "ix_portfolio_trades_dedup_hash",
+          "unique": false
+        },
+        {
+          "columns": [
+            "symbol"
+          ],
+          "name": "ix_portfolio_trades_symbol",
+          "unique": false
+        },
+        {
+          "columns": [
+            "trade_date"
+          ],
+          "name": "ix_portfolio_trades_trade_date",
+          "unique": false
+        }
+      ],
+      "unique_constraints": [
+        {
+          "columns": [
+            "account_id",
+            "dedup_hash"
+          ],
+          "name": "uix_portfolio_trade_dedup_hash"
+        },
+        {
+          "columns": [
+            "account_id",
+            "trade_uid"
+          ],
+          "name": "uix_portfolio_trade_uid"
+        }
+      ]
+    },
+    "schema_migrations": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "version",
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "description",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(255)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "applied_at",
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "applied_at"
+          ],
+          "name": "ix_schema_migrations_applied_at",
+          "unique": false
+        }
+      ],
+      "unique_constraints": []
+    },
+    "settlement_alert_states": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [
+            "portfolio_accounts.id"
+          ],
+          "name": "account_id",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "symbol",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "market",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(8)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "settlement_state",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(24)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "total_quantity",
+          "nullable": false,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "sellable_quantity",
+          "nullable": false,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "unsettled_quantity",
+          "nullable": false,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "thesis_invalidated",
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        {
+          "foreign_keys": [],
+          "name": "source_signal_id",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "risk_level",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "risk_rank",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "risk_policy_version",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "observed_at",
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "account_id"
+          ],
+          "name": "ix_settlement_alert_states_account_id",
+          "unique": false
+        },
+        {
+          "columns": [
+            "market"
+          ],
+          "name": "ix_settlement_alert_states_market",
+          "unique": false
+        },
+        {
+          "columns": [
+            "observed_at"
+          ],
+          "name": "ix_settlement_alert_states_observed_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "source_signal_id"
+          ],
+          "name": "ix_settlement_alert_states_source_signal_id",
+          "unique": false
+        },
+        {
+          "columns": [
+            "symbol"
+          ],
+          "name": "ix_settlement_alert_states_symbol",
+          "unique": false
+        },
+        {
+          "columns": [
+            "updated_at"
+          ],
+          "name": "ix_settlement_alert_states_updated_at",
+          "unique": false
+        }
+      ],
+      "unique_constraints": [
+        {
+          "columns": [
+            "account_id",
+            "symbol"
+          ],
+          "name": "uix_settlement_alert_state_account_symbol"
+        }
+      ]
+    },
+    "settlement_outcomes": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [
+            "decision_signals.id"
+          ],
+          "name": "signal_id",
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [
+            "portfolio_trades.id"
+          ],
+          "name": "source_trade_id",
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "outcome_type",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "record_key",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "engine_version",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "entry_policy_version",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "calendar_version",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(255)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "settlement_policy_version",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "date_semantic": "Vietnam trading/calendar date; remains DATE unless the domain contract says otherwise",
+          "foreign_keys": [],
+          "name": "anchor_date",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATE"
+        },
+        {
+          "date_semantic": "Vietnam trading/calendar date; remains DATE unless the domain contract says otherwise",
+          "foreign_keys": [],
+          "name": "estimated_settlement_date",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATE"
+        },
+        {
+          "foreign_keys": [],
+          "name": "estimated_first_sellable_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "entry_price",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "return_t1_pct",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "return_t2_pct",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "return_first_sellable_pct",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "return_t5_pct",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "return_t10_pct",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "return_t20_pct",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "mae_before_sellable_pct",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "mfe_before_sellable_pct",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "invalidation_before_sellable",
+          "nullable": true,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        {
+          "foreign_keys": [],
+          "name": "operationally_executable",
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        {
+          "foreign_keys": [],
+          "name": "estimated_fee_pct",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "estimated_slippage_pct",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "net_return_first_sellable_pct",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "data_quality",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(24)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "unavailable_reason",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        {
+          "foreign_keys": [],
+          "json_contract": {
+            "empty": "[]",
+            "null": "not allowed"
+          },
+          "name": "ambiguity_flags_json",
+          "nullable": false,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "settlement_risk_score",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "survivability_bucket",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(24)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "liquidity_bucket",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(24)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "guarded_action",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "engine_version",
+            "outcome_type",
+            "guarded_action"
+          ],
+          "name": "ix_settlement_outcome_stats",
+          "unique": false
+        },
+        {
+          "columns": [
+            "anchor_date"
+          ],
+          "name": "ix_settlement_outcomes_anchor_date",
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "name": "ix_settlement_outcomes_created_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "data_quality"
+          ],
+          "name": "ix_settlement_outcomes_data_quality",
+          "unique": false
+        },
+        {
+          "columns": [
+            "engine_version"
+          ],
+          "name": "ix_settlement_outcomes_engine_version",
+          "unique": false
+        },
+        {
+          "columns": [
+            "entry_policy_version"
+          ],
+          "name": "ix_settlement_outcomes_entry_policy_version",
+          "unique": false
+        },
+        {
+          "columns": [
+            "estimated_first_sellable_at"
+          ],
+          "name": "ix_settlement_outcomes_estimated_first_sellable_at",
+          "unique": false
+        },
+        {
+          "columns": [
+            "estimated_settlement_date"
+          ],
+          "name": "ix_settlement_outcomes_estimated_settlement_date",
+          "unique": false
+        },
+        {
+          "columns": [
+            "guarded_action"
+          ],
+          "name": "ix_settlement_outcomes_guarded_action",
+          "unique": false
+        },
+        {
+          "columns": [
+            "liquidity_bucket"
+          ],
+          "name": "ix_settlement_outcomes_liquidity_bucket",
+          "unique": false
+        },
+        {
+          "columns": [
+            "outcome_type"
+          ],
+          "name": "ix_settlement_outcomes_outcome_type",
+          "unique": false
+        },
+        {
+          "columns": [
+            "signal_id"
+          ],
+          "name": "ix_settlement_outcomes_signal_id",
+          "unique": false
+        },
+        {
+          "columns": [
+            "source_trade_id"
+          ],
+          "name": "ix_settlement_outcomes_source_trade_id",
+          "unique": false
+        },
+        {
+          "columns": [
+            "survivability_bucket"
+          ],
+          "name": "ix_settlement_outcomes_survivability_bucket",
+          "unique": false
+        },
+        {
+          "columns": [
+            "unavailable_reason"
+          ],
+          "name": "ix_settlement_outcomes_unavailable_reason",
+          "unique": false
+        },
+        {
+          "columns": [
+            "updated_at"
+          ],
+          "name": "ix_settlement_outcomes_updated_at",
+          "unique": false
+        }
+      ],
+      "unique_constraints": [
+        {
+          "columns": [
+            "signal_id",
+            "outcome_type",
+            "record_key",
+            "engine_version",
+            "entry_policy_version"
+          ],
+          "name": "uix_settlement_outcome_versioned_key"
+        }
+      ]
+    },
+    "stock_daily": {
+      "columns": [
+        {
+          "foreign_keys": [],
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        {
+          "foreign_keys": [],
+          "name": "code",
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(10)"
+        },
+        {
+          "date_semantic": "Vietnam trading/calendar date; remains DATE unless the domain contract says otherwise",
+          "foreign_keys": [],
+          "name": "date",
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATE"
+        },
+        {
+          "foreign_keys": [],
+          "name": "open",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "high",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "low",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "close",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "volume",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "amount",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "pct_chg",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "ma5",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "ma10",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "ma20",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "volume_ratio",
+          "nullable": true,
+          "primary_key": false,
+          "type": "FLOAT"
+        },
+        {
+          "foreign_keys": [],
+          "name": "data_source",
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(50)"
+        },
+        {
+          "foreign_keys": [],
+          "name": "created_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        {
+          "foreign_keys": [],
+          "name": "updated_at",
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "code",
+            "date"
+          ],
+          "name": "ix_code_date",
+          "unique": false
+        },
+        {
+          "columns": [
+            "code"
+          ],
+          "name": "ix_stock_daily_code",
+          "unique": false
+        },
+        {
+          "columns": [
+            "date"
+          ],
+          "name": "ix_stock_daily_date",
+          "unique": false
+        }
+      ],
+      "unique_constraints": [
+        {
+          "columns": [
+            "code",
+            "date"
+          ],
+          "name": "uix_code_date"
+        }
+      ]
+    }
+  }
+}

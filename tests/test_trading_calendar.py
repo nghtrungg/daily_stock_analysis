@@ -2,7 +2,9 @@
 """Regression tests for effective trading date resolution."""
 
 import json
+import tempfile
 from datetime import date, datetime, time, timezone
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Optional
 import unittest
@@ -262,6 +264,204 @@ class EffectiveTradingDateTestCase(unittest.TestCase):
             result = trading_calendar.get_effective_trading_date("hk", current_time=current_time)
 
         self.assertEqual(result, date(2026, 3, 28))
+
+
+class VietnamSettlementCalendarTestCase(unittest.TestCase):
+    def _write_calendar(
+        self,
+        directory: Path,
+        year: int,
+        *,
+        trading_closures=(),
+        settlement_closures=(),
+        version: Optional[str] = None,
+    ) -> None:
+        directory.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "market": "vn",
+            "year": year,
+            "timezone": "Asia/Ho_Chi_Minh",
+            "calendar_version": version or f"vn-{year}-test",
+            "trading_closures": list(trading_closures),
+            "settlement_closures": list(settlement_closures),
+            "sources": ["https://example.invalid/official-calendar"],
+        }
+        (directory / f"{year}.json").write_text(
+            json.dumps(payload),
+            encoding="utf-8",
+        )
+
+    def test_bundled_calendar_handles_weekday_weekend_and_public_holiday(self):
+        weekday = trading_calendar.get_vn_calendar_day(date(2026, 7, 10))
+        weekend = trading_calendar.get_vn_calendar_day(date(2026, 7, 11))
+        holiday = trading_calendar.get_vn_calendar_day(date(2026, 4, 30))
+
+        self.assertTrue(weekday.is_trading_day)
+        self.assertTrue(weekday.is_settlement_day)
+        self.assertEqual(
+            weekday.classification,
+            trading_calendar.VNCalendarDayClassification.TRADING_AND_SETTLEMENT_DAY,
+        )
+        self.assertFalse(weekend.is_trading_day)
+        self.assertFalse(weekend.is_settlement_day)
+        self.assertEqual(
+            holiday.classification,
+            trading_calendar.VNCalendarDayClassification.NON_TRADING_CLOSURE,
+        )
+        self.assertFalse(trading_calendar.is_market_open("vn", date(2026, 4, 30)))
+
+    def test_friday_purchase_counts_two_settlement_sessions(self):
+        result = trading_calendar.calculate_vn_settlement(
+            datetime(2026, 7, 10, 10, 0),
+            settlement_sessions=2,
+        )
+
+        self.assertEqual(result.trade_date, date(2026, 7, 10))
+        self.assertEqual(result.settlement_date, date(2026, 7, 14))
+        self.assertEqual(result.estimated_sellable_at.hour, 13)
+        self.assertEqual(
+            result.estimated_sellable_at.tzinfo,
+            ZoneInfo("Asia/Ho_Chi_Minh"),
+        )
+        self.assertEqual(
+            result.calculation_status,
+            trading_calendar.SettlementCalculationStatus.CONFIRMED,
+        )
+
+    def test_public_and_consecutive_holidays_are_not_settlement_sessions(self):
+        before_hung_kings = trading_calendar.calculate_vn_settlement(
+            datetime(2026, 4, 24, 10, 0),
+            settlement_sessions=2,
+        )
+        before_consecutive_holidays = trading_calendar.calculate_vn_settlement(
+            datetime(2026, 4, 29, 10, 0),
+            settlement_sessions=2,
+        )
+
+        self.assertEqual(before_hung_kings.settlement_date, date(2026, 4, 29))
+        self.assertEqual(before_consecutive_holidays.settlement_date, date(2026, 5, 5))
+
+    def test_settlement_only_closure_remains_a_trading_day(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            calendar_dir = Path(temp_dir)
+            self._write_calendar(
+                calendar_dir,
+                2026,
+                settlement_closures=["2026-07-07"],
+            )
+
+            closure = trading_calendar.get_vn_calendar_day(
+                date(2026, 7, 7),
+                calendar_directory=calendar_dir,
+            )
+            result = trading_calendar.calculate_vn_settlement(
+                datetime(2026, 7, 6, 10, 0),
+                settlement_sessions=1,
+                calendar_directory=calendar_dir,
+            )
+
+        self.assertTrue(closure.is_trading_day)
+        self.assertFalse(closure.is_settlement_day)
+        self.assertEqual(
+            closure.classification,
+            trading_calendar.VNCalendarDayClassification.SETTLEMENT_ONLY_CLOSURE,
+        )
+        self.assertEqual(result.settlement_date, date(2026, 7, 8))
+
+    def test_confirmed_year_boundary_loads_each_calendar_year(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            calendar_dir = Path(temp_dir)
+            self._write_calendar(calendar_dir, 2026)
+            self._write_calendar(
+                calendar_dir,
+                2027,
+                trading_closures=["2027-01-01"],
+                settlement_closures=["2027-01-01"],
+            )
+
+            result = trading_calendar.calculate_vn_settlement(
+                datetime(2026, 12, 31, 10, 0),
+                settlement_sessions=2,
+                calendar_directory=calendar_dir,
+            )
+
+        self.assertEqual(result.settlement_date, date(2027, 1, 5))
+        self.assertEqual(
+            result.calculation_status,
+            trading_calendar.SettlementCalculationStatus.CONFIRMED,
+        )
+        self.assertIn("vn-2026-test", result.calendar_version)
+        self.assertIn("vn-2027-test", result.calendar_version)
+
+    def test_missing_calendar_year_is_explicitly_degraded(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = trading_calendar.calculate_vn_settlement(
+                datetime(2028, 1, 3, 10, 0),
+                settlement_sessions=2,
+                calendar_directory=Path(temp_dir),
+            )
+
+        self.assertEqual(
+            result.calculation_status,
+            trading_calendar.SettlementCalculationStatus.DEGRADED,
+        )
+        self.assertIn("calendar_year_missing:2028", result.warnings)
+        self.assertIn("weekend-only", result.calendar_version)
+
+    def test_malformed_calendar_year_is_unknown(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            calendar_dir = Path(temp_dir)
+            (calendar_dir / "2026.json").write_text("{not-json", encoding="utf-8")
+
+            result = trading_calendar.calculate_vn_settlement(
+                datetime(2026, 7, 6, 10, 0),
+                settlement_sessions=2,
+                calendar_directory=calendar_dir,
+            )
+
+        self.assertEqual(
+            result.calculation_status,
+            trading_calendar.SettlementCalculationStatus.UNKNOWN,
+        )
+        self.assertIn("calendar_year_malformed:2026", result.warnings)
+
+    def test_negative_settlement_sessions_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, "settlement_sessions"):
+            trading_calendar.calculate_vn_settlement(
+                datetime(2026, 7, 6, 10, 0),
+                settlement_sessions=-1,
+            )
+
+    def test_naive_and_aware_times_normalize_around_vietnam_midnight(self):
+        naive = trading_calendar.calculate_vn_settlement(
+            datetime(2026, 7, 6, 0, 30),
+            settlement_sessions=0,
+        )
+        aware = trading_calendar.calculate_vn_settlement(
+            datetime(2026, 7, 5, 17, 30, tzinfo=timezone.utc),
+            settlement_sessions=0,
+        )
+
+        self.assertEqual(naive.trade_date, date(2026, 7, 6))
+        self.assertEqual(aware.trade_date, date(2026, 7, 6))
+        self.assertEqual(naive, aware)
+
+    def test_repeated_calculation_is_deterministic(self):
+        inputs = (
+            datetime(2026, 7, 10, 10, 0, tzinfo=ZoneInfo("Asia/Ho_Chi_Minh")),
+            2,
+        )
+
+        first = trading_calendar.calculate_vn_settlement(
+            inputs[0],
+            settlement_sessions=inputs[1],
+        )
+        second = trading_calendar.calculate_vn_settlement(
+            inputs[0],
+            settlement_sessions=inputs[1],
+        )
+
+        self.assertEqual(first, second)
 
 
 class InferMarketPhaseTestCase(unittest.TestCase):

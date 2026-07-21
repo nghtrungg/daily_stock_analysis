@@ -306,3 +306,44 @@ def test_builder_to_prompt_renders_aux_fetch_failed_without_confidence_cap() -> 
     assert "已知限制：基本面：抓取失败" in section
     assert "置信度规则" not in section
     assert "confidence_level" not in section
+
+
+def test_settlement_prompt_exposes_authoritative_values_and_prohibits_recalculation() -> None:
+    pack = _core_available_pack(phase="intraday").model_copy(deep=True)
+    pack.blocks["settlement"] = AnalysisContextBlock(
+        status=ContextFieldStatus.AVAILABLE,
+        source="deterministic_portfolio_ledger",
+        items={
+            "snapshot_version": AnalysisContextItem(
+                status=ContextFieldStatus.AVAILABLE,
+                value="vn-settlement-v1",
+            ),
+            "settlement_state": AnalysisContextItem(
+                status=ContextFieldStatus.AVAILABLE,
+                value="partially_sellable",
+            ),
+            "sellable_quantity": AnalysisContextItem(
+                status=ContextFieldStatus.AVAILABLE,
+                value=40,
+            ),
+            "unsettled_quantity": AnalysisContextItem(
+                status=ContextFieldStatus.AVAILABLE,
+                value=60,
+            ),
+            "maximum_sell_quantity": AnalysisContextItem(
+                status=ContextFieldStatus.AVAILABLE,
+                value=40,
+            ),
+            "calendar_status": AnalysisContextItem(
+                status=ContextFieldStatus.AVAILABLE,
+                value="confirmed",
+            ),
+        },
+    )
+
+    section = format_analysis_context_pack_prompt_section(pack, report_language="vi")
+
+    assert "Authoritative settlement constraint" in section
+    assert "settlement_state=partially_sellable" in section
+    assert "maximum_sell_quantity=40" in section
+    assert "Do not calculate or replace quantities/dates" in section

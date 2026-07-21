@@ -331,6 +331,53 @@ def test_build_payload_records_empty_holding_state_from_explicit_portfolio_conte
     assert payload["metadata"]["holding_state"] == "empty"
 
 
+def test_build_payload_preserves_guarded_action_and_sanitized_settlement_snapshot() -> None:
+    result = _result(
+        code="VNM.VN",
+        name="Vinamilk",
+        sentiment_score=15,
+        action="hold",
+        operation_advice="Cổ phiếu chưa về tài khoản nên chưa thể bán.",
+        decision_type="hold",
+        report_language="vi",
+    )
+    result.reason_codes = ["settlement_unsettled_sale_blocked"]
+    result.settlement_snapshot = {
+        "snapshot_version": "vn-settlement-v1",
+        "scope": "selected_account",
+        "position_lifecycle": "open",
+        "settlement_state": "unsettled",
+        "total_quantity": 100,
+        "sellable_quantity": 0,
+        "unsettled_quantity": 100,
+        "maximum_sell_quantity": 0,
+        "calendar_status": "confirmed",
+        "account_id": 7,
+        "account_name": "Private",
+        "total_cost": 99_000_000,
+    }
+
+    payload = build_decision_signal_payload_from_report(
+        result,
+        portfolio_context={"quantity": 100},
+        trace_id="trace-settlement-guarded",
+        query_source="portfolio",
+        report_type="detailed",
+        profile_source=BUILD_PROFILE_SOURCE,
+    )
+
+    assert payload is not None
+    assert payload["action"] == "hold"
+    assert payload["metadata"]["settlement_reason_codes"] == [
+        "settlement_unsettled_sale_blocked"
+    ]
+    snapshot = payload["metadata"]["settlement_snapshot"]
+    assert snapshot["maximum_sell_quantity"] == 0
+    assert "account_id" not in snapshot
+    assert "account_name" not in snapshot
+    assert "total_cost" not in snapshot
+
+
 def test_runtime_decision_signal_summary_is_not_serialized_by_analysis_result_to_dict() -> None:
     result = _result()
     setattr(result, "decision_signal_summary", {"action": "sell", "reason": "risk"})

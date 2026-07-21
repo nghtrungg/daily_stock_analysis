@@ -5,6 +5,7 @@ import os
 import sqlite3
 import tempfile
 import threading
+from contextlib import closing
 from datetime import date
 from unittest.mock import patch
 
@@ -16,13 +17,25 @@ from sqlalchemy.sql import func
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.config import Config
-from src.storage import Base, CURRENT_SCHEMA_VERSION, DatabaseManager, DatabaseSchemaMigration, StockDaily
+from src.schema_migrations import (
+    SchemaMigration,
+    SchemaMigrationError,
+    run_ordered_migrations,
+)
+from src.storage import (
+    Base,
+    CURRENT_SCHEMA_VERSION,
+    ORDERED_SCHEMA_MIGRATIONS,
+    DatabaseManager,
+    DatabaseSchemaMigration,
+    StockDaily,
+)
 
 class TestStorage(unittest.TestCase):
 
     @staticmethod
     def _list_sqlite_unique_indexes(db_path: str, table_name: str) -> dict[str, list[str]]:
-        with sqlite3.connect(db_path) as conn:
+        with closing(sqlite3.connect(db_path)) as conn:
             rows = conn.execute(f"PRAGMA index_list({table_name})").fetchall()
             unique_indexes = {}
             for row in rows:
@@ -42,7 +55,7 @@ class TestStorage(unittest.TestCase):
         db_path = os.path.join(temp_dir.name, "legacy_intel.sqlite")
 
         try:
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn:
                 conn.execute(
                     """CREATE TABLE intelligence_sources (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -106,6 +119,7 @@ class TestStorage(unittest.TestCase):
                          '2026-01-02 00:00:00', '2026-01-02 00:00:00', 'market', None, 'cn', None),
                     ],
                 )
+                conn.commit()
 
             unique_indexes_before = self._list_sqlite_unique_indexes(db_path, "intelligence_items")
             self.assertIn("uix_intelligence_item_url_legacy", unique_indexes_before)
@@ -122,7 +136,7 @@ class TestStorage(unittest.TestCase):
                 unique_indexes_after["uix_intel_item_scope"],
                 ["source_id", "url", "scope_type", "scope_value", "market"],
             )
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn:
                 table_count = conn.execute("SELECT COUNT(*) FROM intelligence_items").fetchone()[0]
                 temp_tables = conn.execute(
                     "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'intelligence_items_recreate_tmp_%'"
@@ -131,6 +145,8 @@ class TestStorage(unittest.TestCase):
             self.assertEqual(table_count, 2)
             self.assertEqual(temp_tables, [])
         finally:
+            if "conn" in locals():
+                conn.close()
             DatabaseManager.reset_instance()
             Config.reset_instance()
             temp_dir.cleanup()
@@ -143,8 +159,15 @@ class TestStorage(unittest.TestCase):
             row = session.get(DatabaseSchemaMigration, CURRENT_SCHEMA_VERSION)
 
         self.assertIsNotNone(row)
+        self.assertEqual(
+            [migration.version for migration in ORDERED_SCHEMA_MIGRATIONS],
+            sorted(migration.version for migration in ORDERED_SCHEMA_MIGRATIONS),
+        )
         self.assertEqual(row.version, CURRENT_SCHEMA_VERSION)
-        self.assertIn("metadata.create_all", row.description)
+        self.assertEqual(
+            row.description,
+            ORDERED_SCHEMA_MIGRATIONS[-1].description,
+        )
 
         DatabaseManager.reset_instance()
 
@@ -160,7 +183,7 @@ class TestStorage(unittest.TestCase):
                 select(func.count()).select_from(DatabaseSchemaMigration)
             ).scalar_one()
 
-        self.assertEqual(count, 1)
+        self.assertEqual(count, len(ORDERED_SCHEMA_MIGRATIONS))
 
         DatabaseManager.reset_instance()
 
@@ -197,11 +220,162 @@ class TestStorage(unittest.TestCase):
 
         self.assertFalse(any(thread.is_alive() for thread in threads))
         self.assertEqual(errors, [])
-        self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0].version, CURRENT_SCHEMA_VERSION)
+        self.assertEqual(len(rows), len(ORDERED_SCHEMA_MIGRATIONS))
+        self.assertEqual(
+            {row.version for row in rows},
+            {migration.version for migration in ORDERED_SCHEMA_MIGRATIONS},
+        )
 
         DatabaseManager.reset_instance()
         temp_dir.cleanup()
+
+    def test_ordered_migrations_preserve_representative_legacy_data(self) -> None:
+        temp_dir = tempfile.TemporaryDirectory()
+        db_path = os.path.join(temp_dir.name, "legacy.db")
+        try:
+            with closing(sqlite3.connect(db_path)) as conn:
+                conn.execute(
+                    "CREATE TABLE stock_daily ("
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    "code VARCHAR(10) NOT NULL, "
+                    "date DATE NOT NULL, "
+                    "close FLOAT)"
+                )
+                conn.execute(
+                    "INSERT INTO stock_daily (code, date, close) "
+                    "VALUES ('VNM.VN', '2026-07-17', 61200)"
+                )
+                conn.commit()
+
+            DatabaseManager.reset_instance()
+            db = DatabaseManager(db_url=f"sqlite:///{db_path}")
+
+            with closing(sqlite3.connect(db_path)) as conn:
+                stored = conn.execute(
+                    "SELECT code, date, close FROM stock_daily"
+                ).fetchall()
+                migrations = conn.execute(
+                    "SELECT version, description FROM schema_migrations "
+                    "ORDER BY version"
+                ).fetchall()
+
+            self.assertEqual(stored, [("VNM.VN", "2026-07-17", 61200.0)])
+            self.assertEqual(
+                [row[0] for row in migrations],
+                [migration.version for migration in ORDERED_SCHEMA_MIGRATIONS],
+            )
+            self.assertTrue(all(row[1] for row in migrations))
+        finally:
+            if "conn" in locals():
+                conn.close()
+            DatabaseManager.reset_instance()
+            temp_dir.cleanup()
+
+    def test_settlement_migration_upgrades_legacy_portfolio_tables_in_place(self) -> None:
+        temp_dir = tempfile.TemporaryDirectory()
+        db_path = os.path.join(temp_dir.name, "legacy_portfolio.db")
+        try:
+            with closing(sqlite3.connect(db_path)) as conn:
+                conn.executescript(
+                    """
+                    CREATE TABLE portfolio_trades (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        account_id INTEGER NOT NULL,
+                        trade_date DATE NOT NULL,
+                        symbol VARCHAR(16) NOT NULL
+                    );
+                    CREATE TABLE portfolio_positions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        account_id INTEGER NOT NULL,
+                        symbol VARCHAR(16) NOT NULL
+                    );
+                    CREATE TABLE portfolio_position_lots (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        account_id INTEGER NOT NULL,
+                        symbol VARCHAR(16) NOT NULL
+                    );
+                    INSERT INTO portfolio_trades
+                        (account_id, trade_date, symbol)
+                    VALUES (7, '2026-07-06', 'VNM.VN');
+                    """
+                )
+                conn.commit()
+
+            DatabaseManager.reset_instance()
+            DatabaseManager(db_url=f"sqlite:///{db_path}")
+
+            with closing(sqlite3.connect(db_path)) as conn:
+                trade_columns = {
+                    row[1] for row in conn.execute(
+                        "PRAGMA table_info(portfolio_trades)"
+                    )
+                }
+                position_columns = {
+                    row[1] for row in conn.execute(
+                        "PRAGMA table_info(portfolio_positions)"
+                    )
+                }
+                lot_columns = {
+                    row[1] for row in conn.execute(
+                        "PRAGMA table_info(portfolio_position_lots)"
+                    )
+                }
+                preserved = conn.execute(
+                    "SELECT account_id, trade_date, symbol "
+                    "FROM portfolio_trades"
+                ).fetchall()
+                sidecar_exists = conn.execute(
+                    "SELECT name FROM sqlite_master "
+                    "WHERE type = 'table' "
+                    "AND name = 'portfolio_trade_settlements'"
+                ).fetchone()
+
+            self.assertIn("executed_at", trade_columns)
+            self.assertIn("sellable_quantity", position_columns)
+            self.assertIn("estimated_sellable_at", lot_columns)
+            self.assertEqual(preserved, [(7, "2026-07-06", "VNM.VN")])
+            self.assertIsNotNone(sidecar_exists)
+        finally:
+            DatabaseManager.reset_instance()
+            temp_dir.cleanup()
+
+    def test_failed_required_migration_is_actionable_and_not_recorded(self) -> None:
+        DatabaseManager.reset_instance()
+        db = DatabaseManager(db_url="sqlite:///:memory:")
+        failed_version = "2099-01-01-required-test-migration"
+
+        def fail_upgrade(connection, _context) -> None:
+            connection.exec_driver_sql(
+                "CREATE TABLE migration_should_rollback (id INTEGER PRIMARY KEY)"
+            )
+            raise RuntimeError("simulated migration failure")
+
+        migration = SchemaMigration(
+            version=failed_version,
+            description="Required test migration",
+            upgrade=fail_upgrade,
+        )
+
+        with self.assertRaisesRegex(
+            SchemaMigrationError,
+            "2099-01-01-required-test-migration.*Required test migration",
+        ):
+            run_ordered_migrations(
+                db._engine,
+                migration_table=DatabaseSchemaMigration.__tablename__,
+                migrations=(migration,),
+            )
+
+        with db.get_session() as session:
+            recorded = session.get(DatabaseSchemaMigration, failed_version)
+            rolled_back_table = session.connection().exec_driver_sql(
+                "SELECT name FROM sqlite_master "
+                "WHERE type = 'table' AND name = 'migration_should_rollback'"
+            ).scalar()
+
+        self.assertIsNone(recorded)
+        self.assertIsNone(rolled_back_table)
+        DatabaseManager.reset_instance()
     
     def test_parse_sniper_value(self):
         """测试解析狙击点位数值"""
@@ -731,7 +905,10 @@ class TestStorage(unittest.TestCase):
             return engine
 
         try:
-            with patch("src.storage.create_engine", side_effect=create_engine_with_failing_dispose):
+            with patch(
+                "src.repositories.database.create_engine",
+                side_effect=create_engine_with_failing_dispose,
+            ):
                 with patch.object(Base.metadata, "create_all", side_effect=original_error):
                     with self.assertRaisesRegex(RuntimeError, "create all failed") as ctx:
                         DatabaseManager.get_instance()
@@ -755,6 +932,45 @@ class TestStorage(unittest.TestCase):
             self.assertEqual(result, 7)
             self.assertTrue(
                 any(call.args == ("BEGIN IMMEDIATE",) for call in mock_exec.call_args_list)
+            )
+        finally:
+            DatabaseManager.reset_instance()
+
+    def test_recent_fundamental_snapshots_are_code_scoped_and_newest_first(self):
+        DatabaseManager.reset_instance()
+        db = DatabaseManager(db_url="sqlite:///:memory:")
+        try:
+            self.assertEqual(
+                db.save_fundamental_snapshot(
+                    query_id="older",
+                    code="VCB.VN",
+                    payload={"valuation": {"data": {"pe_ratio": 10}}},
+                ),
+                1,
+            )
+            self.assertEqual(
+                db.save_fundamental_snapshot(
+                    query_id="other-symbol",
+                    code="VNM.VN",
+                    payload={"valuation": {"data": {"pe_ratio": 99}}},
+                ),
+                1,
+            )
+            self.assertEqual(
+                db.save_fundamental_snapshot(
+                    query_id="newer",
+                    code="VCB.VN",
+                    payload={"valuation": {"data": {"pe_ratio": 12}}},
+                ),
+                1,
+            )
+
+            rows = db.get_recent_fundamental_snapshots("VCB.VN", limit=10)
+
+            self.assertEqual([row["query_id"] for row in rows], ["newer", "older"])
+            self.assertEqual(
+                [row["payload"]["valuation"]["data"]["pe_ratio"] for row in rows],
+                [12, 10],
             )
         finally:
             DatabaseManager.reset_instance()
@@ -817,8 +1033,8 @@ class TestStorage(unittest.TestCase):
 
             self.assertEqual(total, 1)
         finally:
-            temp_dir.cleanup()
             DatabaseManager.reset_instance()
+            temp_dir.cleanup()
 
 if __name__ == '__main__':
     unittest.main()

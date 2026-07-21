@@ -177,6 +177,71 @@ class TestReportRenderer(unittest.TestCase):
         self.assertIn("放量突破", out)
         self.assertIn("quote: stale", out)
 
+    def test_vietnamese_markdown_renders_sector_health_decision_scenarios_and_closing_summary(self) -> None:
+        summary = (
+            "Xu hướng ngắn hạn trung tính và dòng tiền chưa xác nhận. "
+            "Ưu tiên chờ tín hiệu tại các mốc giá quyết định."
+        )
+        r = _make_result(
+            code="MBB.VN",
+            name="MBB",
+            operation_advice="Theo dõi",
+            analysis_summary=summary,
+            report_language="vi",
+            dashboard={
+                "core_conclusion": {"one_sentence": "Chờ xác nhận tại vùng giá quyết định."},
+                "data_perspective": {
+                    "sector_health": {
+                        "score": 68,
+                        "label": "Tích cực",
+                        "peer_symbols": ["VCB.VN", "BID.VN"],
+                        "rationale": "Hai cổ phiếu dẫn dắt cùng ngành duy trì xu hướng tốt.",
+                        "data_status": "available",
+                    },
+                    "chip_structure": {
+                        "profit_ratio": "Không có dữ liệu",
+                        "avg_cost": "Không có dữ liệu",
+                        "concentration": "Không có dữ liệu",
+                        "chip_health": "Không có dữ liệu",
+                    },
+                },
+                "intelligence": {"risk_alerts": []},
+                "phase_decision": {
+                    "action_window": "Theo dõi trong phiên",
+                    "immediate_action": "Chờ xác nhận",
+                    "watch_conditions": ["Giữ trên 23.800"],
+                    "decision_scenarios": [
+                        {
+                            "condition": "Giá vượt 24.300 với thanh khoản tăng",
+                            "action": "Mua thăm dò",
+                            "invalidation": "Quay xuống dưới 24.300",
+                        },
+                        {
+                            "condition": "Giá thủng 23.800",
+                            "action": "Giảm tỷ trọng",
+                            "invalidation": "Lấy lại 23.800 cuối phiên",
+                        },
+                    ],
+                    "next_check_time": "14:30",
+                    "confidence_reason": "Dữ liệu đủ dùng.",
+                    "data_limitations": [],
+                },
+                "battle_plan": {"sniper_points": {"stop_loss": "23.800"}},
+            },
+        )
+
+        out = render("markdown", [r], summary_only=False)
+
+        self.assertIsNotNone(out)
+        self.assertIn("Sức khỏe nhóm ngành", out)
+        self.assertIn("68/100", out)
+        self.assertIn("VCB.VN, BID.VN", out)
+        self.assertIn("Kịch bản quyết định", out)
+        self.assertIn("Giá vượt 24.300 với thanh khoản tăng", out)
+        self.assertIn("Tổng hợp cuối báo cáo", out)
+        self.assertIn(summary, out)
+        self.assertNotIn("Cơ cấu nắm giữ", out)
+
     def test_render_markdown_skips_context_only_phase_decision_shape(self) -> None:
         """Markdown skips mechanically shaped phase_decision without actionable content."""
         r = _make_result(

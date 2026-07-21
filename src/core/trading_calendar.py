@@ -13,10 +13,12 @@
 依赖：exchange-calendars（可选，交易日判断不可用时 fail-open，阶段推断不可用时 unknown）
 """
 
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 from zoneinfo import ZoneInfo
 
@@ -76,6 +78,11 @@ _VN_OPEN_TIME = time(9, 0)
 _VN_BREAK_START = time(11, 30)
 _VN_BREAK_END = time(13, 0)
 _VN_CLOSE_TIME = time(14, 45)
+_VN_ESTIMATED_SELLABLE_TIME = time(13, 0)
+_VN_CALENDAR_DIRECTORY = (
+    Path(__file__).resolve().parents[2] / "config" / "market_calendars" / "vn"
+)
+VN_SETTLEMENT_POLICY_VERSION = "vn-equity-t2-2022-08-29"
 _SUPPORTED_ANALYSIS_PHASES = {
     "auto",
     "premarket",
@@ -94,6 +101,75 @@ class MarketPhase(str, Enum):
     POSTMARKET = "postmarket"
     NON_TRADING = "non_trading"
     UNKNOWN = "unknown"
+
+
+class VNCalendarCoverage(str, Enum):
+    """Quality of the bundled calendar data for one year."""
+
+    CONFIRMED = "confirmed"
+    MISSING = "missing"
+    MALFORMED = "malformed"
+
+
+class VNCalendarDayClassification(str, Enum):
+    """Trading and settlement state for one Vietnam-local date."""
+
+    TRADING_AND_SETTLEMENT_DAY = "trading_and_settlement_day"
+    TRADING_DAY = "trading_day"
+    SETTLEMENT_DAY = "settlement_day"
+    NON_TRADING_CLOSURE = "non_trading_closure"
+    SETTLEMENT_ONLY_CLOSURE = "settlement_only_closure"
+    WEEKEND = "weekend"
+    UNKNOWN = "unknown"
+
+
+class SettlementCalculationStatus(str, Enum):
+    CONFIRMED = "confirmed"
+    DEGRADED = "degraded"
+    UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True)
+class VNCalendarYear:
+    year: int
+    calendar_version: str
+    trading_closures: frozenset[date]
+    settlement_closures: frozenset[date]
+    coverage: VNCalendarCoverage
+    warnings: Tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class VNCalendarDay:
+    calendar_date: date
+    is_trading_day: bool
+    is_settlement_day: bool
+    classification: VNCalendarDayClassification
+    coverage: VNCalendarCoverage
+    calendar_version: str
+    warnings: Tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class SettlementCalculationResult:
+    trade_date: date
+    settlement_date: date
+    estimated_sellable_at: datetime
+    calendar_version: str
+    policy_version: str
+    calculation_status: SettlementCalculationStatus
+    warnings: Tuple[str, ...] = ()
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "trade_date": self.trade_date.isoformat(),
+            "settlement_date": self.settlement_date.isoformat(),
+            "estimated_sellable_at": self.estimated_sellable_at.isoformat(),
+            "calendar_version": self.calendar_version,
+            "policy_version": self.policy_version,
+            "calculation_status": self.calculation_status.value,
+            "warnings": list(self.warnings),
+        }
 
 
 @dataclass
@@ -131,6 +207,189 @@ class MarketPhaseContext:
             "analysis_intent": self.analysis_intent,
             "warnings": list(self.warnings),
         }
+
+
+def _parse_vn_calendar_dates(values: Any, *, year: int, field_name: str) -> frozenset[date]:
+    if not isinstance(values, list):
+        raise ValueError(f"{field_name} must be a list")
+    parsed = set()
+    for value in values:
+        parsed_date = date.fromisoformat(str(value))
+        if parsed_date.year != year:
+            raise ValueError(f"{field_name} contains a date outside {year}")
+        parsed.add(parsed_date)
+    return frozenset(parsed)
+
+
+def load_vn_calendar_year(
+    year: int,
+    *,
+    calendar_directory: Optional[Path] = None,
+) -> VNCalendarYear:
+    """Load and validate one versioned Vietnam calendar year."""
+    directory = Path(calendar_directory or _VN_CALENDAR_DIRECTORY)
+    calendar_path = directory / f"{int(year)}.json"
+    if not calendar_path.is_file():
+        return VNCalendarYear(
+            year=int(year),
+            calendar_version=f"vn-{int(year)}-weekend-only",
+            trading_closures=frozenset(),
+            settlement_closures=frozenset(),
+            coverage=VNCalendarCoverage.MISSING,
+            warnings=(f"calendar_year_missing:{int(year)}",),
+        )
+
+    try:
+        payload = json.loads(calendar_path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("calendar root must be an object")
+        if payload.get("market") != "vn":
+            raise ValueError("market must be 'vn'")
+        if int(payload.get("year")) != int(year):
+            raise ValueError("calendar year does not match filename")
+        if payload.get("timezone") != MARKET_TIMEZONE["vn"]:
+            raise ValueError("calendar timezone must be Asia/Ho_Chi_Minh")
+        calendar_version = str(payload.get("calendar_version") or "").strip()
+        if not calendar_version:
+            raise ValueError("calendar_version is required")
+        trading_closures = _parse_vn_calendar_dates(
+            payload.get("trading_closures"),
+            year=int(year),
+            field_name="trading_closures",
+        )
+        settlement_closures = _parse_vn_calendar_dates(
+            payload.get("settlement_closures"),
+            year=int(year),
+            field_name="settlement_closures",
+        )
+    except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        logger.error("Malformed Vietnam calendar %s: %s", calendar_path, exc)
+        return VNCalendarYear(
+            year=int(year),
+            calendar_version=f"vn-{int(year)}-malformed-weekend-only",
+            trading_closures=frozenset(),
+            settlement_closures=frozenset(),
+            coverage=VNCalendarCoverage.MALFORMED,
+            warnings=(f"calendar_year_malformed:{int(year)}",),
+        )
+
+    return VNCalendarYear(
+        year=int(year),
+        calendar_version=calendar_version,
+        trading_closures=trading_closures,
+        settlement_closures=settlement_closures,
+        coverage=VNCalendarCoverage.CONFIRMED,
+    )
+
+
+def get_vn_calendar_day(
+    check_date: date,
+    *,
+    calendar_directory: Optional[Path] = None,
+) -> VNCalendarDay:
+    """Return independent trading and settlement state for a Vietnam date."""
+    calendar = load_vn_calendar_year(
+        check_date.year,
+        calendar_directory=calendar_directory,
+    )
+    is_weekend = check_date.weekday() >= 5
+    trading_closed = is_weekend or check_date in calendar.trading_closures
+    settlement_closed = is_weekend or check_date in calendar.settlement_closures
+    is_trading_day = not trading_closed
+    is_settlement_day = not settlement_closed
+
+    if is_weekend:
+        classification = VNCalendarDayClassification.WEEKEND
+    elif calendar.coverage != VNCalendarCoverage.CONFIRMED:
+        classification = VNCalendarDayClassification.UNKNOWN
+    elif trading_closed and settlement_closed:
+        classification = VNCalendarDayClassification.NON_TRADING_CLOSURE
+    elif settlement_closed:
+        classification = VNCalendarDayClassification.SETTLEMENT_ONLY_CLOSURE
+    elif trading_closed:
+        classification = VNCalendarDayClassification.SETTLEMENT_DAY
+    else:
+        classification = VNCalendarDayClassification.TRADING_AND_SETTLEMENT_DAY
+
+    return VNCalendarDay(
+        calendar_date=check_date,
+        is_trading_day=is_trading_day,
+        is_settlement_day=is_settlement_day,
+        classification=classification,
+        coverage=calendar.coverage,
+        calendar_version=calendar.calendar_version,
+        warnings=calendar.warnings,
+    )
+
+
+def calculate_vn_settlement(
+    trade_time: datetime,
+    *,
+    settlement_sessions: int = 2,
+    calendar_directory: Optional[Path] = None,
+) -> SettlementCalculationResult:
+    """Calculate a Vietnam equity settlement estimate from settlement sessions."""
+    if isinstance(settlement_sessions, bool) or settlement_sessions < 0:
+        raise ValueError("settlement_sessions must be a non-negative integer")
+    if not isinstance(settlement_sessions, int):
+        raise TypeError("settlement_sessions must be an integer")
+    if not isinstance(trade_time, datetime):
+        raise TypeError("trade_time must be a datetime")
+
+    local_trade_time = get_market_now("vn", current_time=trade_time)
+    trade_date = local_trade_time.date()
+    warnings: List[str] = []
+    versions: List[str] = []
+    coverages: List[VNCalendarCoverage] = []
+
+    def observe(calendar_day: VNCalendarDay) -> None:
+        if calendar_day.calendar_version not in versions:
+            versions.append(calendar_day.calendar_version)
+        coverages.append(calendar_day.coverage)
+        for warning in calendar_day.warnings:
+            _add_warning_code(warnings, warning)
+
+    trade_calendar_day = get_vn_calendar_day(
+        trade_date,
+        calendar_directory=calendar_directory,
+    )
+    observe(trade_calendar_day)
+    if not trade_calendar_day.is_trading_day:
+        _add_warning_code(warnings, "trade_date_not_trading_day")
+
+    settlement_date = trade_date
+    remaining_sessions = settlement_sessions
+    while remaining_sessions:
+        settlement_date += timedelta(days=1)
+        calendar_day = get_vn_calendar_day(
+            settlement_date,
+            calendar_directory=calendar_directory,
+        )
+        observe(calendar_day)
+        if calendar_day.is_settlement_day:
+            remaining_sessions -= 1
+
+    if VNCalendarCoverage.MALFORMED in coverages or not trade_calendar_day.is_trading_day:
+        status = SettlementCalculationStatus.UNKNOWN
+    elif VNCalendarCoverage.MISSING in coverages:
+        status = SettlementCalculationStatus.DEGRADED
+    else:
+        status = SettlementCalculationStatus.CONFIRMED
+
+    sellable_at = datetime.combine(
+        settlement_date,
+        _VN_ESTIMATED_SELLABLE_TIME,
+        tzinfo=ZoneInfo(MARKET_TIMEZONE["vn"]),
+    )
+    return SettlementCalculationResult(
+        trade_date=trade_date,
+        settlement_date=settlement_date,
+        estimated_sellable_at=sellable_at,
+        calendar_version="+".join(versions),
+        policy_version=VN_SETTLEMENT_POLICY_VERSION,
+        calculation_status=status,
+        warnings=tuple(warnings),
+    )
 
 
 def get_market_for_stock(code: str) -> Optional[str]:
@@ -175,7 +434,7 @@ def is_market_open(market: str, check_date: date) -> bool:
         True if trading day (or fail-open), False otherwise
     """
     if market == "vn":
-        return check_date.weekday() < 5
+        return get_vn_calendar_day(check_date).is_trading_day
     if not _XCALS_AVAILABLE:
         return True
     ex = MARKET_EXCHANGE.get(market)
@@ -217,7 +476,7 @@ def get_market_now(
 
 def _previous_vn_weekday(check_date: date) -> date:
     previous = check_date - timedelta(days=1)
-    while previous.weekday() >= 5:
+    while not get_vn_calendar_day(previous).is_trading_day:
         previous -= timedelta(days=1)
     return previous
 
@@ -230,7 +489,7 @@ def _vn_session_bounds(market_now: datetime) -> Tuple[datetime, datetime]:
 
 
 def _infer_vn_market_phase(market_now: datetime) -> MarketPhase:
-    if market_now.weekday() >= 5:
+    if not get_vn_calendar_day(market_now.date()).is_trading_day:
         return MarketPhase.NON_TRADING
 
     session_open, session_close = _vn_session_bounds(market_now)
@@ -267,7 +526,7 @@ def get_effective_trading_date(
     fallback_date = market_now.date()
 
     if market == "vn":
-        if market_now.weekday() >= 5:
+        if not get_vn_calendar_day(market_now.date()).is_trading_day:
             return _previous_vn_weekday(market_now.date())
         _, session_close = _vn_session_bounds(market_now)
         return market_now.date() if market_now >= session_close else _previous_vn_weekday(market_now.date())
@@ -444,7 +703,11 @@ def _session_open_close_for_today(
 ) -> Tuple[Optional[datetime], Optional[datetime]]:
     tz_name = MARKET_TIMEZONE.get(market)
     if market == "vn":
-        return _vn_session_bounds(market_now) if market_now.weekday() < 5 else (None, None)
+        return (
+            _vn_session_bounds(market_now)
+            if get_vn_calendar_day(market_now.date()).is_trading_day
+            else (None, None)
+        )
 
     ex = MARKET_EXCHANGE.get(market)
     if not ex or not tz_name or not _XCALS_AVAILABLE:
@@ -547,6 +810,10 @@ def build_market_phase_context(
     else:
         if not _XCALS_AVAILABLE and market != "vn":
             _add_warning_code(warnings, "calendar_unavailable")
+        if market == "vn":
+            vn_day = get_vn_calendar_day(market_now.date())
+            if vn_day.coverage != VNCalendarCoverage.CONFIRMED:
+                _add_warning_code(warnings, f"vn_calendar_{vn_day.coverage.value}")
         if requested_phase == "auto":
             phase = infer_market_phase(market, current_time=current_time)
             if phase == MarketPhase.UNKNOWN and _XCALS_AVAILABLE:

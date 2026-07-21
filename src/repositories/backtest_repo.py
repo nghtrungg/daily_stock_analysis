@@ -8,16 +8,20 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from datetime import date, datetime, timedelta
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
-from sqlalchemy import and_, delete, desc, func, or_, select
+from sqlalchemy import and_, delete, desc, func, insert, or_, select
+from sqlalchemy.dialects.postgresql import insert as postgres_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from data_provider.base import is_bse_code
 from src.core.backtest_engine import OVERALL_SENTINEL_CODE
 from src.services.stock_code_utils import normalize_code as normalize_backtest_code
 
 from src.storage import BacktestResult, BacktestSummary, DatabaseManager, AnalysisHistory
+from src.repositories.bulk import chunk_mappings, model_to_mapping
 
 logger = logging.getLogger(__name__)
 
@@ -147,31 +151,49 @@ class BacktestRepository:
         if not results:
             return 0
 
-        with self.db.get_session() as session:
-            try:
-                if replace_existing:
-                    analysis_ids = sorted({r.analysis_history_id for r in results if r.analysis_history_id is not None})
-                    key_pairs = sorted({(r.eval_window_days, r.engine_version) for r in results})
+        mappings = [model_to_mapping(result) for result in results]
 
-                    if analysis_ids and key_pairs:
-                        for window_days, engine_version in key_pairs:
-                            session.execute(
-                                delete(BacktestResult).where(
-                                    and_(
-                                        BacktestResult.analysis_history_id.in_(analysis_ids),
-                                        BacktestResult.eval_window_days == window_days,
-                                        BacktestResult.engine_version == engine_version,
-                                    )
+        def _write(session: Any) -> int:
+            if replace_existing:
+                analysis_ids = sorted({
+                    result.analysis_history_id
+                    for result in results
+                    if result.analysis_history_id is not None
+                })
+                key_pairs = sorted({
+                    (result.eval_window_days, result.engine_version)
+                    for result in results
+                })
+                if analysis_ids and key_pairs:
+                    for window_days, engine_version in key_pairs:
+                        session.execute(
+                            delete(BacktestResult).where(
+                                and_(
+                                    BacktestResult.analysis_history_id.in_(analysis_ids),
+                                    BacktestResult.eval_window_days == window_days,
+                                    BacktestResult.engine_version == engine_version,
                                 )
                             )
+                        )
 
-                session.add_all(results)
-                session.commit()
-                return len(results)
-            except Exception as exc:
-                session.rollback()
-                logger.error(f"批量保存回测结果失败: {exc}")
-                raise
+            chunk_count = 0
+            started_at = time.monotonic()
+            for chunk in chunk_mappings(mappings):
+                session.execute(insert(BacktestResult), chunk)
+                chunk_count += 1
+            logger.info(
+                "Bulk write completed: operation=backtest_results rows=%s chunks=%s duration_ms=%s",
+                len(mappings),
+                chunk_count,
+                int((time.monotonic() - started_at) * 1000),
+            )
+            return len(results)
+
+        try:
+            return self.db.run_write_transaction("save_backtest_results", _write)
+        except Exception as exc:
+            logger.error(f"批量保存回测结果失败: {exc}")
+            raise
 
     def get_results_paginated(
         self,
@@ -356,49 +378,58 @@ class BacktestRepository:
 
     def upsert_summary(self, summary: BacktestSummary) -> None:
         """Insert or replace summary row by unique key."""
-        with self.db.get_session() as session:
-            existing = session.execute(
-                select(BacktestSummary)
-                .where(
-                    and_(
-                        BacktestSummary.scope == summary.scope,
-                        BacktestSummary.code == summary.code,
-                        BacktestSummary.eval_window_days == summary.eval_window_days,
-                        BacktestSummary.engine_version == summary.engine_version,
+        self.upsert_summaries([summary])
+
+    def upsert_summaries(self, summaries: List[BacktestSummary]) -> int:
+        """Upsert a naturally grouped summary batch in bounded statements."""
+        if not summaries:
+            return 0
+        mutable_fields = (
+            "computed_at", "total_evaluations", "completed_count",
+            "insufficient_count", "long_count", "cash_count", "win_count",
+            "loss_count", "neutral_count", "direction_accuracy_pct",
+            "win_rate_pct", "neutral_rate_pct", "avg_stock_return_pct",
+            "avg_simulated_return_pct", "stop_loss_trigger_rate",
+            "take_profit_trigger_rate", "ambiguous_rate", "avg_days_to_first_hit",
+            "advice_breakdown_json", "diagnostics_json",
+        )
+        mappings_by_key = {}
+        for summary in summaries:
+            mapping = model_to_mapping(summary)
+            key = (
+                mapping.get("scope"), mapping.get("code"),
+                mapping.get("eval_window_days"), mapping.get("engine_version"),
+            )
+            mappings_by_key[key] = mapping
+
+        def _write(session: Any) -> int:
+            chunk_count = 0
+            started_at = time.monotonic()
+            for chunk in chunk_mappings(mappings_by_key.values()):
+                stmt = (
+                    sqlite_insert(BacktestSummary)
+                    if self.db.is_sqlite
+                    else postgres_insert(BacktestSummary)
+                ).values(chunk)
+                excluded = stmt.excluded
+                session.execute(
+                    stmt.on_conflict_do_update(
+                        index_elements=[
+                            "scope", "code", "eval_window_days", "engine_version"
+                        ],
+                        set_={field: getattr(excluded, field) for field in mutable_fields},
                     )
                 )
-                .limit(1)
-            ).scalar_one_or_none()
+                chunk_count += 1
+            logger.info(
+                "Bulk write completed: operation=backtest_summaries rows=%s chunks=%s duration_ms=%s",
+                len(mappings_by_key),
+                chunk_count,
+                int((time.monotonic() - started_at) * 1000),
+            )
+            return len(mappings_by_key)
 
-            if existing:
-                for attr in (
-                    "computed_at",
-                    "total_evaluations",
-                    "completed_count",
-                    "insufficient_count",
-                    "long_count",
-                    "cash_count",
-                    "win_count",
-                    "loss_count",
-                    "neutral_count",
-                    "direction_accuracy_pct",
-                    "win_rate_pct",
-                    "neutral_rate_pct",
-                    "avg_stock_return_pct",
-                    "avg_simulated_return_pct",
-                    "stop_loss_trigger_rate",
-                    "take_profit_trigger_rate",
-                    "ambiguous_rate",
-                    "avg_days_to_first_hit",
-                    "advice_breakdown_json",
-                    "diagnostics_json",
-                ):
-                    setattr(existing, attr, getattr(summary, attr))
-                session.commit()
-                return
-
-            session.add(summary)
-            session.commit()
+        return self.db.run_write_transaction("upsert_backtest_summaries", _write)
 
     def get_summary(
         self,
@@ -427,14 +458,17 @@ class BacktestRepository:
             return row
 
     @staticmethod
-    def parse_analysis_date_from_snapshot(context_snapshot: Optional[str]) -> Optional[date]:
+    def parse_analysis_date_from_snapshot(context_snapshot: Any) -> Optional[date]:
         if not context_snapshot:
             return None
 
-        try:
-            payload = json.loads(context_snapshot)
-        except Exception:
-            return None
+        if isinstance(context_snapshot, dict):
+            payload = context_snapshot
+        else:
+            try:
+                payload = json.loads(context_snapshot)
+            except Exception:
+                return None
 
         if not isinstance(payload, dict):
             return None

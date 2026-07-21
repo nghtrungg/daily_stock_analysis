@@ -24,6 +24,7 @@ except ModuleNotFoundError:
 import src.auth as auth
 from api.app import create_app
 from src.config import Config
+from src.services.decision_signal_service import DecisionSignalService
 from src.services.portfolio_service import PortfolioBusyError
 from src.storage import DatabaseManager
 
@@ -123,6 +124,242 @@ class PortfolioApiTestCase(unittest.TestCase):
         self.assertEqual(trade_resp.status_code, 200, trade_resp.text)
         self._save_close(symbol, date(2026, 1, 3), 110.0)
         return account_id
+
+    def _create_vn_account(self, name: str = "Vietnam") -> int:
+        response = self.client.post(
+            "/api/v1/portfolio/accounts",
+            json={
+                "name": name,
+                "broker": "Demo",
+                "market": "vn",
+                "base_currency": "VND",
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        return int(response.json()["id"])
+
+    def _record_vn_buy(
+        self,
+        account_id: int,
+        *,
+        trade_date: str = "2026-07-06",
+        executed_at: str | None = None,
+        quantity: float = 100,
+    ):
+        payload = {
+            "account_id": account_id,
+            "symbol": "VNM.VN",
+            "trade_date": trade_date,
+            "side": "buy",
+            "quantity": quantity,
+            "price": 70000,
+            "fee": 0,
+            "tax": 0,
+            "market": "vn",
+            "currency": "VND",
+        }
+        if executed_at is not None:
+            payload["executed_at"] = executed_at
+        return self.client.post("/api/v1/portfolio/trades", json=payload)
+
+    def test_vietnam_trade_request_preserves_trade_date_only_client(self) -> None:
+        account_id = self._create_vn_account()
+
+        response = self._record_vn_buy(account_id)
+
+        self.assertEqual(response.status_code, 200, response.text)
+        snapshot = self.client.get(
+            "/api/v1/portfolio/snapshot",
+            params={"account_id": account_id, "as_of": "2026-07-06"},
+        )
+        self.assertEqual(snapshot.status_code, 200, snapshot.text)
+        position = snapshot.json()["accounts"][0]["positions"][0]
+        self.assertEqual(position["position_lifecycle"], "open")
+        self.assertEqual(position["settlement_state"], "unsettled")
+        self.assertEqual(position["sellable_quantity"], 0.0)
+        self.assertEqual(position["unsettled_quantity"], 100.0)
+        self.assertEqual(
+            position["settlement_calculation_status"],
+            "confirmed",
+        )
+        self.assertIn(
+            "execution_time_inferred_from_trade_date",
+            position["settlement_warnings"],
+        )
+
+    def test_vietnam_trade_request_accepts_naive_and_aware_execution_times(self) -> None:
+        account_id = self._create_vn_account()
+
+        naive = self._record_vn_buy(
+            account_id,
+            executed_at="2026-07-06T10:15:00",
+        )
+        aware = self._record_vn_buy(
+            account_id,
+            executed_at="2026-07-06T03:30:00+00:00",
+        )
+
+        self.assertEqual(naive.status_code, 200, naive.text)
+        self.assertEqual(aware.status_code, 200, aware.text)
+
+    def test_vietnam_trade_api_accepts_optional_source_decision_signal(self) -> None:
+        account_id = self._create_vn_account()
+        signal = DecisionSignalService(db_manager=self.db).create_signal(
+            {
+                "stock_code": "VNM.VN",
+                "stock_name": "Vinamilk",
+                "market": "vn",
+                "source_type": "analysis",
+                "trace_id": "portfolio-api-pr6-link",
+                "trigger_source": "api",
+                "action": "buy",
+                "reason": "Khuyến nghị mua kiểm thử",
+            }
+        )["item"]
+
+        response = self.client.post(
+            "/api/v1/portfolio/trades",
+            json={
+                "account_id": account_id,
+                "symbol": "VNM.VN",
+                "trade_date": "2026-07-06",
+                "side": "buy",
+                "quantity": 100,
+                "price": 70000,
+                "market": "vn",
+                "currency": "VND",
+                "source_decision_signal_id": signal["id"],
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(
+            response.json()["source_decision_signal_id"],
+            signal["id"],
+        )
+        trades = self.client.get(
+            "/api/v1/portfolio/trades",
+            params={"account_id": account_id},
+        )
+        self.assertEqual(trades.status_code, 200, trades.text)
+        self.assertEqual(
+            trades.json()["items"][0]["source_decision_signal_id"],
+            signal["id"],
+        )
+
+    def test_vietnam_trade_request_rejects_invalid_mismatched_and_unsuffixed_input(self) -> None:
+        account_id = self._create_vn_account()
+        base = {
+            "account_id": account_id,
+            "symbol": "VNM.VN",
+            "trade_date": "2026-07-06",
+            "side": "buy",
+            "quantity": 100,
+            "price": 70000,
+            "market": "vn",
+            "currency": "VND",
+        }
+
+        invalid = self.client.post(
+            "/api/v1/portfolio/trades",
+            json={**base, "executed_at": "not-a-date"},
+        )
+        mismatched = self.client.post(
+            "/api/v1/portfolio/trades",
+            json={**base, "executed_at": "2026-07-05T16:30:00+00:00"},
+        )
+        unsuffixed = self.client.post(
+            "/api/v1/portfolio/trades",
+            json={**base, "symbol": "VNM"},
+        )
+
+        self.assertEqual(invalid.status_code, 422, invalid.text)
+        self.assertEqual(mismatched.status_code, 400, mismatched.text)
+        self.assertEqual(unsuffixed.status_code, 400, unsuffixed.text)
+
+    def test_position_settlement_endpoint_scopes_account_and_serializes_lots(self) -> None:
+        first_account = self._create_vn_account("First")
+        second_account = self._create_vn_account("Second")
+        self.assertEqual(
+            self._record_vn_buy(first_account, quantity=100).status_code,
+            200,
+        )
+        self.assertEqual(
+            self._record_vn_buy(second_account, quantity=200).status_code,
+            200,
+        )
+
+        ambiguous = self.client.get(
+            "/api/v1/portfolio/positions/VNM.VN/settlement",
+            params={"as_of": "2026-07-06"},
+        )
+        scoped = self.client.get(
+            "/api/v1/portfolio/positions/VNM.VN/settlement",
+            params={"account_id": first_account, "as_of": "2026-07-06"},
+        )
+        missing = self.client.get(
+            "/api/v1/portfolio/positions/FPT.VN/settlement",
+            params={"account_id": first_account, "as_of": "2026-07-06"},
+        )
+
+        self.assertEqual(ambiguous.status_code, 400, ambiguous.text)
+        self.assertEqual(
+            ambiguous.json()["error"],
+            "ambiguous_position_account",
+        )
+        self.assertEqual(scoped.status_code, 200, scoped.text)
+        payload = scoped.json()
+        self.assertEqual(payload["account_id"], first_account)
+        self.assertEqual(payload["symbol"], "VNM.VN")
+        self.assertEqual(payload["total_quantity"], 100.0)
+        self.assertEqual(payload["settlement_state"], "unsettled")
+        self.assertEqual(len(payload["lots"]), 1)
+        self.assertEqual(payload["lots"][0]["remaining_quantity"], 100.0)
+        self.assertIsNotNone(payload["lots"][0]["acquired_at"])
+        self.assertEqual(missing.status_code, 404, missing.text)
+
+    def test_unsettled_sale_returns_structured_conflict_and_oversell_stays_generic(self) -> None:
+        account_id = self._create_vn_account()
+        self.assertEqual(self._record_vn_buy(account_id).status_code, 200)
+        sale = {
+            "account_id": account_id,
+            "symbol": "VNM.VN",
+            "trade_date": "2026-07-07",
+            "executed_at": "2026-07-07T10:00:00+07:00",
+            "side": "sell",
+            "price": 71000,
+            "fee": 0,
+            "tax": 0,
+            "market": "vn",
+            "currency": "VND",
+        }
+
+        unsettled = self.client.post(
+            "/api/v1/portfolio/trades",
+            json={**sale, "quantity": 100},
+        )
+        oversell = self.client.post(
+            "/api/v1/portfolio/trades",
+            json={**sale, "quantity": 200},
+        )
+
+        self.assertEqual(unsettled.status_code, 409, unsettled.text)
+        self.assertEqual(
+            unsettled.json(),
+            {
+                "error": "insufficient_sellable_quantity",
+                "message": (
+                    "The requested quantity exceeds the currently sellable quantity."
+                ),
+                "requested_quantity": 100.0,
+                "held_quantity": 100.0,
+                "sellable_quantity": 0.0,
+                "unsettled_quantity": 100.0,
+                "next_sellable_at": "2026-07-08T13:00:00+07:00",
+            },
+        )
+        self.assertEqual(oversell.status_code, 409, oversell.text)
+        self.assertEqual(oversell.json()["error"], "portfolio_oversell")
 
     def test_account_event_snapshot_flow(self) -> None:
         create_resp = self.client.post(

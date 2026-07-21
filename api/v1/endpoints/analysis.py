@@ -948,10 +948,12 @@ def _ensure_report_action_fields(report_data: Dict[str, Any]) -> Dict[str, Any]:
             raw_result.get("sentiment_score"),
         ),
         guardrail_reason=_extract_guardrail_reason(raw_result),
-        align_with_score=True,
+        align_with_score=not bool(raw_result.get("settlement_risk")),
     )
     summary["action"] = action_fields["action"]
     summary["action_label"] = action_fields["action_label"]
+    if raw_result.get("settlement_risk") is not None:
+        summary["settlement_risk"] = raw_result["settlement_risk"]
     enriched_report["summary"] = summary
     return enriched_report
 
@@ -1200,7 +1202,7 @@ def get_analysis_status(task_id: str) -> TaskStatus:
                 report_language=report_language,
                 sentiment_score=record.sentiment_score if record.sentiment_score is not None else raw_dict.get("sentiment_score"),
                 guardrail_reason=_extract_guardrail_reason(raw_dict),
-                align_with_score=True,
+                align_with_score=not bool(raw_dict.get("settlement_risk")),
             )
 
             # Build report from DB record so completed tasks return real data
@@ -1225,6 +1227,7 @@ def get_analysis_status(task_id: str) -> TaskStatus:
                     action_label=action_fields["action_label"],
                     trend_prediction=record.trend_prediction,
                     analysis_summary=record.analysis_summary,
+                    settlement_risk=raw_dict.get("settlement_risk"),
                 ),
                 strategy=ReportStrategy(
                     ideal_buy=_stringify_report_strategy_value(getattr(record, 'ideal_buy', None)),
@@ -1392,7 +1395,10 @@ def _build_analysis_report(
             details_data.get("sentiment_score"),
         ),
         guardrail_reason=_extract_guardrail_reason(raw_result_data),
-        align_with_score=True,
+        align_with_score=not bool(
+            raw_result_data.get("settlement_risk")
+            or details_data.get("settlement_risk")
+        ),
     )
 
     summary = ReportSummary(
@@ -1402,7 +1408,12 @@ def _build_analysis_report(
         action_label=action_fields["action_label"],
         trend_prediction=summary_data.get("trend_prediction"),
         sentiment_score=summary_data.get("sentiment_score"),
-        sentiment_label=summary_data.get("sentiment_label")
+        sentiment_label=summary_data.get("sentiment_label"),
+        settlement_risk=(
+            raw_result_data.get("settlement_risk")
+            or details_data.get("settlement_risk")
+            or summary_data.get("settlement_risk")
+        ),
     )
 
     strategy = None

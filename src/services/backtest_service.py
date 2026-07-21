@@ -980,7 +980,7 @@ class BacktestService:
                 engine_version=engine_version,
             )
             overall_summary = self._build_summary_model(overall_data)
-            self.repo.upsert_summary(overall_summary)
+            summaries = [overall_summary]
 
             for code in touched_codes:
                 normalized_code = self._normalize_summary_code(code)
@@ -1005,7 +1005,9 @@ class BacktestService:
                     engine_version=engine_version,
                 )
                 summary = self._build_summary_model(data)
-                self.repo.upsert_summary(summary)
+                summaries.append(summary)
+
+        self.repo.upsert_summaries(summaries)
 
     @staticmethod
     def _build_summary_model(summary_data: Dict[str, Any]) -> BacktestSummary:
@@ -1103,7 +1105,13 @@ class BacktestService:
 
     @staticmethod
     def _summary_to_dict(row: BacktestSummary) -> Dict[str, Any]:
-        diagnostics = json.loads(row.diagnostics_json) if row.diagnostics_json else {}
+        diagnostics = (
+            row.diagnostics_json
+            if isinstance(row.diagnostics_json, dict)
+            else json.loads(row.diagnostics_json)
+            if row.diagnostics_json
+            else {}
+        )
         stored_sample_counts = diagnostics.get("metric_sample_counts") if isinstance(diagnostics, dict) else None
         metric_sample_counts = stored_sample_counts if isinstance(stored_sample_counts, dict) else {
             "completion_rate": int(row.total_evaluations or 0),
@@ -1176,7 +1184,13 @@ class BacktestService:
             "is_headline_horizon": int(row.eval_window_days) == 5,
             "metric_sample_counts": metric_sample_counts,
             "metric_availability": metric_availability,
-            "advice_breakdown": json.loads(row.advice_breakdown_json) if row.advice_breakdown_json else {},
+            "advice_breakdown": (
+                row.advice_breakdown_json
+                if isinstance(row.advice_breakdown_json, dict)
+                else json.loads(row.advice_breakdown_json)
+                if row.advice_breakdown_json
+                else {}
+            ),
             "diagnostics": diagnostics,
         }
 

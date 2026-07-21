@@ -3681,7 +3681,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PortfolioEventCreatedResponse"
+                  "$ref": "#/components/schemas/PortfolioTradeCreatedResponse"
                 }
               }
             }
@@ -3700,7 +3700,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/InsufficientSellableQuantityErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ],
+                  "title": "Response 409 Create Trade Api V1 Portfolio Trades Post"
                 }
               }
             },
@@ -4657,6 +4665,127 @@
               }
             },
             "description": "Bad Request"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portfolio/positions/{symbol}/settlement": {
+      "get": {
+        "tags": [
+          "Portfolio"
+        ],
+        "summary": "Get settlement details for a held portfolio position",
+        "operationId": "get_position_settlement_api_v1_portfolio_positions__symbol__settlement_get",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Symbol"
+            }
+          },
+          {
+            "name": "account_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional account id; required when a symbol is held in multiple accounts",
+              "title": "Account Id"
+            },
+            "description": "Optional account id; required when a symbol is held in multiple accounts"
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Projection date, default today",
+              "title": "As Of"
+            },
+            "description": "Projection date, default today"
+          },
+          {
+            "name": "cost_method",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Cost method: fifo or avg",
+              "default": "fifo",
+              "title": "Cost Method"
+            },
+            "description": "Cost method: fifo or avg"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioPositionSettlementResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
           },
           "500": {
             "content": {
@@ -14341,6 +14470,56 @@
         "title": "ImportSystemConfigRequest",
         "description": "Import request payload for raw `.env` backups."
       },
+      "InsufficientSellableQuantityErrorResponse": {
+        "properties": {
+          "error": {
+            "type": "string",
+            "const": "insufficient_sellable_quantity",
+            "title": "Error"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "requested_quantity": {
+            "type": "number",
+            "title": "Requested Quantity"
+          },
+          "held_quantity": {
+            "type": "number",
+            "title": "Held Quantity"
+          },
+          "sellable_quantity": {
+            "type": "number",
+            "title": "Sellable Quantity"
+          },
+          "unsettled_quantity": {
+            "type": "number",
+            "title": "Unsettled Quantity"
+          },
+          "next_sellable_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Sellable At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "error",
+          "message",
+          "requested_quantity",
+          "held_quantity",
+          "sellable_quantity",
+          "unsettled_quantity"
+        ],
+        "title": "InsufficientSellableQuantityErrorResponse"
+      },
       "IntelligenceDefaultSourceCreateResponse": {
         "properties": {
           "items": {
@@ -17207,6 +17386,79 @@
             },
             "type": "array",
             "title": "Limitations"
+          },
+          "position_lifecycle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position Lifecycle"
+          },
+          "settlement_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settlement State"
+          },
+          "sellable_quantity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sellable Quantity"
+          },
+          "unsettled_quantity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unsettled Quantity"
+          },
+          "next_sellable_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Sellable At"
+          },
+          "settlement_calculation_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settlement Calculation Status"
+          },
+          "settlement_warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Settlement Warnings"
           }
         },
         "type": "object",
@@ -17223,6 +17475,79 @@
           "valuation_currency"
         ],
         "title": "PortfolioPositionItem"
+      },
+      "PortfolioPositionSettlementResponse": {
+        "properties": {
+          "account_id": {
+            "type": "integer",
+            "title": "Account Id"
+          },
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "as_of": {
+            "type": "string",
+            "title": "As Of"
+          },
+          "total_quantity": {
+            "type": "number",
+            "title": "Total Quantity"
+          },
+          "sellable_quantity": {
+            "type": "number",
+            "title": "Sellable Quantity"
+          },
+          "unsettled_quantity": {
+            "type": "number",
+            "title": "Unsettled Quantity"
+          },
+          "settlement_state": {
+            "type": "string",
+            "title": "Settlement State"
+          },
+          "next_sellable_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Sellable At"
+          },
+          "calculation_status": {
+            "type": "string",
+            "title": "Calculation Status"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "lots": {
+            "items": {
+              "$ref": "#/components/schemas/PortfolioSettlementLotItem"
+            },
+            "type": "array",
+            "title": "Lots"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "symbol",
+          "as_of",
+          "total_quantity",
+          "sellable_quantity",
+          "unsettled_quantity",
+          "settlement_state",
+          "calculation_status"
+        ],
+        "title": "PortfolioPositionSettlementResponse"
       },
       "PortfolioRiskResponse": {
         "properties": {
@@ -17285,6 +17610,85 @@
           "currency"
         ],
         "title": "PortfolioRiskResponse"
+      },
+      "PortfolioSettlementLotItem": {
+        "properties": {
+          "source_trade_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Trade Id"
+          },
+          "acquired_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acquired At"
+          },
+          "remaining_quantity": {
+            "type": "number",
+            "title": "Remaining Quantity"
+          },
+          "unit_cost": {
+            "type": "number",
+            "title": "Unit Cost"
+          },
+          "settlement_state": {
+            "type": "string",
+            "title": "Settlement State"
+          },
+          "estimated_sellable_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Sellable At"
+          },
+          "actual_sellable_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Sellable At"
+          },
+          "calculation_status": {
+            "type": "string",
+            "title": "Calculation Status"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "remaining_quantity",
+          "unit_cost",
+          "settlement_state",
+          "calculation_status"
+        ],
+        "title": "PortfolioSettlementLotItem"
       },
       "PortfolioSnapshotResponse": {
         "properties": {
@@ -17390,6 +17794,19 @@
             "format": "date",
             "title": "Trade Date"
           },
+          "executed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Executed At",
+            "description": "ISO execution time. Naive values are interpreted in Asia/Ho_Chi_Minh; aware values must resolve to trade_date there."
+          },
           "side": {
             "type": "string",
             "enum": [
@@ -17465,6 +17882,19 @@
             ],
             "title": "Trade Uid"
           },
+          "source_decision_signal_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Decision Signal Id",
+            "description": "Optional active buy/add DecisionSignal that sourced this purchase."
+          },
           "note": {
             "anyOf": [
               {
@@ -17488,6 +17918,41 @@
           "price"
         ],
         "title": "PortfolioTradeCreateRequest"
+      },
+      "PortfolioTradeCreatedResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "source_decision_signal_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Decision Signal Id"
+          },
+          "link_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "PortfolioTradeCreatedResponse"
       },
       "PortfolioTradeListItem": {
         "properties": {
@@ -17567,6 +18032,28 @@
               }
             ],
             "title": "Created At"
+          },
+          "source_decision_signal_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Decision Signal Id"
+          },
+          "link_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link Type"
           }
         },
         "type": "object",
@@ -17993,6 +18480,19 @@
             ],
             "title": "Sentiment Label",
             "description": "情绪标签"
+          },
+          "settlement_risk": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settlement Risk",
+            "description": "Deterministic Vietnam settlement-window risk heuristic"
           }
         },
         "type": "object",

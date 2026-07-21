@@ -49,6 +49,8 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
                 "STOCK_LIST": "VNM.VN",
                 "TECHNICAL_LOOKBACK_DAYS": "420",
                 "ENABLE_VN_ADVANCED_FLOW": "true",
+                "SETTLEMENT_RISK_ENABLED": "false",
+                "SETTLEMENT_RISK_LOOKBACK_SESSIONS": "180",
             },
             clear=True,
         ):
@@ -56,6 +58,8 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
 
         self.assertEqual(config.technical_lookback_days, 420)
         self.assertTrue(config.enable_vn_advanced_flow)
+        self.assertFalse(config.settlement_risk_enabled)
+        self.assertEqual(config.settlement_risk_lookback_sessions, 180)
 
     def test_enabled_markets_accepts_a_comma_separated_override(self) -> None:
         self.assertEqual(Config._parse_enabled_markets("vn,us"), ["us", "vn"])
