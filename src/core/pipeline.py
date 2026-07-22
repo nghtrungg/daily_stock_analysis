@@ -73,6 +73,7 @@ from src.services.analysis_context_builder import (
     PipelineAnalysisArtifacts,
 )
 from src.services.trading_plan_validator import apply_trading_plan_validation
+from src.services.decision_metrics import apply_decision_metrics
 from src.services.market_data_quality import (
     apply_market_data_quality_guardrail,
     reconcile_daily_bar,
@@ -883,6 +884,12 @@ class StockAnalysisPipeline:
                     report_type=report_type.value,
                     previous_operation_advice=action_source_advice,
                 )
+                apply_decision_metrics(
+                    result,
+                    analysis_context_pack_overview=analysis_context_pack_overview,
+                    market_data_quality=enhanced_context.get("data_quality"),
+                    daily_market_context=enhanced_context.get("daily_market_context"),
+                )
 
             # Step 8: 保存分析历史记录
             if result and result.success:
@@ -1596,6 +1603,12 @@ class StockAnalysisPipeline:
                     result,
                     report_type=report_type.value,
                     previous_operation_advice=action_source_advice,
+                )
+                apply_decision_metrics(
+                    result,
+                    analysis_context_pack_overview=analysis_context_pack_overview,
+                    market_data_quality=analysis_context.get("data_quality"),
+                    daily_market_context=initial_context.get("daily_market_context"),
                 )
 
             resolved_stock_name = result.name if result and result.name else stock_name

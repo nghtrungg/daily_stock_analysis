@@ -17,12 +17,20 @@
 {% set core = dashboard.get('core_conclusion') or {} %}
 {% set battle = dashboard.get('battle_plan') or {} %}
 {% set intel = dashboard.get('intelligence') or {} %}
+{% set metrics = dashboard.get('decision_metrics') or {} %}
 
 ### {{ e.signal_emoji }} **{{ e.signal_text }}** | {{ e.stock_name }}({{ result.code }})
 
 {% set one_sentence = core.get('one_sentence', result.analysis_summary) if core else result.analysis_summary %}
 {% if one_sentence %}
 📌 **{{ one_sentence[:80] }}**
+{% endif %}
+{% set compact_scenarios = (metrics.get('scenario_outlook') or {}).get('scenarios') or [] %}
+{% set compact_confidence = metrics.get('evidence_confidence') or {} %}
+{% set compact_expectancy = metrics.get('trade_expectancy') or {} %}
+{% if metrics %}
+**{{ labels.score_label }} {{ result.sentiment_score }}/100**{% if compact_confidence %} | {{ labels.evidence_confidence_label }} {{ compact_confidence.get('score_pct') }}%{% endif %}{% if compact_scenarios %} | {{ compact_scenarios[0].get('label') }} {{ compact_scenarios[0].get('probability_pct') }}%{% endif %}
+{% if compact_expectancy.get('status') == 'available' %}Reward/Risk 1:{{ compact_expectancy.get('risk_reward_ratio') }} | {{ labels.win_probability_label }} {{ compact_expectancy.get('win_probability_pct') }}% | {{ labels.expected_value_label }} {{ format_ev_r(compact_expectancy.get('expected_value_r')) }}{% endif %}
 {% endif %}
 {% set signal_excerpt = decision_signal_excerpt(result) %}
 {% if signal_excerpt %}

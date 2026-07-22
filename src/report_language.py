@@ -897,10 +897,104 @@ def is_supported_report_language_value(value: Optional[str]) -> bool:
     return candidate in SUPPORTED_REPORT_LANGUAGES or candidate in _REPORT_LANGUAGE_ALIASES
 
 
+_DECISION_METRIC_LABELS: Dict[str, Dict[str, str]] = {
+    "zh": {
+        "decision_metrics_heading": "可解释决策指标",
+        "total_score_label": "总分",
+        "score_band_label": "分数区间",
+        "next_band_distance_label": "距下一档",
+        "trend_component_label": "趋势",
+        "momentum_component_label": "动量",
+        "volume_component_label": "成交量",
+        "market_component_label": "市场",
+        "fundamental_component_label": "基本面",
+        "evidence_confidence_label": "数据置信度",
+        "scenario_probability_heading": "情景概率",
+        "risk_matrix_heading": "风险矩阵",
+        "condition_label": "条件",
+        "scenario_label": "情景",
+        "probability_label": "概率",
+        "target_label": "目标",
+        "recommended_action_label": "建议动作",
+        "win_probability_label": "胜率估计",
+        "expected_value_label": "Expected Value",
+        "probability_source_label": "概率来源",
+    },
+    "en": {
+        "decision_metrics_heading": "Explainable Decision Metrics",
+        "total_score_label": "Total score",
+        "score_band_label": "Score band",
+        "next_band_distance_label": "Points to next band",
+        "trend_component_label": "Trend",
+        "momentum_component_label": "Momentum",
+        "volume_component_label": "Volume",
+        "market_component_label": "Market",
+        "fundamental_component_label": "Fundamental",
+        "evidence_confidence_label": "Evidence confidence",
+        "scenario_probability_heading": "Scenario probabilities",
+        "risk_matrix_heading": "Risk matrix",
+        "condition_label": "Condition",
+        "scenario_label": "Scenario",
+        "probability_label": "Probability",
+        "target_label": "Target",
+        "recommended_action_label": "Recommended action",
+        "win_probability_label": "Win probability",
+        "expected_value_label": "Expected Value",
+        "probability_source_label": "Probability source",
+    },
+    "vi": {
+        "decision_metrics_heading": "Chỉ số quyết định có thể giải thích",
+        "total_score_label": "Điểm tổng",
+        "score_band_label": "Vùng điểm",
+        "next_band_distance_label": "Còn thiếu đến vùng tiếp theo",
+        "trend_component_label": "Xu hướng",
+        "momentum_component_label": "Momentum",
+        "volume_component_label": "Khối lượng",
+        "market_component_label": "Thị trường",
+        "fundamental_component_label": "Cơ bản",
+        "evidence_confidence_label": "Độ tin cậy dữ liệu",
+        "scenario_probability_heading": "Xác suất kịch bản",
+        "risk_matrix_heading": "Ma trận rủi ro",
+        "condition_label": "Điều kiện",
+        "scenario_label": "Kịch bản",
+        "probability_label": "Xác suất",
+        "target_label": "Mục tiêu",
+        "recommended_action_label": "Hành động",
+        "win_probability_label": "Win probability",
+        "expected_value_label": "Expected Value",
+        "probability_source_label": "Nguồn xác suất",
+    },
+    "ko": {
+        "decision_metrics_heading": "설명 가능한 의사결정 지표",
+        "total_score_label": "총점",
+        "score_band_label": "점수 구간",
+        "next_band_distance_label": "다음 구간까지",
+        "trend_component_label": "추세",
+        "momentum_component_label": "모멘텀",
+        "volume_component_label": "거래량",
+        "market_component_label": "시장",
+        "fundamental_component_label": "펀더멘털",
+        "evidence_confidence_label": "데이터 신뢰도",
+        "scenario_probability_heading": "시나리오 확률",
+        "risk_matrix_heading": "리스크 매트릭스",
+        "condition_label": "조건",
+        "scenario_label": "시나리오",
+        "probability_label": "확률",
+        "target_label": "목표",
+        "recommended_action_label": "권장 행동",
+        "win_probability_label": "승률 추정",
+        "expected_value_label": "Expected Value",
+        "probability_source_label": "확률 출처",
+    },
+}
+
+
 def get_report_labels(language: Optional[str]) -> Dict[str, str]:
     """Return UI copy for the selected report language."""
     normalized = normalize_report_language(language)
-    return _REPORT_LABELS[normalized]
+    labels = dict(_REPORT_LABELS[normalized])
+    labels.update(_DECISION_METRIC_LABELS[normalized])
+    return labels
 
 
 def get_placeholder_text(language: Optional[str]) -> str:

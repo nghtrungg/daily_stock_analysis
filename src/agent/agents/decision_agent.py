@@ -18,6 +18,7 @@ from src.agent.agents.base_agent import BaseAgent
 from src.agent.protocols import AgentContext, AgentOpinion, normalize_decision_signal
 from src.report_language import normalize_report_language
 from src.services.market_symbol_utils import is_vn_market_symbol
+from src.services.decision_metrics import DECISION_METRICS_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +139,7 @@ should sum to 100; all-zero means no effective signal and must not be faked.
 ``strongest_bullish_signal`` is the name of the strongest bullish signal (e.g., MACD golden cross, earnings surprise, low valuation).
 ``strongest_bearish_signal`` is the name of the strongest bearish signal (e.g., MA death cross, earnings warning, high valuation).
 """
+        prompt += "\n" + DECISION_METRICS_PROMPT
         if force_vietnamese:
             return prompt + """
 

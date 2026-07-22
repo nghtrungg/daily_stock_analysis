@@ -33,6 +33,7 @@ from src.config import Config
 from src.notification import NotificationService, NotificationChannel
 from src.notification_noise import reset_notification_noise_state
 from src.analyzer import AnalysisResult
+from src.services.decision_metrics import apply_decision_metrics
 from bot.models import BotMessage, ChatType
 import requests
 
@@ -775,6 +776,49 @@ class TestNotificationServiceReportGeneration(unittest.TestCase):
         self.assertIn("等待确认", out)
         self.assertIn("放量突破", out)
         self.assertIn("quote: stale", out)
+
+    @mock.patch("src.notification.get_config")
+    def test_default_renderer_shows_explainable_decision_metrics(
+        self, mock_get_config: mock.MagicMock
+    ):
+        mock_get_config.return_value = _make_config(
+            report_renderer_enabled=False,
+            report_language="vi",
+        )
+        service = NotificationService()
+        result = AnalysisResult(
+            code="KLB.VN",
+            name="KienlongBank",
+            sentiment_score=35,
+            trend_prediction="Xu hướng giảm",
+            operation_advice="Giảm tỷ trọng",
+            report_language="vi",
+            analysis_summary="Ưu tiên kiểm soát rủi ro.",
+            dashboard={
+                "core_conclusion": {"one_sentence": "Ưu tiên kiểm soát rủi ro."},
+                "battle_plan": {
+                    "sniper_points": {
+                        "ideal_buy": 22000,
+                        "stop_loss": 21500,
+                        "take_profit": 24000,
+                    },
+                    "trading_plan_validation": {
+                        "quality_status": "valid",
+                        "risk_reward_ratio": 4.0,
+                    },
+                },
+            },
+        )
+        apply_decision_metrics(result)
+
+        out = service.generate_dashboard_report([result], report_date="2026-07-22")
+
+        self.assertIn("Điểm 35/100", out)
+        self.assertIn("Điểm tổng: **35/100**", out)
+        self.assertIn("Độ tin cậy dữ liệu", out)
+        self.assertIn("Xác suất kịch bản", out)
+        self.assertIn("Ma trận rủi ro", out)
+        self.assertIn("Expected Value", out)
 
     @mock.patch("src.notification.get_config")
     def test_generate_dashboard_report_skips_context_only_phase_decision_default_renderer(

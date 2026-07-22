@@ -10,6 +10,7 @@ This core-only build keeps documentation for CLI analysis, providers, reports, s
 - [Provider stability](data-source-stability.md)
 - [Market support](market-support.md)
 - [Decision signals](decision-signals.md)
+- [Explainable decision metrics](report-decision-metrics.md)
 - [Change history](CHANGELOG.md)
 
 Web, API, Desktop, Docker, and cloud-deployment documentation was removed with those application surfaces.

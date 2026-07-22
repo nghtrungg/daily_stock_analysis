@@ -88,3 +88,6 @@ static/
 /apps/dsa-desktop/dist/
 /apps/dsa-desktop/node_modules/
 docs/specs/
+/apps/dsa-web/dist/
+/apps/dsa-web/node_modules/
+personal-stock-tracking

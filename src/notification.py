@@ -873,7 +873,7 @@ class NotificationService(
                 report_lines.append(
                     f"{emoji} **{self._get_display_name(r, report_language)}({r.code})**: "
                     f"{localize_operation_advice(r.operation_advice, report_language)} | "
-                    f"{labels['score_label']} {r.sentiment_score} | "
+                    f"{labels['score_label']} {r.sentiment_score}/100 | "
                     f"{localize_trend_prediction(r.trend_prediction, report_language)}"
                 )
         else:
@@ -1115,6 +1115,137 @@ class NotificationService(
                 report_lines.append(f"- {limitation}")
             report_lines.append("")
 
+    @staticmethod
+    def _format_expected_value_r(value: Any) -> str:
+        number = _safe_float(value)
+        if number is None:
+            return "N/A"
+        rendered = f"{number:+.2f}".rstrip("0").rstrip(".")
+        return f"{rendered}R"
+
+    def _append_decision_metrics_block(
+        self,
+        report_lines: List[str],
+        dashboard: Dict[str, Any],
+        labels: Dict[str, str],
+    ) -> None:
+        """Render explainability metrics in the legacy Markdown path."""
+        metrics = dashboard.get("decision_metrics") if dashboard else None
+        if not isinstance(metrics, dict) or not metrics:
+            return
+
+        score = metrics.get("score_breakdown") or {}
+        confidence = metrics.get("evidence_confidence") or {}
+        outlook = metrics.get("scenario_outlook") or {}
+        expectancy = metrics.get("trade_expectancy") or {}
+        report_lines.extend([f"### {labels['decision_metrics_heading']}", ""])
+
+        if score:
+            report_lines.extend([
+                f"{labels['total_score_label']}: **{score.get('total_score')}/{score.get('max_score', 100)}** — {score.get('band_label', '')}",
+                "",
+                f"| {labels['score_label']} | {labels['total_score_label']} | {labels['data_limitations_label']} |",
+                "|---------|---------:|---------|",
+            ])
+            component_labels = {
+                "trend": labels["trend_component_label"],
+                "momentum": labels["momentum_component_label"],
+                "volume": labels["volume_component_label"],
+                "market": labels["market_component_label"],
+                "fundamental": labels["fundamental_component_label"],
+            }
+            for key, component_label in component_labels.items():
+                component = (score.get("components") or {}).get(key) or {}
+                report_lines.append(
+                    f"| {component_label} | {component.get('score', 0)}/{component.get('max_score', 0)} | {component.get('reason', '')} |"
+                )
+            report_lines.extend([
+                "",
+                f"**{labels['score_band_label']}**: {score.get('band', 'N/A')}",
+                "",
+            ])
+
+        if confidence:
+            report_lines.extend([
+                f"**{labels['evidence_confidence_label']}: {confidence.get('score_pct')}%**",
+                "",
+                f"| {labels['source_label']} | {labels['evidence_confidence_label']} |",
+                "|---------|---------|",
+            ])
+            factor_labels = {
+                "ohlc": "OHLC",
+                "trend": labels["trend_component_label"],
+                "volume": labels["volume_component_label"],
+                "market": labels["market_component_label"],
+                "news": labels["news_sentiment_label"],
+                "fundamental": labels["fundamental_component_label"],
+            }
+            for key, factor_label in factor_labels.items():
+                factor = (confidence.get("factors") or {}).get(key) or {}
+                icon = "✓" if factor.get("status") == "available" else "?" if factor.get("status") == "limited" else "✗"
+                report_lines.append(
+                    f"| {factor_label} | {icon} {factor.get('score_pct')}% — {factor.get('reason', '')} |"
+                )
+            report_lines.extend(["", f"_{confidence.get('methodology', '')}_", ""])
+
+        scenarios = outlook.get("scenarios") or []
+        if scenarios:
+            report_lines.extend([
+                f"#### {labels['scenario_probability_heading']} ({outlook.get('horizon', '')})",
+                "",
+            ])
+            for scenario in scenarios:
+                report_lines.append(
+                    f"- **{scenario.get('label')}: {scenario.get('probability_pct')}%**"
+                )
+            report_lines.extend([
+                "",
+                f"#### {labels['risk_matrix_heading']}",
+                "",
+                f"| {labels['condition_label']} | {labels['scenario_label']} | {labels['target_label']} | {labels['recommended_action_label']} |",
+                "|---------|---------|---------:|---------|",
+            ])
+            for scenario in scenarios:
+                report_lines.append(
+                    f"| {scenario.get('condition', 'N/A')} | {scenario.get('label')} ({scenario.get('probability_pct')}%) | {self._clean_sniper_value(scenario.get('target_price'))} | {scenario.get('recommended_action', 'N/A')} |"
+                )
+            report_lines.append("")
+
+        if expectancy.get("status") == "available":
+            report_lines.extend([
+                f"**Reward/Risk**: 1 : {expectancy.get('risk_reward_ratio')}",
+                "",
+                f"**{labels['win_probability_label']}**: {expectancy.get('win_probability_pct')}%",
+                "",
+                f"**{labels['expected_value_label']}**: {self._format_expected_value_r(expectancy.get('expected_value_r'))}",
+                "",
+                f"**{labels['probability_source_label']}**: {expectancy.get('probability_source')} ({expectancy.get('calibration_status')})",
+                "",
+                f"_{expectancy.get('methodology', '')}_",
+                "",
+            ])
+
+    @staticmethod
+    def _compact_decision_metrics(dashboard: Dict[str, Any], labels: Dict[str, str]) -> str:
+        metrics = dashboard.get("decision_metrics") if dashboard else None
+        if not isinstance(metrics, dict):
+            return ""
+        score = metrics.get("score_breakdown") or {}
+        confidence = metrics.get("evidence_confidence") or {}
+        scenarios = (metrics.get("scenario_outlook") or {}).get("scenarios") or []
+        expectancy = metrics.get("trade_expectancy") or {}
+        leading = max(scenarios, key=lambda item: item.get("probability_pct", 0), default={})
+        parts = []
+        if score:
+            parts.append(f"{score.get('total_score')}/{score.get('max_score', 100)}")
+        if confidence:
+            parts.append(f"{labels['evidence_confidence_label']} {confidence.get('score_pct')}%")
+        if leading:
+            parts.append(f"{leading.get('label')} {leading.get('probability_pct')}%")
+        if expectancy.get("status") == "available":
+            parts.append(f"EV {NotificationService._format_expected_value_r(expectancy.get('expected_value_r'))}")
+        return " | ".join(parts)
+
     def _get_signal_level(self, result: AnalysisResult) -> tuple:
         """Get localized signal level and color based on operation advice."""
         return get_signal_level(
@@ -1209,7 +1340,7 @@ class NotificationService(
                 report_lines.append(
                     f"{signal_emoji} **{display_name}({r.code})**: "
                     f"{localize_operation_advice(r.operation_advice, report_language)} | "
-                    f"{labels['score_label']} {r.sentiment_score} | "
+                    f"{labels['score_label']} {r.sentiment_score}/100 | "
                     f"{localize_trend_prediction(r.trend_prediction, report_language)}"
                 )
             report_lines.extend([
@@ -1281,6 +1412,9 @@ class NotificationService(
                     "",
                     f"> **{labels['one_sentence_label']}**: {one_sentence}",
                     "",
+                ])
+                self._append_decision_metrics_block(report_lines, dashboard, labels)
+                report_lines.extend([
                     f"⏰ **{labels['time_sensitivity_label']}**: {time_sense}",
                     "",
                 ])
@@ -1584,7 +1718,7 @@ class NotificationService(
                 lines.append(
                     f"{signal_emoji} **{stock_name}({r.code})**: "
                     f"{localize_operation_advice(r.operation_advice, report_language)} | "
-                    f"{labels['score_label']} {r.sentiment_score} | "
+                    f"{labels['score_label']} {r.sentiment_score}/100 | "
                     f"{localize_trend_prediction(r.trend_prediction, report_language)}"
                 )
         else:
@@ -1607,6 +1741,9 @@ class NotificationService(
                 if one_sentence:
                     lines.append(f"📌 **{one_sentence[:80]}**")
                     lines.append("")
+                compact_metrics = self._compact_decision_metrics(dashboard, labels)
+                if compact_metrics:
+                    lines.extend([f"📐 {compact_metrics}", ""])
                 signal_excerpt = self._decision_signal_excerpt(result, report_language)
                 if signal_excerpt:
                     lines.append(signal_excerpt)
@@ -1831,8 +1968,11 @@ class NotificationService(
             lines.append(
                 f"**{name}({r.code})** {emoji} "
                 f"{localize_operation_advice(r.operation_advice, report_language)} | "
-                f"{labels['score_label']} {r.sentiment_score} | {one}"
+                f"{labels['score_label']} {r.sentiment_score}/100 | {one}"
             )
+            compact_metrics = self._compact_decision_metrics(dash, labels)
+            if compact_metrics:
+                lines.append(f"📐 {compact_metrics}")
         lines.append("")
         lines.append(f"*{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*")
         models = self._collect_models_used(results)
@@ -1870,7 +2010,7 @@ class NotificationService(
         lines = [
             f"## {signal_emoji} {stock_name} ({result.code})",
             "",
-            f"> {report_date} | {labels['score_label']}: **{result.sentiment_score}** | {localize_trend_prediction(result.trend_prediction, report_language)}",
+            f"> {report_date} | {labels['score_label']}: **{result.sentiment_score}/100** | {localize_trend_prediction(result.trend_prediction, report_language)}",
             "",
         ]
 

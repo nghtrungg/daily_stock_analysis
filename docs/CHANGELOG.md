@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [feature] Explain final decision scores with fixed component points, deterministic evidence confidence, normalized tactical scenarios, a shared risk matrix, and before-cost R:R expectancy.
+- [test] Cover score reconciliation, confidence degradation, scenario normalization, EV arithmetic, additive schema compatibility, and full/brief/WeChat report rendering.
+- [docs] Document explainable decision-metric semantics, probability limitations, compatibility, and rollback.
 - [fix] Reject impossible or incomplete OHLC candles, reconcile valid same-day daily bars, and suppress unconfirmed partial, conflicting, or extreme volume evidence before report decisions.
 - [improvement] Separate report horizons, expire stale short-term news, distinguish reduce from sell, require conditional entry confirmation, and explain score and risk/reward methodology.
 - [test] Cover MBB-style impossible OHLC, suspicious volume, stale news, conditional entries, and reduce-versus-sell report summaries.

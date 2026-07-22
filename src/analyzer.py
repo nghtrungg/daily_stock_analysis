@@ -102,6 +102,7 @@ from src.schemas.report_schema import AnalysisReportSchema
 from src.market_context import detect_market, get_market_role, get_market_guidelines
 from src.services.daily_market_context import format_daily_market_context_prompt_section
 from src.services.market_symbol_utils import is_vn_market_symbol
+from src.services.decision_metrics import DECISION_METRICS_PROMPT
 from src.market_phase_prompt import format_market_phase_prompt_section
 
 logger = logging.getLogger(__name__)
@@ -2962,6 +2963,7 @@ prose and never move nested fields to a parent object:
 - If price is between support/resistance and capital flow is unclear, prefer hold/watch or a range-bound setup.
 """
     ENGLISH_SYSTEM_PROMPT += "\n" + TRADING_PLAN_CONSTRAINTS_PROMPT
+    ENGLISH_SYSTEM_PROMPT += "\n" + DECISION_METRICS_PROMPT
 
     TEXT_SYSTEM_PROMPT = """你是一位专业的股票分析助手。
 

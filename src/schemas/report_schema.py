@@ -265,6 +265,93 @@ class SignalAttribution(BaseModel):
         return self
 
 
+class ScoreComponent(BaseModel):
+    """One bounded contribution to the composite 0-100 decision score."""
+
+    score: int = Field(ge=0)
+    max_score: Optional[int] = Field(None, gt=0)
+    status: Optional[Literal["available", "limited", "missing", "estimated"]] = None
+    reason: Optional[str] = None
+
+    @model_validator(mode="after")
+    def score_must_not_exceed_maximum(self) -> "ScoreComponent":
+        if self.max_score is not None and self.score > self.max_score:
+            raise ValueError("score must not exceed max_score")
+        return self
+
+
+class ScoreBreakdown(BaseModel):
+    """Explainable decomposition of the final composite score."""
+
+    total_score: Optional[int] = Field(None, ge=0, le=100)
+    max_score: int = Field(default=100, ge=100, le=100)
+    band: Optional[str] = None
+    band_label: Optional[str] = None
+    distance_to_next_band: Optional[int] = Field(None, ge=0)
+    source: Optional[str] = None
+    components: Dict[str, ScoreComponent] = Field(default_factory=dict)
+
+
+class EvidenceConfidenceFactor(BaseModel):
+    """Quality and availability of one evidence family."""
+
+    score_pct: int = Field(ge=0, le=100)
+    status: Literal["available", "limited", "missing", "estimated"]
+    reason: Optional[str] = None
+
+
+class EvidenceConfidence(BaseModel):
+    """Input-evidence confidence, distinct from forecast probability."""
+
+    score_pct: int = Field(ge=0, le=100)
+    level: Literal["high", "medium", "low"]
+    methodology: Optional[str] = None
+    factors: Dict[str, EvidenceConfidenceFactor] = Field(default_factory=dict)
+
+
+class DecisionScenario(BaseModel):
+    """One normalized forward scenario used by both probability and risk views."""
+
+    key: Literal["downside", "sideways", "upside"]
+    label: str
+    probability_pct: int = Field(ge=0, le=100)
+    condition: Optional[str] = None
+    target_price: Optional[Union[int, float, str]] = None
+    invalidation: Optional[str] = None
+    recommended_action: Optional[str] = None
+    rationale: Optional[str] = None
+
+
+class ScenarioOutlook(BaseModel):
+    """Tactical scenario proposal normalized by the decision-metrics finalizer."""
+
+    horizon: str
+    probability_source: str
+    calibration_status: Optional[str] = None
+    scenarios: List[DecisionScenario] = Field(default_factory=list)
+
+class TradeExpectancy(BaseModel):
+    """Before-cost long-trade expectancy based on trusted plan geometry."""
+
+    status: Literal["available", "unavailable"]
+    risk_reward_ratio: Optional[float] = Field(None, ge=0)
+    win_probability_pct: Optional[int] = Field(None, ge=0, le=100)
+    expected_value_r: Optional[float] = None
+    probability_source: Optional[str] = None
+    calibration_status: Optional[str] = None
+    sample_size: Optional[int] = Field(None, ge=0)
+    methodology: Optional[str] = None
+
+
+class DecisionMetrics(BaseModel):
+    """Additive explainability contract for a completed decision report."""
+
+    score_breakdown: Optional[ScoreBreakdown] = None
+    evidence_confidence: Optional[EvidenceConfidence] = None
+    scenario_outlook: Optional[ScenarioOutlook] = None
+    trade_expectancy: Optional[TradeExpectancy] = None
+
+
 class Dashboard(BaseModel):
     """Dashboard block."""
 
@@ -274,6 +361,7 @@ class Dashboard(BaseModel):
     battle_plan: Optional[BattlePlan] = None
     phase_decision: Optional[PhaseDecision] = None
     signal_attribution: Optional[SignalAttribution] = None
+    decision_metrics: Optional[DecisionMetrics] = None
 
 
 class AnalysisReportSchema(BaseModel):
