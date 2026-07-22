@@ -73,6 +73,12 @@ from src.services.analysis_context_builder import (
     PipelineAnalysisArtifacts,
 )
 from src.services.trading_plan_validator import apply_trading_plan_validation
+from src.services.market_data_quality import (
+    apply_market_data_quality_guardrail,
+    reconcile_daily_bar,
+    validate_ohlc,
+)
+from src.services.report_evidence_guardrails import apply_report_evidence_guardrails
 from src.services.run_diagnostics import (
     activate_run_diagnostic_context,
     current_diagnostic_snapshot,
@@ -849,6 +855,25 @@ class StockAnalysisPipeline:
                         trade_plan_adjustments,
                     )
                 apply_trading_plan_validation(result)
+                evidence_adjustments = apply_report_evidence_guardrails(
+                    result,
+                    analysis_date=enhanced_context.get("date"),
+                    news_window_days=enhanced_context.get("news_window_days", 3),
+                    report_language=getattr(result, "report_language", None)
+                    or getattr(self.config, "report_language", "zh"),
+                )
+                quality_adjustments = apply_market_data_quality_guardrail(
+                    result,
+                    enhanced_context.get("data_quality"),
+                    report_language=getattr(result, "report_language", None)
+                    or getattr(self.config, "report_language", "zh"),
+                )
+                if evidence_adjustments or quality_adjustments:
+                    logger.info(
+                        "[report_evidence_guardrail] Applied adjustments for %s: %s",
+                        code,
+                        evidence_adjustments + quality_adjustments,
+                    )
                 if isinstance(fundamental_context, dict):
                     result.fundamental_context = fundamental_context
                 result.market_phase_summary = market_phase_summary
@@ -1037,42 +1062,62 @@ class StockAnalysisPipeline:
                 source = getattr(realtime_quote, 'source', None)
                 source_name = getattr(source, 'value', source)
                 source_name = str(source_name) if source_name is not None else 'unknown'
-                open_p = getattr(realtime_quote, 'open_price', None) or getattr(
-                    realtime_quote, 'pre_close', None
-                ) or yesterday_close or orig_today.get('open') or price
-                high_p = getattr(realtime_quote, 'high', None) or price
-                low_p = getattr(realtime_quote, 'low', None) or price
+                # Never synthesize an opening price from pre-close/yesterday.
+                # Doing so can create an impossible candle such as open > high.
+                open_p = getattr(realtime_quote, 'open_price', None)
+                high_p = getattr(realtime_quote, 'high', None)
+                low_p = getattr(realtime_quote, 'low', None)
                 vol = getattr(realtime_quote, 'volume', None)
                 amt = getattr(realtime_quote, 'amount', None)
                 pct = getattr(realtime_quote, 'change_pct', None)
                 fetched_at = getattr(realtime_quote, 'fetched_at', None)
                 provider_timestamp = getattr(realtime_quote, 'provider_timestamp', None)
                 fallback_from = getattr(realtime_quote, 'fallback_from', None)
-                realtime_today = {
+                realtime_candidate = {
                     'close': price,
                     'open': open_p,
                     'high': high_p,
                     'low': low_p,
-                    'ma5': trend_result.ma5,
-                    'ma10': trend_result.ma10,
-                    'ma20': trend_result.ma20,
                     'date': market_today,
                     'data_source': f"realtime:{source_name}",
                     'realtime_source': source_name,
-                    'is_estimated': True,
+                    'volume': vol,
+                    'amount': amt,
+                    'pct_chg': pct,
                 }
-                estimated_fields = [
-                    'close', 'open', 'high', 'low', 'ma5', 'ma10', 'ma20',
-                ]
-                if vol is not None:
-                    realtime_today['volume'] = vol
-                    estimated_fields.append('volume')
-                if amt is not None:
-                    realtime_today['amount'] = amt
-                    estimated_fields.append('amount')
-                if pct is not None:
-                    realtime_today['pct_chg'] = pct
-                    estimated_fields.append('pct_chg')
+                is_partial_bar = bool(
+                    isinstance(market_phase_context, dict)
+                    and market_phase_context.get("is_partial_bar")
+                )
+                previous_volume = None
+                if isinstance(orig_today, dict) and str(orig_today.get('date', ''))[:10] != market_today:
+                    previous_volume = orig_today.get('volume')
+                elif isinstance(enhanced.get('yesterday'), dict):
+                    previous_volume = enhanced['yesterday'].get('volume')
+                realtime_today, data_quality = reconcile_daily_bar(
+                    historical_bar=orig_today if isinstance(orig_today, dict) else {},
+                    realtime_bar=realtime_candidate,
+                    market_date=market_today,
+                    previous_volume=previous_volume,
+                    is_partial_bar=is_partial_bar,
+                )
+                realtime_today.update({
+                    'ma5': trend_result.ma5,
+                    'ma10': trend_result.ma10,
+                    'ma20': trend_result.ma20,
+                    'is_estimated': True,
+                })
+                estimated_fields = []
+                if data_quality.get('ohlc_source') == 'realtime':
+                    estimated_fields.extend(['close', 'open', 'high', 'low'])
+                elif data_quality.get('ohlc_source') == 'close_only':
+                    estimated_fields.append('close')
+                estimated_fields.extend(['ma5', 'ma10', 'ma20'])
+                for field, value in (('volume', vol), ('amount', amt), ('pct_chg', pct)):
+                    if field == 'volume' and data_quality.get('volume_source') != 'realtime':
+                        continue
+                    if value is not None and field in realtime_today:
+                        estimated_fields.append(field)
                 realtime_today['estimated_fields'] = estimated_fields
                 if isinstance(market_phase_context, dict) and "is_partial_bar" in market_phase_context:
                     realtime_today['is_partial_bar'] = market_phase_context.get("is_partial_bar")
@@ -1096,6 +1141,9 @@ class StockAnalysisPipeline:
                     if k not in realtime_today and k not in realtime_owned_fields and v is not None:
                         realtime_today[k] = v
                 enhanced['today'] = realtime_today
+                enhanced['data_quality'] = data_quality
+                if not data_quality.get('volume_usable'):
+                    enhanced.pop('volume_change_ratio', None)
                 enhanced['ma_status'] = self._compute_ma_status(
                     price, trend_result.ma5, trend_result.ma10, trend_result.ma20
                 )
@@ -1109,7 +1157,7 @@ class StockAnalysisPipeline:
                             )
                     except (TypeError, ValueError):
                         pass
-                if vol is not None and enhanced.get('yesterday'):
+                if data_quality.get('volume_usable') and realtime_today.get('volume') is not None and enhanced.get('yesterday'):
                     yest_vol = enhanced['yesterday'].get('volume') if isinstance(
                         enhanced['yesterday'], dict
                     ) else None
@@ -1118,7 +1166,7 @@ class StockAnalysisPipeline:
                             yv = float(yest_vol)
                             if yv > 0:
                                 enhanced['volume_change_ratio'] = round(
-                                    float(vol) / yv, 2
+                                    float(realtime_today['volume']) / yv, 2
                                 )
                         except (TypeError, ValueError):
                             pass
@@ -1376,6 +1424,18 @@ class StockAnalysisPipeline:
             self._ensure_agent_history(code)
 
             analysis_context = self._load_agent_analysis_context(code, stock_name)
+            analysis_context = self._enhance_context(
+                analysis_context,
+                realtime_quote,
+                chip_data,
+                trend_result,
+                stock_name,
+                fundamental_context=fundamental_context,
+                market_phase_context=market_phase_context,
+            )
+            initial_context["analysis_context"] = analysis_context
+            if isinstance(analysis_context.get("data_quality"), dict):
+                initial_context["data_quality"] = analysis_context["data_quality"]
             market = get_market_for_stock(normalize_stock_code(code))
             (
                 analysis_context_pack_summary,
@@ -1509,6 +1569,25 @@ class StockAnalysisPipeline:
                         trade_plan_adjustments,
                     )
                 apply_trading_plan_validation(result)
+                evidence_adjustments = apply_report_evidence_guardrails(
+                    result,
+                    analysis_date=analysis_context.get("date"),
+                    news_window_days=analysis_context.get("news_window_days", 3),
+                    report_language=getattr(result, "report_language", None)
+                    or getattr(self.config, "report_language", "zh"),
+                )
+                quality_adjustments = apply_market_data_quality_guardrail(
+                    result,
+                    analysis_context.get("data_quality"),
+                    report_language=getattr(result, "report_language", None)
+                    or getattr(self.config, "report_language", "zh"),
+                )
+                if evidence_adjustments or quality_adjustments:
+                    logger.info(
+                        "[report_evidence_guardrail] Applied agent adjustments for %s: %s",
+                        code,
+                        evidence_adjustments + quality_adjustments,
+                    )
                 if isinstance(fundamental_context, dict):
                     result.fundamental_context = fundamental_context
                 result.market_phase_summary = market_phase_summary
@@ -2393,13 +2472,22 @@ class StockAnalysisPipeline:
             last_val.date() if hasattr(last_val, 'date') else
             (last_val if isinstance(last_val, date) else pd.Timestamp(last_val).date())
         )
-        yesterday_close = float(df.iloc[-1]['close']) if len(df) > 0 else price
-        open_p = getattr(realtime_quote, 'open_price', None) or getattr(
-            realtime_quote, 'pre_close', None
-        ) or yesterday_close
-        high_p = getattr(realtime_quote, 'high', None) or price
-        low_p = getattr(realtime_quote, 'low', None) or price
-        vol = getattr(realtime_quote, 'volume', None) or 0
+        open_p = getattr(realtime_quote, 'open_price', None)
+        high_p = getattr(realtime_quote, 'high', None)
+        low_p = getattr(realtime_quote, 'low', None)
+        candidate = {'open': open_p, 'high': high_p, 'low': low_p, 'close': price}
+        ohlc_valid, _reason = validate_ohlc(candidate)
+        if not ohlc_valid:
+            logger.warning(
+                "[%s] Realtime OHLC rejected before technical analysis: %s",
+                code,
+                candidate,
+            )
+            return df
+        # The market is open in this code path. Cumulative intraday volume is
+        # not comparable with completed daily bars and must not drive a daily
+        # volume signal.
+        vol = None
         amt = getattr(realtime_quote, 'amount', None)
         pct = getattr(realtime_quote, 'change_pct', None)
 

@@ -5017,6 +5017,13 @@ prose and never move nested fields to a parent object:
                 "Use only directly matched company news as company evidence; never attribute sector, macro, or unrelated-company items to the subject. "
                 "If no directly matched item supports a claim, state that the evidence is unavailable. "
                 "Do not claim public-infrastructure investment, government-policy benefits, industry tailwinds, or foreign-capital catalysts without dated direct evidence and a direct mechanism linking the evidence to subject revenue, costs, or earnings. "
+                "Separate the analysis into three horizons: tactical 1-5 sessions, medium-term 1-3 months, and fundamental 6-12 months. "
+                "MA200, ownership, and business results may inform medium/fundamental context but must not independently determine the 1-5-session action. "
+                "Treat data_quality as a hard gate: never infer candle patterns, support/resistance, selling pressure, or liquidity disappearance from invalid OHLC, partial volume, a material source conflict, or an unconfirmed volume outlier. "
+                "Use dated items inside news_window_days for latest_news and short-term catalysts; older financial results must be labeled historical and placed only in the fundamental horizon. "
+                "Distinguish sell (exit all), reduce (trim exposure), hold, watch, and avoid; decision_type=sell is permitted only for an actual exit-all recommendation. "
+                "Every entry price is conditional on price holding the zone, reversal confirmation, confirmed completed-session volume, and a non-deteriorating VN-Index; a price touch alone is not a buy signal and must not contradict a no-averaging-down warning. "
+                "Scores and R:R are composite or derived indicators, not backtested probabilities; explain confidence from evidence quality and do not claim false precision. "
                 "Keep every dashboard object nested exactly as shown; top-level analysis fields must be strings.",
             )
             if part
@@ -5090,6 +5097,7 @@ prose and never move nested fields to a parent object:
         open_price = today.get('open')
         high = today.get('high')
         low = today.get('low')
+        data_quality = today.get('data_quality') if isinstance(today.get('data_quality'), dict) else {}
 
         if language == "vi":
             # Also protect reports built from cached daily rows produced before
@@ -5119,6 +5127,14 @@ prose and never move nested fields to a parent object:
             except (TypeError, ValueError):
                 change_amount = None
 
+        volume_display = self._format_volume(today.get('volume'), language)
+        if data_quality and data_quality.get('volume_usable') is not True:
+            volume_display = (
+                f"Chưa xác nhận ({volume_display})"
+                if language == "vi"
+                else f"Unconfirmed ({volume_display})"
+            )
+
         snapshot = {
             "date": context.get('date', 'Không rõ' if language == "vi" else '未知'),
             "close": self._format_price(close),
@@ -5133,7 +5149,7 @@ prose and never move nested fields to a parent object:
             ),
             "change_amount": self._format_price(change_amount),
             "amplitude": self._format_percent(amplitude, language),
-            "volume": self._format_volume(today.get('volume'), language),
+            "volume": volume_display,
             "amount": self._format_amount(today.get('amount'), language),
         }
 

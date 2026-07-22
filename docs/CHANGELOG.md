@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [fix] Reject impossible or incomplete OHLC candles, reconcile valid same-day daily bars, and suppress unconfirmed partial, conflicting, or extreme volume evidence before report decisions.
+- [improvement] Separate report horizons, expire stale short-term news, distinguish reduce from sell, require conditional entry confirmation, and explain score and risk/reward methodology.
+- [test] Cover MBB-style impossible OHLC, suspicious volume, stale news, conditional entries, and reduce-versus-sell report summaries.
+- [improvement] Reduce the repository to CLI analysis, scheduling, bots, notifications, and SQLite history by removing the Web, API, Desktop, and Docker surfaces.
 - [fix] Display actual-VND amounts with Vietnamese dot thousands separators in the system UI and generated reports.
 - [fix] Validate and deterministically repair Vietnam long trading-plan geometry and risk/reward ratios, while preserving numeric prices for persistence and adding VND delta and R:R display metadata.
 - [improvement] Localize Personal Stock Tracking navigation, authentication, portfolio pages, metadata, offline state, and safe errors into Vietnamese.

@@ -144,8 +144,8 @@ async def handle_webhook_async(
 ) -> WebhookResponse:
     """Async version of :func:`handle_webhook`.
 
-    Preferred when called from an async context (e.g. FastAPI endpoint)
-    to avoid blocking the event loop.
+    Preferred when called from an async bot transport to avoid blocking the
+    event loop.
     """
     logger.info(f"[BotHandler] 收到 {platform_name} Webhook 请求 (async)")
 

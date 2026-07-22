@@ -1,6 +1,4 @@
-"""Vietnam-local API, database, and portfolio default contracts."""
-
-from api.v1.schemas.portfolio import PortfolioAccountCreateRequest
+"""Vietnam-local database and portfolio default contracts."""
 from src.core.pipeline import _sanitize_vietnam_history_payload
 from src.services.portfolio_service import PortfolioService
 from src.storage import (
@@ -22,11 +20,7 @@ def _column_default(model: type, column: str) -> str:
     return str(default.arg)
 
 
-def test_portfolio_api_defaults_to_vietnam_and_vnd() -> None:
-    request = PortfolioAccountCreateRequest(name="Local Vietnam account")
-
-    assert request.market == "vn"
-    assert request.base_currency == "VND"
+def test_portfolio_service_defaults_to_vnd() -> None:
     assert PortfolioService._default_currency_for_market("vn") == "VND"
 
 

@@ -216,6 +216,12 @@ LEGACY_DEFAULT_AGENT_SYSTEM_PROMPT = """你是一位专注于趋势交易的{mar
 - 必须输出 `dashboard.phase_decision` 七字段；盘中/午休/临近收盘要给出当前动作、观察条件和下一次检查点。
 - 建议输出可选展示字段 `dashboard.signal_attribution` 六字段；解释推荐理由的构成，包括技术指标、新闻舆情、基本面、市场环境的贡献度，以及最强看多/看空信号。
 - 盘前、非交易日或未知阶段不得伪造今日盘中走势；quote/daily_bars/technical 存在 stale、fallback、missing、fetch_failed、partial 或 estimated 时，`confidence_level` 不得为高。
+- OHLC 必须满足 low <= open/close <= high；不完整或冲突时禁止使用 K 线形态、支撑/压力和卖压结论。
+- 盘中累计量、跨源冲突量或相对前日异常但未经第二来源确认的量，不得用于“流动性消失”或资金流结论。
+- 严格分离 1-5 个交易日、1-3 个月和 6-12 个月三个周期；MA200、股权结构和长期经营信息不能单独决定短线动作。
+- `sell` 仅表示清仓；减仓必须使用 `reduce`，持有不加仓使用 `hold`，等待条件使用 `watch`。
+- 买入价必须附带价格企稳、反转结构、已确认的全日成交量和市场指数止跌条件；仅触及价位不构成买入信号。
+- 最新新闻必须有日期且位于配置窗口内；旧业绩只能标为历史基本面背景。评分和 R:R 不是回测概率，必须说明数据质量限制。
 
 {language_section}
 """
@@ -372,6 +378,12 @@ AGENT_SYSTEM_PROMPT = """你是一位{market_role}投资分析 Agent，拥有数
 - 必须输出 `dashboard.phase_decision` 七字段；盘中/午休/临近收盘要给出当前动作、观察条件和下一次检查点。
 - 建议输出可选展示字段 `dashboard.signal_attribution` 六字段；解释推荐理由的构成，包括技术指标、新闻舆情、基本面、市场环境的贡献度，以及最强看多/看空信号。
 - 盘前、非交易日或未知阶段不得伪造今日盘中走势；quote/daily_bars/technical 存在 stale、fallback、missing、fetch_failed、partial 或 estimated 时，`confidence_level` 不得为高。
+- OHLC 必须满足 low <= open/close <= high；不完整或冲突时禁止使用 K 线形态、支撑/压力和卖压结论。
+- 盘中累计量、跨源冲突量或相对前日异常但未经第二来源确认的量，不得用于“流动性消失”或资金流结论。
+- 严格分离 1-5 个交易日、1-3 个月和 6-12 个月三个周期；MA200、股权结构和长期经营信息不能单独决定短线动作。
+- `sell` 仅表示清仓；减仓必须使用 `reduce`，持有不加仓使用 `hold`，等待条件使用 `watch`。
+- 买入价必须附带价格企稳、反转结构、已确认的全日成交量和市场指数止跌条件；仅触及价位不构成买入信号。
+- 最新新闻必须有日期且位于配置窗口内；旧业绩只能标为历史基本面背景。评分和 R:R 不是回测概率，必须说明数据质量限制。
 
 {language_section}
 """

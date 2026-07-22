@@ -9,12 +9,9 @@ on:
     paths:
       - '**.py'
       - '**.md'
-      - '**.ts'
-      - '**.tsx'
       - 'docs/**'
       - 'README.md'
       - 'AGENTS.md'
-      - 'apps/dsa-web/**'
       - 'requirements.txt'
       - '.github/requirements-ci.txt'
       - 'pyproject.toml'
@@ -22,8 +19,6 @@ on:
       - '.github/PULL_REQUEST_TEMPLATE.md'
       - '.github/workflows/**'
       - '.github/scripts/**'
-      - 'docker/Dockerfile'
-      - 'docker-compose.yml'
   # Allow manual runs (for re-reviewing).
   workflow_dispatch:
 

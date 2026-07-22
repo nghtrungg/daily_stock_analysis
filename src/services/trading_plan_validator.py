@@ -91,6 +91,11 @@ class TradingPlanValidationResult:
                 display["take_profit"] = format_target(self.take_profit, self.ideal_buy)
             if self.risk_reward_ratio is not None:
                 display["risk_reward"] = format_risk_reward(self.risk_reward_ratio)
+                display["risk_reward_method"] = (
+                    "Tính theo (mục tiêu - điểm vào) / (điểm vào - cắt lỗ) từ các mức giá hiển thị; không phải xác suất."
+                    if include_vnd_display
+                    else "Derived as (target - entry) / (entry - stop) from the displayed levels; not a probability."
+                )
         return {
             "quality_status": self.quality_status,
             "warnings": list(self.warnings),
@@ -354,7 +359,7 @@ def get_trading_plan_display(battle_plan: Any) -> dict[str, str]:
     return {
         key: str(value)
         for key, value in display.items()
-        if key in {"stop_loss", "take_profit", "risk_reward"} and value
+        if key in {"stop_loss", "take_profit", "risk_reward", "risk_reward_method"} and value
     }
 
 

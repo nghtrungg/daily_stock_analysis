@@ -170,9 +170,16 @@ def render(
             "localized_trend_prediction": localize_trend_prediction(r.trend_prediction, report_language),
         })
 
-    buy_count = sum(1 for r in results if getattr(r, "decision_type", "") == "buy")
-    sell_count = sum(1 for r in results if getattr(r, "decision_type", "") == "sell")
-    hold_count = sum(1 for r in results if getattr(r, "decision_type", "") in ("hold", ""))
+    def final_action(result: AnalysisResult) -> str:
+        action = str(getattr(result, "action", "") or "").strip().lower()
+        if action:
+            return action
+        return str(getattr(result, "decision_type", "") or "hold").strip().lower()
+
+    buy_count = sum(1 for r in results if final_action(r) in ("buy", "add"))
+    reduce_count = sum(1 for r in results if final_action(r) == "reduce")
+    sell_count = sum(1 for r in results if final_action(r) == "sell")
+    hold_count = sum(1 for r in results if final_action(r) in ("hold", "watch", "avoid", "alert"))
     show_llm_model = bool(getattr(get_config(), "report_show_llm_model", True))
     models_used: List[str] = []
     if show_llm_model:
@@ -220,6 +227,7 @@ def render(
         "summary_only": summary_only,
         "buy_count": buy_count,
         "sell_count": sell_count,
+        "reduce_count": reduce_count,
         "hold_count": hold_count,
         "labels": labels,
         "report_language": report_language,

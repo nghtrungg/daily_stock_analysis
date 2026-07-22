@@ -7,7 +7,6 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock
 
-from api.v1.schemas.history import ReportDetails
 from data_provider.base import DataFetcherManager
 from src.core.pipeline import StockAnalysisPipeline
 from src.utils.data_processing import extract_board_detail_fields
@@ -138,12 +137,9 @@ class PipelineRelatedBoardsTestCase(unittest.TestCase):
         }
 
         extracted = extract_board_detail_fields(snapshot)
-        details = ReportDetails(context_snapshot=snapshot)
-
         self.assertEqual(extracted["concept_rankings"]["top"][0]["name"], "机器人概念")
         self.assertEqual(extracted["concept_rankings"]["top"][0]["change_pct"], 4.2)
         self.assertEqual(extracted["concept_rankings"]["top"][0]["source"], "akshare")
-        self.assertEqual(details.concept_rankings["top"][0]["name"], "机器人概念")
 
     def test_attach_belong_boards_copies_existing_board_list(self) -> None:
         pipeline = StockAnalysisPipeline.__new__(StockAnalysisPipeline)

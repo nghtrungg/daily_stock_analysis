@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the bundled Vietnam-only autocomplete index from vnstock listings.
-
-The generated tuple format remains wire-compatible with the existing Web and
-backend loaders. Field 2 is now a general display name; the historical
-``nameZh`` TypeScript property is retained temporarily for API compatibility.
-"""
+"""Generate the bundled Vietnam-only stock index from vnstock listings."""
 
 from __future__ import annotations
 
@@ -17,10 +12,7 @@ import pandas as pd
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUTPUTS = (
-    REPO_ROOT / "apps" / "dsa-web" / "public" / "stocks.index.json",
-    REPO_ROOT / "static" / "stocks.index.json",
-)
+DEFAULT_OUTPUTS = (REPO_ROOT / "src" / "data" / "stocks.index.json",)
 SUPPORTED_EXCHANGES = {"HOSE", "HNX", "UPCOM"}
 POPULAR_SYMBOLS = {
     "VNM": 100,

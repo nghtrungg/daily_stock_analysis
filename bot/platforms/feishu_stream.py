@@ -639,7 +639,7 @@ class FeishuStreamClient:
         """
         在后台线程启动 Stream 客户端（非阻塞）
 
-        适用于与其他服务（如 WebUI）同时运行的场景。
+        适用于与 CLI 调度器同时运行的场景。
         """
         if self._background_thread and self._background_thread.is_alive():
             logger.warning("[Feishu Stream] 客户端已在运行")

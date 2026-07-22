@@ -31,10 +31,7 @@ _STOCK_INDEX_CACHE_LOCK = RLock()
 def get_stock_index_candidate_paths() -> tuple[Path, ...]:
     """Return the supported locations for the generated stock index."""
     repo_root = Path(__file__).resolve().parents[2]
-    bundled = (
-        repo_root / "apps" / "dsa-web" / "public" / _STOCK_INDEX_FILENAME,
-        repo_root / "static" / _STOCK_INDEX_FILENAME,
-    )
+    bundled = (repo_root / "src" / "data" / _STOCK_INDEX_FILENAME,)
     try:
         from src.config import get_config
 
@@ -269,7 +266,7 @@ def get_stock_name_index_map() -> Dict[str, str]:
                 else:
                     _STOCK_INDEX_CACHE = _load_stock_index_file(index_path)
                 logger.debug(
-                    "[股票名称] 已加载前端股票索引映射: %s (%d 条)",
+                    "[股票名称] 已加载股票索引映射: %s (%d 条)",
                     index_path,
                     len(_STOCK_INDEX_CACHE),
                 )
@@ -297,7 +294,7 @@ def get_index_stock_name(stock_code: str) -> str | None:
 
 
 def resolve_index_stock_code(query: str) -> str | None:
-    """Resolve an input code against the stock index pool.
+    """Resolve an input code against the bundled stock index pool.
 
     Exact canonical/display-code matches win first. Bare Vietnam/JP/KR
     base-code matches are accepted only when unambiguous, so ``VNM`` resolves
