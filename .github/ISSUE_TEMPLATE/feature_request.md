@@ -17,7 +17,7 @@ Describe the desired behavior and user-facing result.
 ## Scope
 
 - Affected markets or data sources:
-- Affected surfaces: CLI / API / Web / Desktop / Bot / notification / report
+- Affected surfaces: CLI / scheduler / Bot / notification / report / persistence
 - Required configuration changes:
 
 ## Alternatives Considered

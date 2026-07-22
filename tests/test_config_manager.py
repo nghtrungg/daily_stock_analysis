@@ -182,8 +182,8 @@ class ConfigManagerTestCase(unittest.TestCase):
         self.env_path.write_text(
             "\n".join(
                 [
-                    "API_PORT=8000",
-                    "WEBUI_PORT=${API_PORT}",
+                    "PRIMARY_SCHEDULE_TIME=15:10",
+                    "SCHEDULE_TIME=${PRIMARY_SCHEDULE_TIME}",
                     'CUSTOM_WEBHOOK_BODY_TEMPLATE={"content":$${content_json}}',
                 ]
             )
@@ -193,21 +193,21 @@ class ConfigManagerTestCase(unittest.TestCase):
 
         config_map = self.manager.read_config_map()
 
-        self.assertEqual(config_map["API_PORT"], "8000")
-        self.assertEqual(config_map["WEBUI_PORT"], "8000")
+        self.assertEqual(config_map["PRIMARY_SCHEDULE_TIME"], "15:10")
+        self.assertEqual(config_map["SCHEDULE_TIME"], "15:10")
         self.assertEqual(
             config_map["CUSTOM_WEBHOOK_BODY_TEMPLATE"],
             '{"content":${content_json}}',
         )
 
         self.manager.apply_updates(
-            updates=[("WEBUI_PORT", config_map["WEBUI_PORT"])],
+            updates=[("SCHEDULE_TIME", config_map["SCHEDULE_TIME"])],
             sensitive_keys=set(),
             mask_token="******",
         )
 
         self.assertIn(
-            "WEBUI_PORT=${API_PORT}\n",
+            "SCHEDULE_TIME=${PRIMARY_SCHEDULE_TIME}\n",
             self.env_path.read_text(encoding="utf-8"),
         )
 

@@ -16,10 +16,8 @@
 
 使用方式：
 1. 配置环境变量（各平台的 Token 等）
-2. 启动 WebUI 服务
-3. 在各平台配置 Webhook URL：
-   - 飞书: http://your-server/bot/feishu
-   - 钉钉: http://your-server/bot/dingtalk
+2. 通过 ``main.py`` 启动调度或分析命令
+3. 按需启用飞书或钉钉 Stream 客户端
    - 企业微信: http://your-server/bot/wecom
    - Telegram: http://your-server/bot/telegram
 

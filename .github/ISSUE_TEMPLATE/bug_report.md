@@ -9,7 +9,7 @@ assignees: ""
 ## Environment
 
 - Version or commit hash:
-- Deployment mode: local / Docker / GitHub Actions / Web / Desktop
+- Execution mode: local one-time / local scheduler / GitHub Actions / Bot
 - Python version:
 - Operating system:
 

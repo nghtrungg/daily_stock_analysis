@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Ledger">
-  <rect width="512" height="512" rx="108" fill="#18181a"/>
-  <path d="M131 147h250M131 256h250M131 365h160" fill="none" stroke="#fafafa" stroke-width="32" stroke-linecap="round"/>
-  <circle cx="365" cy="365" r="32" fill="#fafafa"/>
-</svg>

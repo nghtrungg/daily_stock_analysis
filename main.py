@@ -23,7 +23,6 @@ Trading principles used by the analysis:
 """
 from __future__ import annotations
 
-import json
 import multiprocessing
 import os
 from pathlib import Path
@@ -45,19 +44,6 @@ if os.getenv("GITHUB_ACTIONS") != "true" and os.getenv("USE_PROXY", "false").low
     os.environ["http_proxy"] = proxy_url
     os.environ["https_proxy"] = proxy_url
 
-if os.getenv("DSA_PACKAGED_ALPHASIFT_IMPORT_PROBE") == "1":
-    import importlib
-    import sys
-
-    try:
-        importlib.import_module("alphasift.dsa_adapter")
-    except Exception as exc:
-        print(f"ERROR: packaged AlphaSift adapter import failed: {exc}", file=sys.stderr)
-        sys.exit(1)
-
-    print("OK: packaged AlphaSift adapter import succeeded")
-    sys.exit(0)
-
 import argparse
 import logging
 import sys
@@ -65,7 +51,6 @@ import time
 import uuid
 from datetime import date, datetime, timezone, timedelta
 
-from src.webui_frontend import prepare_webui_frontend_assets
 from src.config import get_config, Config
 from src.logging_config import setup_logging
 from src.services.stock_list_parser import split_stock_list
@@ -75,7 +60,6 @@ from src.services.market_symbol_utils import is_vn_market_symbol
 
 logger = logging.getLogger(__name__)
 _RUNTIME_ENV_FILE_KEYS = set()
-_PUBLIC_BIND_HOSTS = frozenset({"0.0.0.0", "::", "[::]", "*"})
 
 
 def _get_active_env_path() -> Path:
@@ -83,33 +67,6 @@ def _get_active_env_path() -> Path:
     if env_file:
         return Path(env_file)
     return Path(__file__).resolve().parent / ".env"
-
-
-def _is_public_bind_host(host: str) -> bool:
-    return (host or "").strip().lower() in _PUBLIC_BIND_HOSTS
-
-
-def _warn_if_public_webui_without_auth(host: str) -> None:
-    if not _is_public_bind_host(host):
-        return
-
-    from src.auth import is_auth_enabled
-
-    if is_auth_enabled():
-        return
-    logger.warning(
-        "WEBUI_HOST=%s binds the Web UI to a public interface while "
-        "ADMIN_AUTH_ENABLED=false. Keep this service behind a trusted network "
-        "boundary or enable admin authentication before exposing it.",
-        host,
-    )
-
-
-def _resolve_web_service_bind(args: argparse.Namespace, config: Config) -> Tuple[str, int]:
-    """Resolve the effective Web/API bind address from CLI first, then config."""
-    host = args.host if args.host is not None else (config.webui_host or "127.0.0.1")
-    port = args.port if args.port is not None else config.webui_port
-    return host, port
 
 
 def _read_active_env_values() -> Optional[Dict[str, str]]:
@@ -195,8 +152,7 @@ def _setup_runtime_logging(log_dir: str, debug: bool = False) -> bool:
         logger.warning(
             "File logging initialization failed; falling back to console output. "
             "Log directory %r cannot be written or created: %s. "
-            "The official Docker entrypoint repairs default mounted-directory permissions. "
-            "If this persists, check --user, read-only mounts, rootless Docker, or NFS write restrictions.",
+            "Check that the current Windows user can create and replace files in this directory.",
             log_dir,
             exc,
         )
@@ -354,44 +310,6 @@ Examples:
         '--force-run',
         action='store_true',
         help='Run even when the market calendar reports a non-trading day'
-    )
-
-    parser.add_argument(
-        '--webui',
-        action='store_true',
-        help='Start the Web management interface'
-    )
-
-    parser.add_argument(
-        '--webui-only',
-        action='store_true',
-        help='Start the Web service without automatic analysis'
-    )
-
-    parser.add_argument(
-        '--serve',
-        action='store_true',
-        help='Start FastAPI and also execute the analysis task'
-    )
-
-    parser.add_argument(
-        '--serve-only',
-        action='store_true',
-        help='Start FastAPI without automatic analysis'
-    )
-
-    parser.add_argument(
-        '--port',
-        type=int,
-        default=None,
-        help='FastAPI port (WEBUI_PORT, default 8000)'
-    )
-
-    parser.add_argument(
-        '--host',
-        type=str,
-        default=None,
-        help='FastAPI bind address (WEBUI_HOST, default 127.0.0.1)'
     )
 
     parser.add_argument(
@@ -1037,101 +955,6 @@ def _run_analysis_with_runtime_scheduler_lock(
     )
 
 
-def start_api_server(host: str, port: int, config: Config) -> None:
-    """
-    Start the FastAPI service in a background thread.
-
-    Args:
-        host: Bind address.
-        port: Bind port.
-        config: Application configuration.
-    """
-    import socket
-    import threading
-    import uvicorn
-
-    probe = socket.socket(socket.AF_INET6 if ":" in host else socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        probe.bind((host, port))
-    except OSError as exc:
-        raise RuntimeError(f"FastAPI port is not available: {host}:{port}") from exc
-    finally:
-        probe.close()
-
-    level_name = (config.log_level or "INFO").lower()
-    use_config_signal_handlers = True
-    uvicorn_kwargs = {
-        "host": host,
-        "port": port,
-        "log_level": level_name,
-        "log_config": None,
-    }
-    # Import the ASGI app object in the calling thread instead of handing uvicorn
-    # the "api.app:app" import string. With the string, uvicorn imports the app
-    # lazily inside the server thread, and that import (litellm + the full app
-    # tree, ~10s+ on constrained hosts) runs inside the startup probe window
-    # below, tripping the 3.0s timeout and causing a restart loop on slower
-    # machines. Importing first keeps the heavy work out of the probe window;
-    # genuine import failures still surface immediately to the caller.
-    from api.app import app as fastapi_app
-
-    try:
-        uvicorn_config = uvicorn.Config(
-            fastapi_app,
-            install_signal_handlers=False,
-            **uvicorn_kwargs,
-        )
-    except TypeError:
-        # Older uvicorn versions do not accept install_signal_handlers in
-        # Config; fall back and only disable signal handling via Server attribute
-        # when it's a boolean flag.
-        use_config_signal_handlers = False
-        uvicorn_config = uvicorn.Config(
-            fastapi_app,
-            **uvicorn_kwargs,
-        )
-    uvicorn_server = uvicorn.Server(config=uvicorn_config)
-    if not use_config_signal_handlers:
-        install_signal_handlers = getattr(uvicorn_server, "install_signal_handlers", None)
-        if isinstance(install_signal_handlers, bool):
-            uvicorn_server.install_signal_handlers = False
-
-    startup_error: list[BaseException] = []
-
-    def run_server():
-        try:
-            uvicorn_server.run()
-        except Exception as exc:  # noqa: BLE001 - surface startup issues to caller promptly
-            startup_error.append(exc)
-
-    thread = threading.Thread(target=run_server, daemon=True)
-    thread.start()
-
-    timeout_seconds = 3.0
-    wait_deadline = time.time() + timeout_seconds
-    while time.time() < wait_deadline:
-        if startup_error:
-            raise RuntimeError(
-                f"FastAPI server failed to start: {host}:{port}; {startup_error[0]}"
-            )
-        if uvicorn_server.started:
-            logger.info("FastAPI service started: http://%s:%s", host, port)
-            return
-        if not thread.is_alive():
-            break
-        time.sleep(0.05)
-
-    if startup_error:
-        raise RuntimeError(f"FastAPI server failed to start: {host}:{port}; {startup_error[0]}")
-    if uvicorn_server.started:
-        logger.info("FastAPI service started: http://%s:%s", host, port)
-        return
-    if not thread.is_alive():
-        raise RuntimeError(f"FastAPI exited immediately after startup: {host}:{port}")
-
-    raise RuntimeError(f"FastAPI did not start within {timeout_seconds:.1f}s: {host}:{port}")
-
-
 def _is_truthy_env(var_name: str, default: str = "true") -> bool:
     """Parse common truthy / falsy environment values."""
     value = os.getenv(var_name, default).strip().lower()
@@ -1193,9 +1016,9 @@ def _build_schedule_time_provider(default_schedule_time: str):
 
     Fallback order:
     1. Process-level env override (set before launch) → honour it.
-    2. Persisted config file value (written by WebUI) → use it.
+    2. Persisted config file value → use it.
     3. Documented system default ``"18:00"`` → always fall back here so
-       that clearing SCHEDULE_TIME in WebUI correctly resets the schedule.
+       that clearing SCHEDULE_TIME correctly resets the schedule.
     """
     from src.core.config_manager import ConfigManager
 
@@ -1326,93 +1149,9 @@ def main() -> int:
             return 2
         logger.info("Using stock symbols supplied on the command line: %s", stock_codes)
 
-    # Map legacy --webui options to --serve options.
-    if args.webui:
-        args.serve = True
-    if args.webui_only:
-        args.serve_only = True
-
-    # Preserve compatibility with the legacy WEBUI_ENABLED variable.
-    if config.webui_enabled and not (args.serve or args.serve_only):
-        args.serve = True
-
-    # Start the Web service when enabled.
-    start_serve = (args.serve or args.serve_only) and os.getenv("GITHUB_ACTIONS") != "true"
-
-    if start_serve:
-        args.host, args.port = _resolve_web_service_bind(args, config)
-        _warn_if_public_webui_without_auth(args.host)
-
-    bot_clients_started = False
-    if start_serve:
-        from src.services.runtime_scheduler import (
-            CLI_SCHEDULER_OWNER_ENV,
-            RUNTIME_SCHEDULER_ARGS_ENV,
-            RUNTIME_SCHEDULER_FORCE_ENABLED_ENV,
-            RUNTIME_SCHEDULER_RUN_IMMEDIATELY_ENV,
-            RUNTIME_SCHEDULER_SUPPRESS_START_ENV,
-        )
-
-        # The API runtime scheduler owns schedules once the Web/API service starts.
-        # This keeps Web settings, status, and run-now actions attached to the real
-        # scheduler instead of a separate CLI loop.
-        os.environ.pop(CLI_SCHEDULER_OWNER_ENV, None)
-        if args.serve_only:
-            os.environ[RUNTIME_SCHEDULER_SUPPRESS_START_ENV] = "true"
-        else:
-            os.environ.pop(RUNTIME_SCHEDULER_SUPPRESS_START_ENV, None)
-        runtime_schedule_requested = not args.serve_only and (
-            args.schedule or config.schedule_enabled
-        )
-        if not args.serve_only and args.schedule:
-            os.environ[RUNTIME_SCHEDULER_FORCE_ENABLED_ENV] = "true"
-        else:
-            os.environ.pop(RUNTIME_SCHEDULER_FORCE_ENABLED_ENV, None)
-        if runtime_schedule_requested:
-            runtime_run_immediately = config.schedule_run_immediately
-            if getattr(args, 'no_run_immediately', False):
-                runtime_run_immediately = False
-            os.environ[RUNTIME_SCHEDULER_RUN_IMMEDIATELY_ENV] = (
-                "true" if runtime_run_immediately else "false"
-            )
-        else:
-            os.environ.pop(RUNTIME_SCHEDULER_RUN_IMMEDIATELY_ENV, None)
-        os.environ[RUNTIME_SCHEDULER_ARGS_ENV] = json.dumps({
-            "no_notify": bool(getattr(args, "no_notify", False)),
-            "no_market_review": bool(getattr(args, "no_market_review", False)),
-            "dry_run": bool(getattr(args, "dry_run", False)),
-            "force_run": bool(getattr(args, "force_run", False)),
-            "single_notify": bool(getattr(args, "single_notify", False)),
-            "no_context_snapshot": bool(getattr(args, "no_context_snapshot", False)),
-            "workers": getattr(args, "workers", None),
-        })
-        if not prepare_webui_frontend_assets():
-            logger.warning("Web static assets are not ready; starting FastAPI without a usable Web page")
-        try:
-            start_api_server(host=args.host, port=args.port, config=config)
-            bot_clients_started = True
-        except Exception as e:
-            logger.error("Failed to start FastAPI: %s", e)
-            if args.serve_only:
-                return 1
-            start_serve = False
-
-    if bot_clients_started:
-        start_bot_stream_clients(config)
-
-    # Web-service-only mode does not execute analysis automatically.
-    if args.serve_only:
-        logger.info("Mode: Web service only")
-        logger.info("Web service: http://%s:%s", args.host, args.port)
-        logger.info("Trigger analysis through /api/v1/analysis/analyze")
-        logger.info("API documentation: http://%s:%s/docs", args.host, args.port)
-        logger.info("Press Ctrl+C to exit...")
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            logger.info("\nInterrupted by user; exiting")
-        return 0
+    # Stream-based bot clients do not require an HTTP API and can coexist with
+    # one-time or scheduled analysis. Each client remains gated by its own config.
+    start_bot_stream_clients(config)
 
     try:
         # Mode 0: backtesting.
@@ -1483,18 +1222,6 @@ def main() -> int:
 
         # Mode 2: scheduled execution.
         if args.schedule or config.schedule_enabled:
-            if start_serve:
-                logger.info("Mode: Web/API runtime scheduler")
-                logger.info("Web service: http://%s:%s", args.host, args.port)
-                logger.info("Saved scheduler settings apply to the current Web/API process")
-                logger.info("Press Ctrl+C to exit...")
-                try:
-                    while True:
-                        time.sleep(1)
-                except KeyboardInterrupt:
-                    logger.info("\nInterrupted by user; exiting")
-                return 0
-
             logger.info("Mode: scheduled execution")
             logger.info("Daily execution time: %s", config.schedule_time)
 
@@ -1558,16 +1285,6 @@ def main() -> int:
             logger.info("Analysis is not configured to run immediately (RUN_IMMEDIATELY=false)")
 
         logger.info("\nProgram execution completed")
-
-        # Keep a non-scheduled API service alive when enabled.
-        keep_running = start_serve and not (args.schedule or config.schedule_enabled)
-        if keep_running:
-            logger.info("API service is running (press Ctrl+C to exit)...")
-            try:
-                while True:
-                    time.sleep(1)
-            except KeyboardInterrupt:
-                pass
 
         return 0
 

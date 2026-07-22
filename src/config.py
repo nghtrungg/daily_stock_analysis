@@ -74,11 +74,6 @@ from src.scheduler import normalize_schedule_times
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_ALPHASIFT_INSTALL_SPEC = (
-    "git+https://github.com/ZhuLinsen/alphasift.git@9f522747caafd3c0b1ddb7e14d5cf44c8580b6cf"
-)
-
-
 @dataclass
 class ConfigIssue:
     """Structured configuration validation issue with a severity level.
@@ -733,10 +728,6 @@ class Config:
     longbridge_oauth_client_id: Optional[str] = None
     stock_index_remote_update_enabled: bool = False
 
-    # === AlphaSift optional stock screening integration ===
-    alphasift_enabled: bool = False
-    alphasift_install_spec: str = DEFAULT_ALPHASIFT_INSTALL_SPEC
-
     # === AI 分析配置 ===
     generation_backend: str = LITELLM_BACKEND_ID
     generation_fallback_backend: str = LITELLM_BACKEND_ID
@@ -1099,11 +1090,6 @@ class Config:
     retry_base_delay: float = 1.0
     retry_max_delay: float = 30.0
     
-    # === WebUI 配置 ===
-    webui_enabled: bool = False
-    webui_host: str = "127.0.0.1"
-    webui_port: int = 8000
-    
     # === 机器人配置 ===
     bot_enabled: bool = True              # 是否启用机器人功能
     bot_command_prefix: str = "/"         # 命令前缀
@@ -1139,7 +1125,7 @@ class Config:
     _VALID_AGENT_ARCH = {"single", "multi"}
     _VALID_ORCHESTRATOR_MODES = {"quick", "standard", "full", "specialist"}
     _VALID_SKILL_ROUTING = {"auto", "manual"}
-    _WEBUI_RUNTIME_ENV_FILE_PRIORITY_KEYS = frozenset(
+    _RUNTIME_ENV_FILE_PRIORITY_KEYS = frozenset(
         {
             "STOCK_LIST",
             "RUN_IMMEDIATELY",
@@ -1209,7 +1195,7 @@ class Config:
         
         加载优先级：
         1. 大多数配置保持系统环境变量优先
-        2. WebUI 可写的运行期关键键优先复用持久化 `.env`，但保留启动时显式进程环境变量的 override
+        2. 运行期关键键优先复用持久化 `.env`，但保留启动时显式进程环境变量的 override
         3. 代码中的默认值
         """
         cls._capture_bootstrap_runtime_env_overrides()
@@ -2002,9 +1988,6 @@ class Config:
                 os.getenv('MARKET_REVIEW_COLOR_SCHEME', 'green_up')
             ),
             trading_day_check_enabled=os.getenv('TRADING_DAY_CHECK_ENABLED', 'true').lower() != 'false',
-            webui_enabled=os.getenv('WEBUI_ENABLED', 'false').lower() == 'true',
-            webui_host=os.getenv('WEBUI_HOST', '127.0.0.1'),
-            webui_port=parse_env_int(os.getenv('WEBUI_PORT'), 8000, field_name='WEBUI_PORT', minimum=1, maximum=65535),
             # 机器人配置
             bot_enabled=os.getenv('BOT_ENABLED', 'true').lower() == 'true',
             bot_command_prefix=os.getenv('BOT_COMMAND_PREFIX', '/'),
@@ -2108,12 +2091,6 @@ class Config:
                 minimum=1,
             ),
             portfolio_fx_update_enabled=os.getenv('PORTFOLIO_FX_UPDATE_ENABLED', 'true').lower() == 'true',
-            alphasift_enabled=parse_env_bool(os.getenv('ALPHASIFT_ENABLED'), default=False),
-            alphasift_install_spec=(
-                DEFAULT_ALPHASIFT_INSTALL_SPEC
-                if os.getenv('ALPHASIFT_INSTALL_SPEC') is None
-                else os.getenv('ALPHASIFT_INSTALL_SPEC', '').strip()
-            ),
         )
     
     @classmethod
@@ -2496,7 +2473,7 @@ class Config:
         env_value = os.getenv(key)
         file_value = cls._get_env_file_value(key)
 
-        should_prefer_file = prefer_env_file or key in cls._WEBUI_RUNTIME_ENV_FILE_PRIORITY_KEYS
+        should_prefer_file = prefer_env_file or key in cls._RUNTIME_ENV_FILE_PRIORITY_KEYS
         if should_prefer_file and file_value is not None:
             if env_value is not None and cls._has_bootstrap_runtime_env_override(key):
                 return env_value
@@ -2512,8 +2489,8 @@ class Config:
         """Remember process-provided runtime env overrides before dotenv mutates os.environ.
 
         Called by ``setup_env()`` **before** ``load_dotenv()``, so ``os.environ``
-        only contains genuine process-level values (Docker ``environment:``,
-        Dockerfile ``ENV``, shell exports, etc.).
+        only contains genuine process-level values (shell exports, GitHub
+        Actions environment entries, service-manager variables, etc.).
 
         A key is treated as an explicit override when it is present in
         ``os.environ`` and either:
@@ -2521,15 +2498,15 @@ class Config:
         * present with a **different** value.
 
         When both values are identical, the distinction is irrelevant and we
-        do **not** flag the key, so that a later ``.env`` update by WebUI can
-        take effect on config reload without requiring a container restart.
+        do **not** flag the key, so that a later ``.env`` update can take effect
+        on config reload without requiring a process restart.
         """
         if cls._BOOTSTRAP_RUNTIME_ENV_OVERRIDES_CAPTURED:
             return
 
         explicit_overrides = set()
         present_keys = set()
-        for key in cls._WEBUI_RUNTIME_ENV_FILE_PRIORITY_KEYS:
+        for key in cls._RUNTIME_ENV_FILE_PRIORITY_KEYS:
             env_value = os.environ.get(key)
             if env_value is None:
                 continue
@@ -2783,7 +2760,7 @@ class Config:
         
         支持两种配置方式：
         1. .env 文件（本地开发、定时任务模式） - 修改后下次执行自动生效
-        2. 系统环境变量（GitHub Actions、Docker） - 启动时固定，运行中不变
+        2. 系统环境变量（本地 shell、GitHub Actions） - 启动时固定，运行中不变
         """
         # 优先从 .env 文件读取最新配置，这样即使在容器环境中修改了 .env 文件，
         # 也能获取到最新的股票列表配置

@@ -1,7 +1,7 @@
 {% from '_macros.j2' import market_snapshot with context %}
 # 🎯 {{ report_date }} {{ labels.dashboard_title }}
 
-> {{ labels.analyzed_prefix }} **{{ results|length }}** {{ labels.stock_unit }} | 🟢{{ labels.buy_label }}:{{ buy_count }} 🟡{{ labels.watch_label }}:{{ hold_count }} 🔴{{ labels.sell_label }}:{{ sell_count }}
+> {{ labels.analyzed_prefix }} **{{ results|length }}** {{ labels.stock_unit }} | 🟢{{ labels.buy_label }}:{{ buy_count }} 🟡{{ labels.watch_label }}:{{ hold_count }} 🟠{{ labels.reduce_label }}:{{ reduce_count }} 🔴{{ labels.sell_label }}:{{ sell_count }}
 {% if market_status_line %}
 {{ market_status_line }}
 {% endif %}
@@ -64,6 +64,15 @@
 **{{ e.signal_emoji }} {{ e.signal_text }}** | {{ localize_trend_prediction(result.trend_prediction, report_language) }}
 
 > **{{ labels.one_sentence_label }}**: {{ core.get('one_sentence', result.analysis_summary) }}
+
+{% if dashboard.get('methodology_note') %}
+> **{{ labels.methodology_note_label }}**: {{ dashboard.get('methodology_note') }}
+{% endif %}
+
+{% set horizons = dashboard.get('analysis_horizons') or {} %}
+{% if horizons %}
+**{{ labels.horizons_label }}**: {{ labels.tactical_horizon_label }} {{ horizons.get('tactical') }} · {{ labels.medium_horizon_label }} {{ horizons.get('medium_term') }} · {{ labels.fundamental_horizon_label }} {{ horizons.get('fundamental') }}
+{% endif %}
 
 ⏰ **{{ labels.time_sensitivity_label }}**: {{ core.get('time_sensitivity', labels.default_time_sensitivity) }}
 
@@ -201,7 +210,17 @@
 {% if plan_display.get('risk_reward') %}
 
 **{{ plan_display.get('risk_reward') }}**
+{% if plan_display.get('risk_reward_method') %}
+_{{ plan_display.get('risk_reward_method') }}_
 {% endif %}
+{% endif %}
+{% endif %}
+
+{% if battle.get('entry_conditions') %}
+**{{ labels.entry_conditions_label }}**:
+{% for condition in battle.get('entry_conditions') %}
+- {{ condition }}
+{% endfor %}
 {% endif %}
 
 {% set position = battle.get('position_strategy', {}) %}

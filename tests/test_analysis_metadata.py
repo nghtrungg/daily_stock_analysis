@@ -308,39 +308,3 @@ class TestSelectionSourceDocumentation:
 class TestSelectionSourceValidationIntegration:
     """Test selection source integration in task queue"""
 
-    def test_task_queue_validation(self):
-        """Test that task queue validates selection sources"""
-        from src.services.task_queue import AnalysisTaskQueue
-
-        queue = AnalysisTaskQueue(max_workers=1)
-
-        # Valid selection sources should pass
-        for source in SELECTION_SOURCES:
-            try:
-                queue.validate_selection_source(source)
-            except ValueError:
-                pytest.fail(f"Valid selection source {source} was rejected")
-
-    def test_task_queue_reject_invalid_source(self):
-        """Test that task queue rejects invalid selection sources"""
-        from src.services.task_queue import AnalysisTaskQueue
-
-        queue = AnalysisTaskQueue(max_workers=1)
-
-        invalid_sources = ["invalid", "upload", "scan", ""]
-
-        for invalid_source in invalid_sources:
-            with pytest.raises(ValueError, match="Invalid selection_source"):
-                queue.validate_selection_source(invalid_source)
-
-    def test_task_queue_none_source(self):
-        """Test that task queue accepts None as selection source"""
-        from src.services.task_queue import AnalysisTaskQueue
-
-        queue = AnalysisTaskQueue(max_workers=1)
-
-        # None should pass validation (backward compatibility)
-        try:
-            queue.validate_selection_source(None)
-        except ValueError:
-            pytest.fail("None should be a valid selection source (backward compatibility)")

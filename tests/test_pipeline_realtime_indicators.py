@@ -422,6 +422,53 @@ class TestEnhanceContextRealtimeOverride(unittest.TestCase):
         self.assertEqual(enhanced["today"]["close"], 15.0)
         self.assertEqual(enhanced["today"]["ma5"], 14.8)
 
+    @patch("src.core.pipeline.get_market_now")
+    @patch("src.core.pipeline.get_market_for_stock", return_value="vn")
+    def test_missing_open_does_not_create_impossible_realtime_candle(
+        self, _mock_market, mock_now
+    ) -> None:
+        today = date.today()
+        mock_now.return_value = datetime(
+            today.year, today.month, today.day, 16, 0, tzinfo=timezone.utc
+        )
+        context = {
+            "code": "MBB.VN",
+            "date": (today - timedelta(days=1)).isoformat(),
+            "today": {
+                "date": (today - timedelta(days=1)).isoformat(),
+                "close": 22800,
+                "volume": 20_670_000,
+            },
+            "yesterday": {"close": 23000, "volume": 15_000_000},
+        }
+        quote = _make_realtime_quote(
+            price=22700,
+            open_price=None,
+            high=22700,
+            low=22700,
+            volume=966_000,
+        )
+        trend = TrendAnalysisResult(
+            code="MBB.VN",
+            trend_status=TrendStatus.BEAR,
+            ma5=23000,
+            ma10=23500,
+            ma20=24000,
+        )
+
+        enhanced = self.pipeline._enhance_context(
+            context, quote, None, trend, "MB Bank",
+            market_phase_context={"is_partial_bar": False},
+        )
+
+        assert enhanced["today"]["close"] == 22700
+        assert "open" not in enhanced["today"]
+        assert "high" not in enhanced["today"]
+        assert "low" not in enhanced["today"]
+        assert enhanced["data_quality"]["ohlc_usable"] is False
+        assert enhanced["data_quality"]["volume_usable"] is False
+        assert "volume_change_ratio" not in enhanced
+
 
 if __name__ == "__main__":
     unittest.main()

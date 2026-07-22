@@ -14,16 +14,15 @@
 
 ## Scope
 
-- [ ] Backend (`src/`, `data_provider/`, `api/`, `bot/`)
-- [ ] Web (`apps/dsa-web/`)
-- [ ] Desktop (`apps/dsa-desktop/`)
-- [ ] Workflows/scripts/Docker
+- [ ] Core (`main.py`, `src/`, `data_provider/`, `bot/`)
+- [ ] Bot / notifications
+- [ ] Workflows / scripts
 - [ ] Docs/governance
 - [ ] Other:
 
 ## Contract And Compatibility
 
-<!-- Describe API/schema/config/report/notification/user-visible compatibility impact. State "No compatibility impact" if none. -->
+<!-- Describe CLI/schema/config/report/notification/persistence compatibility impact. State "No compatibility impact" if none. -->
 
 ## Validation
 
@@ -32,13 +31,11 @@
 - [ ] `./scripts/ci_gate.sh`
 - [ ] `python -m pytest -m "not network"`
 - [ ] `python -m py_compile <changed_python_files>`
-- [ ] `cd apps/dsa-web && npm ci && npm run lint && npm run build`
-- [ ] Desktop build validation
 - [ ] Docs only, tests not run
 
 ## Screenshots / Visual Evidence
 
-<!-- Required for report format, report rendering, or Web UI changes. Attach affected pages/reports or explain why visual evidence is not possible. -->
+<!-- For report-format changes, attach representative rendered report evidence or explain why it is unavailable. -->
 
 ## Risk And Rollback
 

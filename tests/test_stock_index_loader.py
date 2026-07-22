@@ -75,8 +75,8 @@ class TestStockIndexLoader(unittest.TestCase):
                 paths = stock_index_loader.get_stock_index_candidate_paths()
 
             self.assertNotIn(remote_cache, paths)
-            self.assertTrue(paths[0].as_posix().endswith("apps/dsa-web/public/stocks.index.json"))
-            self.assertTrue(paths[1].as_posix().endswith("static/stocks.index.json"))
+            self.assertEqual(len(paths), 1)
+            self.assertTrue(paths[0].as_posix().endswith("src/data/stocks.index.json"))
 
     def test_candidate_paths_include_remote_cache_when_explicitly_enabled(self):
         with tempfile.TemporaryDirectory() as temp_dir:
