@@ -144,6 +144,99 @@ class TestAnalysisReportSchema(unittest.TestCase):
         self.assertEqual(validation.risk_reward_ratio, 3.49)
         self.assertEqual(validation.display.risk_reward, "R:R = 1 : 3.49")
 
+    def test_schema_accepts_explainable_decision_metrics(self) -> None:
+        data = {
+            "sentiment_score": 35,
+            "dashboard": {
+                "decision_metrics": {
+                    "score_breakdown": {
+                        "total_score": 35,
+                        "max_score": 100,
+                        "band": "20-39",
+                        "components": {
+                            "trend": {"score": 10, "max_score": 30},
+                            "momentum": {"score": 8, "max_score": 20},
+                            "volume": {"score": 5, "max_score": 15},
+                            "market": {"score": 6, "max_score": 15},
+                            "fundamental": {"score": 6, "max_score": 20},
+                        },
+                    },
+                    "evidence_confidence": {
+                        "score_pct": 76,
+                        "level": "medium",
+                        "factors": {
+                            "ohlc": {"score_pct": 100, "status": "available"},
+                        },
+                    },
+                    "scenario_outlook": {
+                        "horizon": "1-5 sessions",
+                        "probability_source": "model_estimate",
+                        "scenarios": [
+                            {
+                                "key": "downside",
+                                "label": "Tiếp tục giảm",
+                                "probability_pct": 60,
+                                "condition": "Mất hỗ trợ",
+                            },
+                            {"key": "sideways", "label": "Đi ngang", "probability_pct": 25},
+                            {"key": "upside", "label": "Hồi kỹ thuật", "probability_pct": 15},
+                        ],
+                    },
+                    "trade_expectancy": {
+                        "status": "available",
+                        "risk_reward_ratio": 4,
+                        "win_probability_pct": 32,
+                        "expected_value_r": 0.6,
+                        "probability_source": "scenario_estimate",
+                    },
+                }
+            },
+        }
+
+        schema = AnalysisReportSchema.model_validate(data)
+
+        metrics = schema.dashboard.decision_metrics
+        self.assertEqual(metrics.score_breakdown.total_score, 35)
+        self.assertEqual(metrics.trade_expectancy.expected_value_r, 0.6)
+
+    def test_schema_accepts_llm_decision_metrics_proposal_before_finalization(self) -> None:
+        schema = AnalysisReportSchema.model_validate({
+            "sentiment_score": 38,
+            "dashboard": {
+                "decision_metrics": {
+                    "score_breakdown": {
+                        "components": {
+                            "trend": {"score": 8, "reason": "Xu hướng giảm"},
+                            "momentum": {"score": 6, "reason": "Động lượng yếu"},
+                            "volume": {"score": 5, "reason": "Khối lượng hạn chế"},
+                            "market": {"score": 8, "reason": "Thị trường thận trọng"},
+                            "fundamental": {"score": 11, "reason": "Cơ bản trung tính"},
+                        }
+                    },
+                    "scenario_outlook": {
+                        "horizon": "1-5 phiên",
+                        "probability_source": "model_estimate",
+                        "scenarios": [
+                            {"key": "downside", "label": "Tiếp tục giảm", "probability_pct": 30},
+                            {"key": "sideways", "label": "Đi ngang", "probability_pct": 15},
+                            {"key": "upside", "label": "Hồi kỹ thuật", "probability_pct": 5},
+                        ],
+                    },
+                }
+            },
+        })
+
+        proposal = schema.dashboard.decision_metrics.score_breakdown
+        self.assertIsNone(proposal.total_score)
+        self.assertIsNone(proposal.components["trend"].max_score)
+        self.assertEqual(
+            sum(
+                item.probability_pct
+                for item in schema.dashboard.decision_metrics.scenario_outlook.scenarios
+            ),
+            50,
+        )
+
     def test_schema_fails_on_invalid_sentiment_score(self) -> None:
         """Schema validation fails when sentiment_score out of range."""
         data = {

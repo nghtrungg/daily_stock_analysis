@@ -69,6 +69,77 @@
 > **{{ labels.methodology_note_label }}**: {{ dashboard.get('methodology_note') }}
 {% endif %}
 
+{% set decision_metrics = dashboard.get('decision_metrics') or {} %}
+{% set score_breakdown = decision_metrics.get('score_breakdown') or {} %}
+{% set evidence_confidence = decision_metrics.get('evidence_confidence') or {} %}
+{% set scenario_outlook = decision_metrics.get('scenario_outlook') or {} %}
+{% set trade_expectancy = decision_metrics.get('trade_expectancy') or {} %}
+{% if decision_metrics %}
+### {{ labels.decision_metrics_heading }}
+
+{% if score_breakdown %}
+{{ labels.total_score_label }}: **{{ score_breakdown.get('total_score') }}/{{ score_breakdown.get('max_score', 100) }}** — {{ score_breakdown.get('band_label', '') }}
+
+| {{ labels.score_label }} | {{ labels.total_score_label }} | {{ labels.data_limitations_label }} |
+|---------|---------:|---------|
+{% set components = score_breakdown.get('components') or {} %}
+{% set trend_component = components.get('trend') or {} %}
+{% set momentum_component = components.get('momentum') or {} %}
+{% set volume_component = components.get('volume') or {} %}
+{% set market_component = components.get('market') or {} %}
+{% set fundamental_component = components.get('fundamental') or {} %}
+| {{ labels.trend_component_label }} | {{ trend_component.get('score', 0) }}/{{ trend_component.get('max_score', 30) }} | {{ trend_component.get('reason', '') }} |
+| {{ labels.momentum_component_label }} | {{ momentum_component.get('score', 0) }}/{{ momentum_component.get('max_score', 20) }} | {{ momentum_component.get('reason', '') }} |
+| {{ labels.volume_component_label }} | {{ volume_component.get('score', 0) }}/{{ volume_component.get('max_score', 15) }} | {{ volume_component.get('reason', '') }} |
+| {{ labels.market_component_label }} | {{ market_component.get('score', 0) }}/{{ market_component.get('max_score', 15) }} | {{ market_component.get('reason', '') }} |
+| {{ labels.fundamental_component_label }} | {{ fundamental_component.get('score', 0) }}/{{ fundamental_component.get('max_score', 20) }} | {{ fundamental_component.get('reason', '') }} |
+
+**{{ labels.score_band_label }}**: {{ score_breakdown.get('band', 'N/A') }}{% if score_breakdown.get('distance_to_next_band') %} · {{ labels.next_band_distance_label }}: {{ score_breakdown.get('distance_to_next_band') }}{% endif %}
+{% endif %}
+
+{% if evidence_confidence %}
+**{{ labels.evidence_confidence_label }}: {{ evidence_confidence.get('score_pct') }}%**
+
+| {{ labels.source_label }} | {{ labels.evidence_confidence_label }} |
+|---------|---------|
+{% for key, factor in (evidence_confidence.get('factors') or {}).items() %}
+{% if key == 'ohlc' %}{% set factor_label = 'OHLC' %}{% elif key == 'trend' %}{% set factor_label = labels.trend_component_label %}{% elif key == 'volume' %}{% set factor_label = labels.volume_component_label %}{% elif key == 'market' %}{% set factor_label = labels.market_component_label %}{% elif key == 'news' %}{% set factor_label = labels.news_sentiment_label %}{% else %}{% set factor_label = labels.fundamental_component_label %}{% endif %}
+| {{ factor_label }} | {{ '✓' if factor.get('status') == 'available' else '?' if factor.get('status') == 'limited' else '✗' }} {{ factor.get('score_pct') }}% — {{ factor.get('reason', '') }} |
+{% endfor %}
+
+_{{ evidence_confidence.get('methodology', '') }}_
+{% endif %}
+
+{% set scenarios = scenario_outlook.get('scenarios') or [] %}
+{% if scenarios %}
+#### {{ labels.scenario_probability_heading }} ({{ scenario_outlook.get('horizon') }})
+
+{% for scenario in scenarios %}
+- **{{ scenario.get('label') }}: {{ scenario.get('probability_pct') }}%**
+{% endfor %}
+
+#### {{ labels.risk_matrix_heading }}
+
+| {{ labels.condition_label }} | {{ labels.scenario_label }} | {{ labels.target_label }} | {{ labels.recommended_action_label }} |
+|---------|---------|---------:|---------|
+{% for scenario in scenarios %}
+| {{ scenario.get('condition', 'N/A') }} | {{ scenario.get('label') }} ({{ scenario.get('probability_pct') }}%) | {{ clean_sniper(scenario.get('target_price'), result.code) }} | {{ scenario.get('recommended_action', 'N/A') }} |
+{% endfor %}
+{% endif %}
+
+{% if trade_expectancy.get('status') == 'available' %}
+**Reward/Risk**: 1 : {{ trade_expectancy.get('risk_reward_ratio') }}
+
+**{{ labels.win_probability_label }}**: {{ trade_expectancy.get('win_probability_pct') }}%
+
+**{{ labels.expected_value_label }}**: {{ format_ev_r(trade_expectancy.get('expected_value_r')) }}
+
+**{{ labels.probability_source_label }}**: {{ trade_expectancy.get('probability_source') }} ({{ trade_expectancy.get('calibration_status') }})
+
+_{{ trade_expectancy.get('methodology', '') }}_
+{% endif %}
+{% endif %}
+
 {% set horizons = dashboard.get('analysis_horizons') or {} %}
 {% if horizons %}
 **{{ labels.horizons_label }}**: {{ labels.tactical_horizon_label }} {{ horizons.get('tactical') }} · {{ labels.medium_horizon_label }} {{ horizons.get('medium_term') }} · {{ labels.fundamental_horizon_label }} {{ horizons.get('fundamental') }}

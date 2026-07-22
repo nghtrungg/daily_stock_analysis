@@ -8,8 +8,10 @@
 {% for e in enriched %}
 {% set dash = e.result.dashboard or {} %}
 {% set core = (dash.get('core_conclusion') or {}) if dash else {} %}
+{% set metrics = dash.get('decision_metrics') or {} %}
+{% set scenarios = (metrics.get('scenario_outlook') or {}).get('scenarios') or [] %}
 {% set one = (core.get('one_sentence') or e.result.analysis_summary or '')[:60] %}
-**{{ e.stock_name }}({{ e.result.code }})** {{ e.signal_emoji }} {{ e.localized_operation_advice }} | {{ labels.score_label }} {{ e.result.sentiment_score }} | {{ one }}
+**{{ e.stock_name }}({{ e.result.code }})** {{ e.signal_emoji }} {{ e.localized_operation_advice }} | {{ labels.score_label }} {{ e.result.sentiment_score }}/100{% if metrics.get('evidence_confidence') %} | {{ labels.evidence_confidence_label }} {{ metrics.get('evidence_confidence').get('score_pct') }}%{% endif %}{% if scenarios %} | {{ scenarios[0].get('label') }} {{ scenarios[0].get('probability_pct') }}%{% endif %} | {{ one }}
 {% endfor %}
 
 *{{ report_timestamp }}*

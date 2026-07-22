@@ -13,5 +13,7 @@ Core implementation:
 
 Signals retain source report identity, stock code, market phase, action, reason, price levels, profile, timestamps, and status. Outcome metrics must report their numerator, denominator, sample count, availability, and version so empty or incomplete data is not presented as performance.
 
+Report scenario probabilities and trade expectancy are separate from DecisionSignal directional outcomes. Until a TP-before-SL calibration contract has sufficient resolved samples, reports label scenario-derived win estimates as uncalibrated and do not present the directional outcome win rate as trade probability.
+
 For the Vietnam profile, prices use actual VND and symbols use explicit `.VN` suffixes. A future Supabase migration must preserve source-report relationships, deduplication keys, feedback, outcomes, timestamps, and nullable legacy fields.
 

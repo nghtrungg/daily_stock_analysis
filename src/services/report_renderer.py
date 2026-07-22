@@ -10,6 +10,7 @@ Any expensive data preparation should be injected by the caller via extra_contex
 """
 
 import logging
+import math
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -74,6 +75,18 @@ def _clean_sniper_value(val: Any, stock_code: str = "") -> str:
         if parsed is not None:
             return format_vnd_amount(parsed)
     return s
+
+
+def _format_ev_r(value: Any) -> str:
+    """Format a finite expectancy value in R units with an explicit sign."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "N/A"
+    if not math.isfinite(number):
+        return "N/A"
+    rendered = f"{number:+.2f}".rstrip("0").rstrip(".")
+    return f"{rendered}R"
 
 
 def _localize_system_text(value: Any, language: str) -> Any:
@@ -236,6 +249,7 @@ def render(
         "market_status_line": market_status_line(),
         "escape_md": _escape_md,
         "clean_sniper": _clean_sniper_value,
+        "format_ev_r": _format_ev_r,
         "failed_checks": failed_checks,
         "phase_pack_excerpt": phase_pack_excerpt,
         "decision_signal_excerpt": decision_signal_excerpt,
