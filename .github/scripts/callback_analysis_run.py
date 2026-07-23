@@ -30,6 +30,7 @@ SUCCESS_SUMMARY: Final = "Phân tích đã hoàn tất và đã lưu giá tại 
 VIETNAM_TIMEZONE: Final = ZoneInfo("Asia/Ho_Chi_Minh")
 MAX_SAFE_INTEGER: Final = 9_007_199_254_740_991
 MAX_CALLBACK_ATTEMPTS: Final = 3
+MAX_REPORT_BYTES: Final = 40_000
 
 
 class QuoteUnavailableError(ValueError):
@@ -66,7 +67,7 @@ def normalize_vnd_price(value: object) -> int:
     return normalized
 
 
-def extract_current_run_quote(database_path: str, symbol: str, workflow_started_at: str) -> dict[str, object]:
+def _current_run_row(database_path: str, symbol: str, workflow_started_at: str) -> tuple[object, ...]:
     canonical_symbol = symbol.strip().upper()
     if not VIETNAM_SYMBOL_PATTERN.fullmatch(canonical_symbol):
         raise QuoteUnavailableError("requested symbol is invalid")
@@ -83,7 +84,9 @@ def extract_current_run_quote(database_path: str, symbol: str, workflow_started_
         with sqlite3.connect(f"file:{path.resolve().as_posix()}?mode=ro", uri=True) as connection:
             rows = connection.execute(
                 """
-                select id, code, raw_result, created_at
+                select id, code, name, report_type, sentiment_score,
+                       operation_advice, trend_prediction, analysis_summary,
+                       raw_result, created_at
                 from analysis_history
                 where code = ?
                 order by created_at desc, id desc
@@ -94,8 +97,9 @@ def extract_current_run_quote(database_path: str, symbol: str, workflow_started_
     except (sqlite3.Error, OSError):
         raise QuoteUnavailableError("analysis database could not be read") from None
 
-    current_rows: list[tuple[object, str, str, datetime]] = []
-    for row_id, code, raw_result, created_at_value in rows:
+    current_rows: list[tuple[object, ...]] = []
+    for row in rows:
+        row_id, code, name, report_type, sentiment_score, operation_advice, trend_prediction, analysis_summary, raw_result, created_at_value = row
         if code != canonical_symbol or not isinstance(created_at_value, str):
             continue
         try:
@@ -103,12 +107,28 @@ def extract_current_run_quote(database_path: str, symbol: str, workflow_started_
         except ValueError:
             continue
         if created_at >= started_at:
-            current_rows.append((row_id, code, raw_result, created_at))
+            current_rows.append((
+                row_id, code, name, report_type, sentiment_score, operation_advice,
+                trend_prediction, analysis_summary, raw_result, created_at,
+            ))
 
     if len(current_rows) != 1:
         raise QuoteUnavailableError("current-run quote record is missing or ambiguous")
 
-    _, _, raw_result_value, created_at = current_rows[0]
+    return current_rows[0]
+
+
+def _required_text(value: object, label: str, maximum: int) -> str:
+    if not isinstance(value, str) or not value.strip() or len(value) > maximum:
+        raise QuoteUnavailableError(f"{label} is invalid")
+    return value.strip()
+
+
+def extract_current_run_analysis(database_path: str, symbol: str, workflow_started_at: str) -> dict[str, object]:
+    (
+        _, code, name, report_type, sentiment_score, operation_advice,
+        trend_prediction, analysis_summary, raw_result_value, created_at,
+    ) = _current_run_row(database_path, symbol, workflow_started_at)
     try:
         raw_result = json.loads(raw_result_value)
     except (json.JSONDecodeError, TypeError):
@@ -123,18 +143,62 @@ def extract_current_run_quote(database_path: str, symbol: str, workflow_started_
     if not isinstance(source, str) or not source.strip() or len(source) > 120:
         raise QuoteUnavailableError("quote source is invalid")
 
+    if isinstance(sentiment_score, bool) or not isinstance(sentiment_score, int) or not 0 <= sentiment_score <= 100:
+        raise QuoteUnavailableError("report sentiment score is invalid")
+    dashboard = raw_result.get("dashboard")
+    if dashboard is not None and not isinstance(dashboard, dict):
+        raise QuoteUnavailableError("report dashboard is invalid")
+
+    report = {
+        "code": code,
+        "name": _required_text(name, "report name", 120),
+        "reportType": _required_text(report_type, "report type", 32),
+        "sentimentScore": sentiment_score,
+        "operationAdvice": _required_text(operation_advice, "operation advice", 120),
+        "trendPrediction": _required_text(trend_prediction, "trend prediction", 120),
+        "dashboard": dashboard,
+    }
+    if len(json.dumps(report, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > MAX_REPORT_BYTES:
+        raise QuoteUnavailableError("report is too large")
+
+    analysis_date = created_at.astimezone(VIETNAM_TIMEZONE).isoformat(timespec="seconds")
     return {
-        "currentPriceVnd": normalize_vnd_price(price),
-        "asOf": created_at.astimezone(VIETNAM_TIMEZONE).isoformat(timespec="seconds"),
-        "source": source.strip(),
+        "summary": _required_text(analysis_summary, "analysis summary", 4_000),
+        "analysisDate": analysis_date,
+        "report": report,
+        "quote": {
+            "currentPriceVnd": normalize_vnd_price(price),
+            "asOf": analysis_date,
+            "source": source.strip(),
+        },
     }
 
 
-def encode_callback_payload(run_id: str, status: str, quote: dict[str, object] | None = None) -> str:
+def extract_current_run_quote(database_path: str, symbol: str, workflow_started_at: str) -> dict[str, object]:
+    """Compatibility helper retained for focused quote callers."""
+    return extract_current_run_analysis(database_path, symbol, workflow_started_at)["quote"]  # type: ignore[return-value]
+
+
+def encode_callback_payload(
+    run_id: str,
+    status: str,
+    quote: dict[str, object] | None = None,
+    *,
+    analysis_date: str | None = None,
+    report: dict[str, object] | None = None,
+    summary: str = SUCCESS_SUMMARY,
+) -> str:
     if status == "succeeded":
-        if quote is None:
-            raise ValueError("a successful callback requires a quote")
-        payload = {"runId": run_id, "status": status, "summary": SUCCESS_SUMMARY, "quote": quote}
+        if quote is None or analysis_date is None or report is None:
+            raise ValueError("a successful callback requires a quote and report")
+        payload = {
+            "runId": run_id,
+            "status": status,
+            "summary": summary,
+            "analysisDate": analysis_date,
+            "report": report,
+            "quote": quote,
+        }
     elif status == "quote-unavailable":
         payload = {"runId": run_id, "status": "failed", "errorCode": "QUOTE_UNAVAILABLE"}
     elif status == "failed":
@@ -229,8 +293,15 @@ def main() -> int:
     try:
         if status == "succeeded":
             try:
-                quote = extract_current_run_quote(database_path, symbol, workflow_started_at)
-                payload = encode_callback_payload(run_id, "succeeded", quote)
+                projection = extract_current_run_analysis(database_path, symbol, workflow_started_at)
+                payload = encode_callback_payload(
+                    run_id,
+                    "succeeded",
+                    projection["quote"],  # type: ignore[arg-type]
+                    analysis_date=str(projection["analysisDate"]),
+                    report=projection["report"],  # type: ignore[arg-type]
+                    summary=str(projection["summary"]),
+                )
             except QuoteUnavailableError:
                 payload = encode_callback_payload(run_id, "quote-unavailable")
         else:

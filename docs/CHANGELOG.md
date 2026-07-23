@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [feature] Project dated, sanitized per-symbol analysis reports into the shared Supabase run contract while retaining SQLite compatibility.
+
 - [feature] Explain final decision scores with fixed component points, deterministic evidence confidence, normalized tactical scenarios, a shared risk matrix, and before-cost R:R expectancy.
 - [test] Cover score reconciliation, confidence degradation, scenario normalization, EV arithmetic, additive schema compatibility, and full/brief/WeChat report rendering.
 - [docs] Document explainable decision-metric semantics, probability limitations, compatibility, and rollback.

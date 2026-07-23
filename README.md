@@ -8,7 +8,7 @@ A private, CLI-first AI stock-analysis workspace for Vietnam securities. It fetc
 
 - Vietnam watchlists with explicit symbols such as `VNM.VN`, `MBB.VN`, `FPT.VN`, and `HPG.VN`
 - Technical, fundamental, news, and LLM-assisted analysis with Vietnamese reports
-- SQLite analysis history at `data/stock_analysis_vn.db`, retained for a future Supabase migration
+- SQLite-compatible local analysis history at `data/stock_analysis_vn.db`, with signed per-run report projections into the shared Supabase dashboard
 - Bot commands, stream clients, and notification delivery
 - One-time analysis, backtesting, and weekday scheduling in `Asia/Ho_Chi_Minh`
 
@@ -53,6 +53,7 @@ cmd.exe /d /c "chcp 65001>nul & set \"PYTHONUTF8=1\"& .venv\Scripts\python.exe m
 - [Notification configuration](docs/notifications.md)
 - [LLM provider configuration](docs/llm-providers.md)
 - [Change history](docs/CHANGELOG.md)
+- [Shared Supabase report integration](docs/supabase-integration.md)
 
 ## Validation
 

@@ -1,0 +1,185 @@
+{
+  "contract_id": "daily-stock-analysis--personal-stock-tracking--supabase-schema-ownership",
+  "contract_version": 4,
+  "effective_date": "2026-07-22",
+  "status": "active",
+  "repositories": {
+    "daily_stock_analysis": {
+      "baseline_commit": "b7a612029f1001e71903ca3b6abc60ad7430a0c9",
+      "contract_copy": "docs/migration/schema-ownership-register.json",
+      "role": "legacy SQLite and future private compute schema owner"
+    },
+    "personal_stock_tracking": {
+      "baseline_commit": "0f9e744340147869b6b22f35f289884835fb33f8",
+      "contract_copy": "docs/migration/schema-ownership-register.json",
+      "role": "dashboard and public Supabase contract owner"
+    }
+  },
+  "rules": {
+    "ddl_owner_count_per_object": 1,
+    "dml_access_does_not_imply_ddl_ownership": true,
+    "manual_remote_ddl": "forbidden",
+    "mirror_policy": "The two contract copies must be byte-equivalent JSON after parsing.",
+    "change_policy": "Bump contract_version and update both repositories in one coordinated change before adding, renaming, moving, or dropping a shared object.",
+    "deployment_policy": "Only the owning repository's protected migration workflow may deploy its objects.",
+    "compatibility_policy": "The owner authors additive migrations and obtains consumer review before an incompatible contract change.",
+    "rollback_policy": "Prefer forward fixes; destructive rollback requires a separately approved recovery plan and verified backup."
+  },
+  "namespace_boundaries": [
+    {
+      "namespace": "sqlite.main",
+      "owner": "daily_stock_analysis",
+      "scope": "PR0 legacy runtime inventory only"
+    },
+    {
+      "namespace": "dsa",
+      "owner": "daily_stock_analysis",
+      "scope": "future private compute objects"
+    },
+    {
+      "namespace": "public",
+      "owner": "personal_stock_tracking",
+      "scope": "only the named owner-facing objects; Supabase/platform objects are excluded"
+    },
+    {
+      "namespace": "private",
+      "owner": "personal_stock_tracking",
+      "scope": "only the named helper functions; this is not blanket namespace ownership"
+    }
+  ],
+  "objects": [
+    {
+      "object_type": "schema",
+      "names": [
+        "private"
+      ],
+      "owner": "personal_stock_tracking",
+      "migration_path": "owner-relative:supabase/migrations"
+    },
+    {
+      "object_type": "table_set",
+      "names_from": "docs/migration/pr0-schema-inventory.json#tables",
+      "namespace": "legacy SQLite; future private dsa schema",
+      "owner": "daily_stock_analysis",
+      "migration_path": "src/storage.py and src/schema_migrations.py (legacy only)"
+    },
+    {
+      "object_type": "table",
+      "names": [
+        "public.analysis_runs",
+        "public.portfolio_cash_entries",
+        "public.portfolio_transactions",
+        "public.portfolio_wallets",
+        "public.watchlist_symbols"
+      ],
+      "owner": "personal_stock_tracking",
+      "migration_path": "owner-relative:supabase/migrations"
+    },
+    {
+      "object_type": "function",
+      "names": [
+        "private.enforce_analysis_cooldown()",
+        "private.lock_portfolio_wallet(uuid)",
+        "private.minimum_opening_balance(uuid)",
+        "private.portfolio_ledger_snapshot(uuid)",
+        "private.portfolio_trade_cash_effect(uuid)",
+        "private.refresh_portfolio_wallet(uuid)",
+        "private.replay_portfolio_ledger(uuid)",
+        "public.delete_cash_entry(uuid,timestamptz)",
+        "public.delete_portfolio_trade(uuid,timestamptz)",
+        "public.record_cash_entry(text,bigint,timestamptz,text)",
+        "public.record_portfolio_trade(text,text,numeric,bigint,bigint,bigint,timestamptz)",
+        "public.update_cash_entry(uuid,timestamptz,text,bigint,timestamptz,text)",
+        "public.update_portfolio_trade(uuid,timestamptz,text,text,numeric,bigint,bigint,bigint,timestamptz)"
+      ],
+      "owner": "personal_stock_tracking",
+      "migration_path": "owner-relative:supabase/migrations"
+    },
+    {
+      "object_type": "trigger",
+      "names": [
+        "public.analysis_runs.analysis_runs_enforce_cooldown"
+      ],
+      "owner": "personal_stock_tracking",
+      "migration_path": "owner-relative:supabase/migrations"
+    },
+    {
+      "object_type": "rls_policy",
+      "names": [
+        "public.analysis_runs.analysis runs are visible to their owner",
+        "public.portfolio_cash_entries.portfolio cash entries are visible to their owner",
+        "public.portfolio_transactions.portfolio transactions are visible to their owner",
+        "public.portfolio_wallets.portfolio wallets are visible to their owner",
+        "public.watchlist_symbols.watchlist symbols are created by their owner",
+        "public.watchlist_symbols.watchlist symbols are deleted by their owner",
+        "public.watchlist_symbols.watchlist symbols are visible to their owner"
+      ],
+      "owner": "personal_stock_tracking",
+      "migration_path": "owner-relative:supabase/migrations"
+    },
+    {
+      "object_type": "view",
+      "names": [],
+      "owner": "none at baseline",
+      "migration_path": "not created"
+    },
+    {
+      "object_type": "enum",
+      "names": [],
+      "owner": "none at baseline",
+      "migration_path": "not created"
+    },
+    {
+      "object_type": "production_migration_workflow",
+      "names": [
+        "dashboard public schema deployment"
+      ],
+      "owner": "personal_stock_tracking",
+      "migration_path": "dashboard repository protected Supabase deployment path"
+    },
+    {
+      "object_type": "production_migration_workflow",
+      "names": [
+        "dsa private compute schema deployment"
+      ],
+      "owner": "daily_stock_analysis",
+      "migration_path": "future protected manual workflow; must not deploy dashboard-owned DDL"
+    }
+  ],
+  "consumer_contracts": [
+    {
+      "consumer": "daily_stock_analysis",
+      "provider": "personal_stock_tracking",
+      "objects": [
+        "public.analysis_runs"
+      ],
+      "allowed_change": "DML through a least-privilege worker role or approved RPC; no DDL",
+      "required_compatibility": "run identity, owner scope, symbol, lifecycle status, analysis date, sanitized report projection, quote fields, safe error code, and external run metadata remain additive until coordinated migration"
+    },
+    {
+      "consumer": "personal_stock_tracking",
+      "provider": "daily_stock_analysis",
+      "objects": [
+        "future sanitized dsa result projection or RPC"
+      ],
+      "allowed_change": "read/execute only after the object is registered and explicitly granted; no DDL",
+      "required_compatibility": "raw prompts, credentials, full context packs, provider payloads, and private portfolio computation evidence are never exposed"
+    }
+  ],
+  "review_gate": {
+    "duplicate_owner_count": 0,
+    "unowned_current_object_count": 0,
+    "joint_contract_recorded": true,
+    "external_confirmation_required_before_pr1": false,
+    "required_object_types_reviewed": [
+      "schema",
+      "table",
+      "view",
+      "function",
+      "trigger",
+      "rls_policy",
+      "enum",
+      "production_migration_workflow"
+    ]
+  }
+}
