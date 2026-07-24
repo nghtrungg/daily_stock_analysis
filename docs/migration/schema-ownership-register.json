@@ -58,7 +58,11 @@
     },
     {
       "object_type": "table_set",
+<<<<<<< HEAD
+      "names_from": "src/storage.py#__tablename__",
+=======
       "names_from": "docs/migration/pr0-schema-inventory.json#tables",
+>>>>>>> origin/remote_user
       "namespace": "legacy SQLite; future private dsa schema",
       "owner": "daily_stock_analysis",
       "migration_path": "src/storage.py and src/schema_migrations.py (legacy only)"

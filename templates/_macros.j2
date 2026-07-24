@@ -1,10 +1,12 @@
 {# Shared macros for report templates #}
 {% macro market_snapshot(result) %}
 {% set snapshot = result.market_snapshot if result.market_snapshot else {} %}
+{% set phase_summary = result.market_phase_summary if result.market_phase_summary else {} %}
+{% set is_intraday_snapshot = phase_summary.get('phase') in ['intraday', 'lunch_break', 'closing_auction'] and phase_summary.get('is_partial_bar') %}
 {% if snapshot %}
 ### 📈 {{ labels.market_snapshot_heading }}
 
-| {{ labels.close_label }} | {{ labels.prev_close_label }} | {{ labels.open_label }} | {{ labels.high_label }} | {{ labels.low_label }} | {{ labels.change_pct_label }} | {{ labels.change_amount_label }} | {{ labels.amplitude_label }} | {{ labels.volume_label }} | {{ labels.amount_label }} |
+| {{ 'Giá hiện tại' if report_language == 'vi' and is_intraday_snapshot else labels.current_price_label if is_intraday_snapshot else labels.close_label }} | {{ labels.prev_close_label }} | {{ labels.open_label }} | {{ labels.high_label }} | {{ labels.low_label }} | {{ labels.change_pct_label }} | {{ labels.change_amount_label }} | {{ labels.amplitude_label }} | {{ labels.volume_label }} | {{ labels.amount_label }} |
 |------|------|------|------|------|-------|-------|------|--------|--------|
 | {{ snapshot.get('close', 'N/A') }} | {{ snapshot.get('prev_close', 'N/A') }} | {{ snapshot.get('open', 'N/A') }} | {{ snapshot.get('high', 'N/A') }} | {{ snapshot.get('low', 'N/A') }} | {{ snapshot.get('pct_chg', 'N/A') }} | {{ snapshot.get('change_amount', 'N/A') }} | {{ snapshot.get('amplitude', 'N/A') }} | {{ snapshot.get('volume', 'N/A') }} | {{ snapshot.get('amount', 'N/A') }} |
 {% if snapshot.get('price') %}

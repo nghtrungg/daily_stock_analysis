@@ -323,3 +323,29 @@ def test_guardrail_creates_dashboard_for_agent_compatible_result_object() -> Non
     assert adjustments == []
     assert result.dashboard["phase_decision"]["phase_context"]["phase"] == "intraday"
     assert result.dashboard["phase_decision"]["watch_conditions"] == []
+
+
+def test_vietnam_early_session_uses_snapshot_language_and_nearby_recheck() -> None:
+    result = AnalysisResult(
+        code="VNM.VN", name="Vinamilk", report_language="vi", sentiment_score=35,
+        trend_prediction="Giảm", operation_advice="Giảm tỷ trọng", decision_type="sell",
+        confidence_level="Trung bình", analysis_summary="Giá giảm trong phiên sáng.",
+        dashboard={"core_conclusion": {"one_sentence": "Áp lực bán trong phiên sáng."},
+                   "phase_decision": {"action_window": "Phiên chiều", "immediate_action": "Giảm tỷ trọng",
+                                      "watch_conditions": [], "next_check_time": "14:15",
+                                      "confidence_reason": "Dữ liệu đầu phiên", "data_limitations": []}},
+    )
+
+    adjustments = apply_phase_decision_guardrails(
+        result,
+        market_phase_summary={"phase": "intraday", "market": "vn", "market_local_time": "2026-07-24T10:08:48+07:00",
+                              "is_trading_day": True, "is_market_open_now": True, "is_partial_bar": True, "warnings": []},
+        analysis_context_pack_overview=_overview("available"), report_language="vi",
+    )
+
+    phase = result.dashboard["phase_decision"]
+    assert "early_vn_intraday_context_applied" in adjustments
+    assert phase["data_snapshot_label"] == "Dữ liệu đầu phiên sáng, cập nhật lúc 10:08."
+    assert phase["next_check_time"] == "10:30"
+    assert result.analysis_summary == phase["data_snapshot_label"]
+    assert "phiên chiều" not in phase["action_window"].lower()

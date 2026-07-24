@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from datetime import datetime, time
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from src.analysis_context_pack_prompt import CORE_DEGRADED_STATUSES
@@ -53,6 +54,8 @@ _EN_POSTMARKET_RECAP_PATTERNS = (
     "tomorrow's focus",
     "tomorrow’s focus",
 )
+
+_VI_PREMATURE_SESSION_PATTERNS = ("phiên sáng", "buổi sáng", "phiên chiều")
 
 _IMMEDIATE_ACTION_MARKERS_ZH = (
     "立即买入",
@@ -105,9 +108,11 @@ def _negations_for(language: str) -> tuple[str, ...]:
     return _NEGATION_PREFIXES_ZH
 
 
-def _reason_text(language: str, *, en: str, zh: str, ko: str) -> str:
+def _reason_text(language: str, *, en: str, zh: str, ko: str, vi: Optional[str] = None) -> str:
     if language == "en":
         return en
+    if language == "vi":
+        return vi or en
     if language == "ko":
         return ko
     return zh
@@ -196,6 +201,10 @@ def apply_phase_decision_guardrails(
         _append_reason(phase_decision, reason)
         adjustments.append("postmarket_recap_wording_adjusted")
 
+    if phase == "intraday" and _safe_text(phase_summary.get("market")).lower() == "vn":
+        if _apply_vietnam_intraday_snapshot(result, phase_decision, phase_summary):
+            adjustments.append("early_vn_intraday_context_applied")
+
     if adjustments:
         phase_decision["data_limitations"] = _merge_limitations(
             phase_decision.get("data_limitations"),
@@ -212,6 +221,7 @@ def _ensure_phase_decision_shape(phase_decision: Dict[str, Any]) -> None:
     phase_decision["watch_conditions"] = _list_strings(phase_decision.get("watch_conditions"))
     phase_decision.setdefault("next_check_time", None)
     phase_decision.setdefault("confidence_reason", None)
+    phase_decision.setdefault("data_snapshot_label", None)
     phase_decision["data_limitations"] = _list_strings(phase_decision.get("data_limitations"))
 
 
@@ -368,6 +378,63 @@ def _replace_postmarket_recap_fields(
         result.analysis_summary = safe_summary
     if _contains_any(phase_decision.get("immediate_action"), _patterns(language)):
         phase_decision["immediate_action"] = safe_action
+
+
+def _apply_vietnam_intraday_snapshot(
+    result: "AnalysisResult",
+    phase_decision: Dict[str, Any],
+    phase_summary: Mapping[str, Any],
+) -> bool:
+    """Make early Vietnam-session reports explicitly snapshot-based.
+
+    HOSE is still trading at 10:08, so neither a morning recap nor an
+    afternoon action window is valid. This deterministic layer also prevents a
+    far-away LLM-proposed check time from skipping the rest of the morning.
+    """
+
+    market_time = _parse_market_time(phase_summary.get("market_local_time"))
+    if market_time is None or not (time(9, 0) <= market_time.time() < time(11, 30)):
+        return False
+    if market_time.time() < time(10, 30):
+        next_check = "10:30"
+        bucket = "đầu phiên sáng"
+    elif market_time.time() < time(11, 15):
+        next_check = "11:15"
+        bucket = "giữa phiên sáng"
+    else:
+        next_check = "sau khi kết thúc phiên sáng (11:30)"
+        bucket = "cuối phiên sáng"
+
+    snapshot = f"Dữ liệu {bucket}, cập nhật lúc {market_time:%H:%M}."
+    phase_decision["data_snapshot_label"] = snapshot
+    phase_decision["action_window"] = "Theo dõi trong phiên; dữ liệu chưa hoàn tất."
+    phase_decision["next_check_time"] = next_check
+    limitations = _list_strings(phase_decision.get("data_limitations"))
+    limitation = "Dữ liệu trong phiên chỉ là ảnh chụp tại thời điểm cập nhật; không xem là tổng kết cả buổi sáng hoặc cả ngày."
+    if limitation not in limitations:
+        limitations.append(limitation)
+    phase_decision["data_limitations"] = limitations
+
+    dashboard = getattr(result, "dashboard", None)
+    core = dashboard.get("core_conclusion") if isinstance(dashboard, dict) else None
+    for container, key in ((result, "analysis_summary"), (core, "one_sentence")):
+        if container is None:
+            continue
+        value = getattr(container, key, "") if container is result else container.get(key)
+        text = _safe_text(value)
+        if any(pattern in text.lower() for pattern in _VI_PREMATURE_SESSION_PATTERNS):
+            if container is result:
+                setattr(container, key, snapshot)
+            else:
+                container[key] = snapshot
+    return True
+
+
+def _parse_market_time(value: Any) -> Optional[datetime]:
+    try:
+        return datetime.fromisoformat(_safe_text(value))
+    except ValueError:
+        return None
 
 
 def _append_reason(phase_decision: Dict[str, Any], reason: str) -> None:

@@ -252,6 +252,15 @@ def apply_market_data_quality_guardrail(
             }
         )
         changes.append("volume_signal_suppressed")
+        _downgrade_unconfirmed_volume_action(result, dashboard, report_language, changes)
+        order_flow = data_perspective.get("order_flow")
+        if isinstance(order_flow, dict):
+            order_flow["inference_status"] = "observation_only"
+            order_flow["note"] = (
+                "Dữ liệu khớp lệnh tạm thời có thể nghiêng về phía bán, nhưng khối lượng còn bán phần hoặc chưa xác nhận; không sử dụng riêng tín hiệu này để ra lệnh."
+                if report_language == "vi"
+                else "Temporary order-flow data may lean toward selling, but volume is partial or unconfirmed; do not use this signal alone to place an order."
+            )
     phase["data_limitations"] = list(dict.fromkeys(limitations))
 
     result.confidence_level = localize_confidence_level("低", report_language)
@@ -280,3 +289,36 @@ def apply_market_data_quality_guardrail(
             core["signal_type"] = "⚠️ Dữ liệu chưa đủ" if report_language == "vi" else "⚠️ Insufficient data"
         changes.extend(["score_neutralized_invalid_ohlc", "action_downgraded_invalid_ohlc"])
     return changes
+
+
+def _downgrade_unconfirmed_volume_action(
+    result: Any,
+    dashboard: Mapping[str, Any],
+    report_language: str,
+    changes: list[str],
+) -> None:
+    """Do not reduce exposure solely before its published price trigger breaks."""
+
+    action = str(getattr(result, "action", "") or "").strip().lower()
+    advice = str(getattr(result, "operation_advice", "") or "").strip().lower()
+    is_reduce = action == "reduce" or "giảm tỷ trọng" in advice or "reduce" in advice
+    if not is_reduce:
+        return
+    perspective = dashboard.get("data_perspective") if isinstance(dashboard, Mapping) else None
+    price_position = perspective.get("price_position") if isinstance(perspective, Mapping) else None
+    current_price = _positive_number(price_position.get("current_price")) if isinstance(price_position, Mapping) else None
+    support = _positive_number(price_position.get("support_level")) if isinstance(price_position, Mapping) else None
+    if current_price is None or support is None or current_price <= support:
+        return
+    result.decision_type = "hold"
+    result.action = "watch"
+    result.action_label = localize_action_label("watch", report_language)
+    result.operation_advice = (
+        "Giữ phòng thủ / chuẩn bị giảm tỷ trọng nếu vùng hỗ trợ bị vi phạm với dữ liệu đáng tin cậy."
+        if report_language == "vi"
+        else "Hold defensively; prepare to reduce only if support breaks on reliable data."
+    )
+    core = dashboard.get("core_conclusion") if isinstance(dashboard, Mapping) else None
+    if isinstance(core, dict):
+        core["one_sentence"] = result.operation_advice
+    changes.append("reduce_action_deferred_until_price_confirmation")
