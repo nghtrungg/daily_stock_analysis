@@ -155,6 +155,37 @@ def test_invalid_plan_omits_trade_probability_and_ev() -> None:
     assert expectancy["expected_value_r"] is None
 
 
+def test_negative_ev_marks_entry_levels_as_observation_only() -> None:
+    result = _result()
+
+    metrics = apply_decision_metrics(result, analysis_context_pack_overview=_overview())
+
+    assert metrics["trade_expectancy"]["expected_value_r"] < 0
+    battle = result.dashboard["battle_plan"]
+    assert battle["entry_status"] == "observation_only"
+    assert "chưa kích hoạt" in battle["entry_status_message"]
+
+
+def test_intraday_snapshot_uses_current_price_not_close_label() -> None:
+    result = _result()
+    result.market_snapshot = {
+        "close": 21750,
+        "prev_close": 22050,
+        "open": 22000,
+        "high": 22000,
+        "low": 21750,
+        "volume": 135500,
+    }
+    result.market_phase_summary = {
+        "phase": "intraday", "market": "vn", "is_partial_bar": True,
+    }
+
+    output = render("markdown", [result], summary_only=False)
+
+    assert output is not None
+    assert "| Giá hiện tại | Đóng cửa trước" in output
+
+
 def test_markdown_renders_explainable_metrics_and_risk_matrix() -> None:
     result = _result()
     apply_decision_metrics(
@@ -168,7 +199,8 @@ def test_markdown_renders_explainable_metrics_and_risk_matrix() -> None:
 
     assert output is not None
     assert "Điểm tổng: **35/100**" in output
-    assert "Xu hướng" in output and "11/30" in output
+    assert "Xu hướng" in output and "13/30" in output
+    assert "Khối lượng | 0/15" in output
     assert "Độ tin cậy dữ liệu" in output
     assert "Xác suất kịch bản" in output
     assert "Tiếp tục giảm" in output and "60%" in output

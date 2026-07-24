@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [fix] Make Vietnam intraday reports snapshot-based, label in-session quotes as current prices, schedule nearby morning rechecks, and prevent partial volume/order-flow data from independently driving exposure reductions.
+- [improvement] Suppress unconfirmed volume scoring, gate negative-EV entries as observation-only, show entry-specific R:R values, and keep one canonical final-invalidation stop.
+- [test] Add regression coverage for early-session timing, unconfirmed order flow, negative-EV entry status, and per-entry R:R calculations.
 - [feature] Explain final decision scores with fixed component points, deterministic evidence confidence, normalized tactical scenarios, a shared risk matrix, and before-cost R:R expectancy.
 - [test] Cover score reconciliation, confidence degradation, scenario normalization, EV arithmetic, additive schema compatibility, and full/brief/WeChat report rendering.
 - [docs] Document explainable decision-metric semantics, probability limitations, compatibility, and rollback.

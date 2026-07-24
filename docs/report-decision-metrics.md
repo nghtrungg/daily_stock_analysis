@@ -14,7 +14,7 @@ The final 0-100 composite score is decomposed into fixed point budgets:
 | Market | 15 |
 | Fundamental | 20 |
 
-The deterministic finalizer reconciles the component sum to the final score after action, phase, evidence, and market-data guardrails. Model-proposed rationales are retained when valid. When the model omits the breakdown, the finalizer allocates the guarded score across the fixed budgets and marks those rows as estimated. The score is a composite decision indicator, not a probability.
+The deterministic finalizer reconciles the component sum to the final score after action, phase, evidence, and market-data guardrails. Model-proposed rationales are retained when valid. When the model omits the breakdown, the finalizer allocates the guarded score across the fixed budgets and marks those rows as estimated. If volume is partial or unconfirmed, its score contribution is zero and the row is explicitly unavailable. The score is a composite decision indicator, not a probability.
 
 The displayed score band comes from `src/schemas/decision_scale.py`. Scores 40 and 45 are both in the 40-59 watch band; 45 represents five additional composite points but does not cross an action threshold.
 
@@ -40,7 +40,7 @@ Scenario probabilities are labeled `uncalibrated` unless a future version suppli
 
 ## Trade expectancy
 
-Trade expectancy is available only when the existing long-plan validator accepts the Entry/SL/TP geometry. R:R continues to be calculated deterministically from displayed price levels.
+Trade expectancy is available only when the existing long-plan validator accepts the Entry/SL/TP geometry. R:R is calculated deterministically for each displayed entry level against the one canonical final-invalidation stop; it is never shared across different entries.
 
 The first implementation uses the upside scenario probability as a conservative long-trade win estimate and labels the source `scenario_estimate`. Expected Value is before fees, tax, and slippage:
 
@@ -48,7 +48,7 @@ The first implementation uses the upside scenario probability as a conservative 
 EV(R) = P(win) * Reward/Risk - P(loss) * 1R
 ```
 
-For example, R:R 1:4 with a 32% win estimate produces `+0.60R`, not `-0.12R`. If the plan is invalid, win probability and EV are unavailable instead of being fabricated.
+For example, R:R 1:4 with a 32% win estimate produces `+0.60R`, not `-0.12R`. If the plan is invalid, win probability and EV are unavailable instead of being fabricated. If EV is negative, the report marks entry prices as a potential observation zone and leaves the buy order unactivated; price levels alone are not an active buy signal.
 
 The existing DecisionSignal directional win rate is not reused as TP-before-SL probability because those measurement contracts are different.
 

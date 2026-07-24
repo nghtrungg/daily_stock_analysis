@@ -143,6 +143,7 @@ class TradingPlanValidationDisplay(BaseModel):
     stop_loss: Optional[str] = None
     take_profit: Optional[str] = None
     risk_reward: Optional[str] = None
+    secondary_risk_reward: Optional[str] = None
 
 
 class TradingPlanValidation(BaseModel):
@@ -151,6 +152,7 @@ class TradingPlanValidation(BaseModel):
     quality_status: Literal["valid", "auto_fixed", "invalid"] = "valid"
     warnings: List[str] = Field(default_factory=list)
     risk_reward_ratio: Optional[float] = Field(None, ge=0)
+    secondary_risk_reward_ratio: Optional[float] = Field(None, ge=0)
     display: TradingPlanValidationDisplay = Field(default_factory=TradingPlanValidationDisplay)
 
 
@@ -172,6 +174,7 @@ class PhaseDecision(BaseModel):
     watch_conditions: List[str] = Field(default_factory=list)
     next_check_time: Optional[str] = None
     confidence_reason: Optional[str] = None
+    data_snapshot_label: Optional[str] = None
     data_limitations: List[str] = Field(default_factory=list)
 
 

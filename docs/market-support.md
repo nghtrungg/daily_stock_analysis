@@ -14,6 +14,8 @@ For the minimal GitHub Actions Variables and Secrets required by this Vietnam-fo
 
 Vietnam market-phase handling uses the published HOSE weekday session baseline: 09:00-11:30, 13:00-14:45, and a 14:30-14:45 closing auction. Public-holiday closures are not yet modeled by a dedicated Vietnam exchange calendar, so scheduled runs should use `--force-run` when a manual run is intended on a local holiday.
 
+During the morning session, reports are explicitly snapshot-based: the report identifies the update time, labels the quote as the current/last matched price rather than a close, and schedules the next check at 10:30, 11:15, or after the 11:30 morning close according to the update time. Intraday volume and Buy Up/Sell Down are observations only until volume is complete and confirmed; they cannot independently trigger an exposure reduction.
+
 Realtime quotes, daily bars, fundamentals, capital flow, chip distribution, news, announcements, social sentiment, and market breadth may not be available for every market. Unsupported fields should be reported as `not_supported`, not as generic failures.
 
 Provider failure should degrade through the configured fallback chain. A single provider should not break the whole analysis flow unless fail-fast behavior is explicitly required. Use token-backed providers for scheduled or batch workloads and keep free providers as fallback when possible.

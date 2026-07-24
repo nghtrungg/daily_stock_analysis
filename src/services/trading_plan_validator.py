@@ -80,6 +80,7 @@ class TradingPlanValidationResult:
     quality_status: str
     warnings: tuple[str, ...]
     risk_reward_ratio: Optional[Decimal]
+    secondary_risk_reward_ratio: Optional[Decimal]
     is_valid: bool
 
     def metadata(self, *, include_vnd_display: bool = True) -> dict[str, Any]:
@@ -91,6 +92,9 @@ class TradingPlanValidationResult:
                 display["take_profit"] = format_target(self.take_profit, self.ideal_buy)
             if self.risk_reward_ratio is not None:
                 display["risk_reward"] = format_risk_reward(self.risk_reward_ratio)
+            if self.secondary_risk_reward_ratio is not None:
+                display["secondary_risk_reward"] = format_risk_reward(self.secondary_risk_reward_ratio)
+            if self.risk_reward_ratio is not None:
                 display["risk_reward_method"] = (
                     "Tính theo (mục tiêu - điểm vào) / (điểm vào - cắt lỗ) từ các mức giá hiển thị; không phải xác suất."
                     if include_vnd_display
@@ -101,6 +105,11 @@ class TradingPlanValidationResult:
             "warnings": list(self.warnings),
             "risk_reward_ratio": (
                 float(self.risk_reward_ratio) if self.risk_reward_ratio is not None else None
+            ),
+            "secondary_risk_reward_ratio": (
+                float(self.secondary_risk_reward_ratio)
+                if self.secondary_risk_reward_ratio is not None
+                else None
             ),
             "display": display,
         }
@@ -149,6 +158,7 @@ class TradingPlanValidator:
                 quality_status="invalid",
                 warnings=("ideal_buy_missing_or_invalid",),
                 risk_reward_ratio=None,
+                secondary_risk_reward_ratio=None,
                 is_valid=False,
             )
 
@@ -219,6 +229,9 @@ class TradingPlanValidator:
             )
 
         ratio = plan.risk_reward_ratio.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        secondary_ratio = ((plan.take_profit - plan.secondary_buy) / (plan.secondary_buy - plan.stop_loss)).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
         return TradingPlanValidationResult(
             ideal_buy=plan.ideal_buy,
             secondary_buy=plan.secondary_buy,
@@ -227,6 +240,7 @@ class TradingPlanValidator:
             quality_status="auto_fixed" if warnings else "valid",
             warnings=tuple(dict.fromkeys(warnings)),
             risk_reward_ratio=ratio,
+            secondary_risk_reward_ratio=secondary_ratio,
             is_valid=True,
         )
 
@@ -280,6 +294,7 @@ class TradingPlanValidator:
             quality_status="invalid",
             warnings=tuple(dict.fromkeys(warnings)),
             risk_reward_ratio=None,
+            secondary_risk_reward_ratio=None,
             is_valid=False,
         )
 
@@ -330,6 +345,13 @@ def apply_trading_plan_validation(result: Any) -> list[str]:
                 "take_profit": _decimal_to_number(validation.take_profit),
             }
         )
+        # There is exactly one canonical hard-stop in a validated plan. Other
+        # thresholds may be rendered as warnings/reduce conditions elsewhere,
+        # but they cannot silently become a competing stop-loss value.
+        battle_plan["risk_levels"] = {
+            "final_invalidation": _decimal_to_number(validation.stop_loss),
+            "canonical_stop_loss": _decimal_to_number(validation.stop_loss),
+        }
     if validation.quality_status == "auto_fixed":
         logger.warning(
             "[trading_plan_validator] Auto-fixed long plan for %s: %s",
@@ -359,7 +381,7 @@ def get_trading_plan_display(battle_plan: Any) -> dict[str, str]:
     return {
         key: str(value)
         for key, value in display.items()
-        if key in {"stop_loss", "take_profit", "risk_reward", "risk_reward_method"} and value
+        if key in {"stop_loss", "take_profit", "risk_reward", "secondary_risk_reward", "risk_reward_method"} and value
     }
 
 

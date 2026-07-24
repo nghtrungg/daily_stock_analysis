@@ -164,3 +164,17 @@ def test_watch_decision_validates_rendered_long_plan() -> None:
     assert validation["display"]["stop_loss"] == "21.800 VND (-3.1%)"
     assert validation["display"]["take_profit"] == "24.000 VND (+6.7%)"
     assert validation["display"]["risk_reward"] == "R:R = 1 : 2.14"
+
+
+def test_validation_reports_a_separate_rr_for_each_entry_level() -> None:
+    result = TradingPlanValidator.validate_and_fix(
+        ideal_buy=Decimal("21000"), secondary_buy=Decimal("21500"),
+        stop_loss=Decimal("20000"), take_profit=Decimal("23000"),
+    )
+
+    metadata = result.metadata()
+
+    assert metadata["risk_reward_ratio"] == 2.0
+    assert metadata["secondary_risk_reward_ratio"] == 1.0
+    assert metadata["display"]["risk_reward"] == "R:R = 1 : 2"
+    assert metadata["display"]["secondary_risk_reward"] == "R:R = 1 : 1"

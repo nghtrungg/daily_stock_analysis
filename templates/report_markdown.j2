@@ -217,6 +217,9 @@ _{{ trade_expectancy.get('methodology', '') }}_
 {% if phase_decision_has_content %}
 ### 🛡️ {{ labels.phase_decision_heading }}
 
+{% if phase_decision.get('data_snapshot_label') %}
+**{{ phase_decision.get('data_snapshot_label') }}**
+{% endif %}
 | {{ labels.action_window_label }} | {{ labels.immediate_action_label }} | {{ labels.next_check_time_label }} |
 |---------|---------|---------|
 | {{ phase_decision.get('action_window') or 'N/A' }} | {{ phase_decision.get('immediate_action') or 'N/A' }} | {{ phase_decision.get('next_check_time') or 'N/A' }} |
@@ -270,6 +273,9 @@ _{{ trade_expectancy.get('methodology', '') }}_
 {% set plan_validation = battle.get('trading_plan_validation', {}) %}
 {% set plan_display = plan_validation.get('display', {}) if plan_validation else {} %}
 {% if sniper %}
+{% if battle.get('entry_status') == 'observation_only' %}
+**{{ battle.get('entry_status_message') }}**
+{% endif %}
 **📍 {{ labels.action_points_heading }}**
 
 | {{ labels.action_points_heading }} | {{ labels.current_price_label }} |
@@ -280,7 +286,10 @@ _{{ trade_expectancy.get('methodology', '') }}_
 | 🎊 {{ labels.take_profit_label }} | {{ plan_display.get('take_profit') or clean_sniper(sniper.get('take_profit'), result.code) }} |
 {% if plan_display.get('risk_reward') %}
 
-**{{ plan_display.get('risk_reward') }}**
+{% if report_language == 'vi' %}**Tại điểm mua lý tưởng: {{ plan_display.get('risk_reward') }}**{% else %}**Ideal entry: {{ plan_display.get('risk_reward') }}**{% endif %}
+{% if plan_display.get('secondary_risk_reward') %}
+{% if report_language == 'vi' %}**Tại điểm mua phụ: {{ plan_display.get('secondary_risk_reward') }}**{% else %}**Secondary entry: {{ plan_display.get('secondary_risk_reward') }}**{% endif %}
+{% endif %}
 {% if plan_display.get('risk_reward_method') %}
 _{{ plan_display.get('risk_reward_method') }}_
 {% endif %}

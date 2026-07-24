@@ -67,7 +67,8 @@
 {% if sniper.stop_loss %}{% set ns.parts = ns.parts + ['🛑' ~ labels.stop_loss_label ~ ':' ~ (plan_display.get('stop_loss') or clean_sniper(sniper.stop_loss, result.code))] %}{% endif %}
 {% if sniper.take_profit %}{% set ns.parts = ns.parts + ['🎊' ~ labels.take_profit_label ~ ':' ~ (plan_display.get('take_profit') or clean_sniper(sniper.take_profit, result.code))] %}{% endif %}
 {{ ns.parts|join(' | ') }}
-{% if plan_display.get('risk_reward') %} | {{ plan_display.get('risk_reward') }}{% endif %}
+{% if plan_display.get('risk_reward') %} | {{ ('Điểm mua lý tưởng: ' if report_language == 'vi' else 'Ideal entry: ') ~ plan_display.get('risk_reward') }}{% endif %}
+{% if plan_display.get('secondary_risk_reward') %} | {{ ('Điểm mua phụ: ' if report_language == 'vi' else 'Secondary entry: ') ~ plan_display.get('secondary_risk_reward') }}{% endif %}
 {% endif %}
 
 {% set pos_advice = core.get('position_advice', {}) if core else {} %}

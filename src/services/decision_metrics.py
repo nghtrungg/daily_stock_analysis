@@ -92,6 +92,7 @@ def apply_decision_metrics(
         score,
         proposed=_mapping(proposed.get("score_breakdown")),
         language=language,
+        volume_usable=_mapping(market_data_quality).get("volume_usable"),
     )
     evidence_confidence = _build_evidence_confidence(
         result,
@@ -107,6 +108,8 @@ def apply_decision_metrics(
         language=language,
     )
     trade_expectancy = _build_trade_expectancy(result, scenario_outlook, language=language)
+    _apply_expectancy_entry_gate(result, trade_expectancy, language=language)
+    dashboard = _mapping(getattr(result, "dashboard", None))
 
     metrics = {
         "score_breakdown": score_breakdown,
@@ -115,10 +118,17 @@ def apply_decision_metrics(
         "trade_expectancy": trade_expectancy,
     }
     dashboard["decision_metrics"] = metrics
+    result.dashboard = dashboard
     return metrics
 
 
-def _build_score_breakdown(score: int, *, proposed: Dict[str, Any], language: str) -> Dict[str, Any]:
+def _build_score_breakdown(
+    score: int,
+    *,
+    proposed: Dict[str, Any],
+    language: str,
+    volume_usable: Any = None,
+) -> Dict[str, Any]:
     proposed_components = _mapping(proposed.get("components"))
     raw_scores: Dict[str, float] = {}
     reasons: Dict[str, str] = {}
@@ -135,6 +145,17 @@ def _build_score_breakdown(score: int, *, proposed: Dict[str, Any], language: st
         if reason:
             reasons[key] = reason
 
+    # A partial or unconfirmed session volume must not be silently converted
+    # into a score contribution. Keep the final composite score reconciled by
+    # allocating its remaining evidence across the other components instead.
+    if volume_usable is False:
+        raw_scores["volume"] = 0.0
+        reasons["volume"] = (
+            "Khối lượng chưa được xác nhận; không dùng làm căn cứ chấm điểm hoặc ra lệnh."
+            if language == "vi"
+            else "Volume is unconfirmed and is excluded from scoring and trade decisions."
+        )
+
     allocated = _allocate_integer_total(score, raw_scores, SCORE_COMPONENT_MAXIMA)
     fallback_reason = (
         "Phân bổ từ điểm tổng cuối cùng sau các lớp kiểm soát; không phải xác suất."
@@ -145,7 +166,10 @@ def _build_score_breakdown(score: int, *, proposed: Dict[str, Any], language: st
         key: {
             "score": allocated[key],
             "max_score": maximum,
-            "status": "available" if key in reasons else "estimated",
+            "status": (
+                "unavailable" if key == "volume" and volume_usable is False
+                else "available" if key in reasons else "estimated"
+            ),
             "reason": reasons.get(key) or fallback_reason,
         }
         for key, maximum in SCORE_COMPONENT_MAXIMA.items()
@@ -369,6 +393,31 @@ def _build_trade_expectancy(result: Any, outlook: Dict[str, Any], *, language: s
             else "Before-cost EV = P(win) × Reward/Risk − P(loss) × 1R; probability is an uncalibrated scenario estimate."
         ),
     }
+
+
+def _apply_expectancy_entry_gate(result: Any, expectancy: Mapping[str, Any], *, language: str) -> None:
+    """Prevent a negative-expectancy setup from being rendered as an active buy.
+
+    Price levels remain visible as an observation zone, but no position size or
+    buy instruction may be inferred until a new setup produces non-negative EV
+    and the existing confirmation conditions are satisfied.
+    """
+
+    expected_value = _finite_number(expectancy.get("expected_value_r"))
+    if expected_value is None or expected_value >= 0:
+        return
+    dashboard = _mapping(getattr(result, "dashboard", None))
+    battle = _mapping(dashboard.get("battle_plan"))
+    if not battle or not _mapping(battle.get("sniper_points")):
+        return
+    battle["entry_status"] = "observation_only"
+    battle["entry_status_message"] = (
+        "Vùng quan sát tiềm năng; trạng thái lệnh mua: chưa kích hoạt vì EV hiện tại âm."
+        if language == "vi"
+        else "Potential observation zone; buy order is not activated because current EV is negative."
+    )
+    dashboard["battle_plan"] = battle
+    result.dashboard = dashboard
 
 
 def _scenario_defaults(language: str) -> Dict[str, Dict[str, str]]:

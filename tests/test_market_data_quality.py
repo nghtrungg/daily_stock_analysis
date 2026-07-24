@@ -168,3 +168,28 @@ def test_invalid_ohlc_downgrades_action_and_suppresses_volume_claim() -> None:
     assert volume["volume_ratio"] == "N/A"
     assert "chưa được xác nhận" in volume["volume_meaning"]
     assert "action_downgraded_invalid_ohlc" in changes
+
+
+def test_unconfirmed_volume_keeps_order_flow_as_observation_not_a_signal() -> None:
+    result = AnalysisResult(
+        code="MBB.VN", name="MB Bank", report_language="vi", sentiment_score=35,
+        trend_prediction="Giảm", operation_advice="Giảm tỷ trọng", decision_type="sell", action="reduce",
+        dashboard={"core_conclusion": {"one_sentence": "Bán do Sell Down áp đảo."},
+                   "data_perspective": {"price_position": {"current_price": 21750, "support_level": 21500},
+                                        "order_flow": {"active_buy_volume": 26600, "active_sell_volume": 108800,
+                                                       "active_imbalance": -0.61}},
+                   "phase_decision": {"data_limitations": []}},
+    )
+
+    changes = apply_market_data_quality_guardrail(
+        result,
+        {"status": "warning", "ohlc_usable": True, "volume_usable": False,
+         "issues": ["partial_session_volume"]}, report_language="vi",
+    )
+
+    flow = result.dashboard["data_perspective"]["order_flow"]
+    assert "volume_signal_suppressed" in changes
+    assert flow["inference_status"] == "observation_only"
+    assert "không sử dụng riêng" in flow["note"]
+    assert result.decision_type == "hold"
+    assert result.action == "watch"

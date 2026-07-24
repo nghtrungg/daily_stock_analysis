@@ -5025,6 +5025,9 @@ prose and never move nested fields to a parent object:
                 "Use dated items inside news_window_days for latest_news and short-term catalysts; older financial results must be labeled historical and placed only in the fundamental horizon. "
                 "Distinguish sell (exit all), reduce (trim exposure), hold, watch, and avoid; decision_type=sell is permitted only for an actual exit-all recommendation. "
                 "Every entry price is conditional on price holding the zone, reversal confirmation, confirmed completed-session volume, and a non-deteriorating VN-Index; a price touch alone is not a buy signal and must not contradict a no-averaging-down warning. "
+                "For an in-progress Vietnam session, state the exact update time and call the quote 'Giá hiện tại' or 'Giá khớp gần nhất', never 'Đóng cửa'; do not summarize an unfinished morning or defer the next check past the remaining morning session. "
+                "When current-session volume or order flow is partial/unconfirmed, describe it only as a temporary observation and never use it alone to reduce exposure or claim dominant demand/supply. "
+                "If EV is negative, present price levels only as a potential observation zone with buy status not activated. For multiple entry levels, calculate a separate R:R for each. Use one canonical stop loss as the final invalidation; label earlier thresholds only as warning or reduce-exposure conditions. "
                 "Scores and R:R are composite or derived indicators, not backtested probabilities; explain confidence from evidence quality and do not claim false precision. "
                 "Keep every dashboard object nested exactly as shown; top-level analysis fields must be strings.",
             )
