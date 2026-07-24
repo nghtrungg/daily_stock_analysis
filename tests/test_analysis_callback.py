@@ -26,22 +26,40 @@ RUN_ID = "a59a1476-2ea4-4c86-9a3c-d0df438e8102"
 def create_history_database(path: Path, rows: list[tuple[str, dict[str, object], str]]) -> None:
     with sqlite3.connect(path) as connection:
         connection.execute(
-            "create table analysis_history (id integer primary key, code text not null, raw_result text, created_at text)"
+            """create table analysis_history (
+                id integer primary key, code text not null, name text, report_type text,
+                sentiment_score integer, operation_advice text, trend_prediction text,
+                analysis_summary text, raw_result text, created_at text
+            )"""
         )
         connection.executemany(
-            "insert into analysis_history (code, raw_result, created_at) values (?, ?, ?)",
-            [(symbol, json.dumps(raw), created_at) for symbol, raw, created_at in rows],
+            """insert into analysis_history (
+                code, name, report_type, sentiment_score, operation_advice,
+                trend_prediction, analysis_summary, raw_result, created_at
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            [(
+                symbol, "Vinamilk", "simple", 72, "Nắm giữ", "Tích cực",
+                "Xu hướng vẫn tích cực.", json.dumps(raw), created_at
+            ) for symbol, raw, created_at in rows],
         )
 
 
 def test_success_callback_uses_a_signed_minimal_quote_payload() -> None:
     quote = {"currentPriceVnd": 68400, "asOf": "2026-07-16T15:10:00+07:00", "source": "realtime:tencent"}
-    body = callback.encode_callback_payload(RUN_ID, "succeeded", quote)
+    report = {
+        "code": "VNM.VN", "name": "Vinamilk", "reportType": "simple", "sentimentScore": 72,
+        "operationAdvice": "Nắm giữ", "trendPrediction": "Tích cực", "dashboard": None,
+    }
+    body = callback.encode_callback_payload(
+        RUN_ID, "succeeded", quote, analysis_date="2026-07-16T15:10:00+07:00", report=report
+    )
 
     assert json.loads(body) == {
         "runId": RUN_ID,
         "status": "succeeded",
         "summary": "Phân tích đã hoàn tất và đã lưu giá tại thời điểm phân tích.",
+        "analysisDate": "2026-07-16T15:10:00+07:00",
+        "report": report,
         "quote": quote,
     }
     assert callback.sign_payload("callback-secret", body) == hmac.new(
@@ -62,6 +80,36 @@ def test_extract_current_run_quote_requires_one_matching_fresh_record(tmp_path: 
         "asOf": "2026-07-16T15:10:00+07:00",
         "source": "realtime:tencent",
     }
+
+
+def test_extract_current_run_analysis_projects_only_dashboard_report_fields(tmp_path: Path) -> None:
+    database = tmp_path / "analysis.db"
+    create_history_database(database, [(
+        "VNM.VN",
+        {
+            "current_price": 68_400,
+            "data_sources": "realtime:tencent",
+            "dashboard": {"core_conclusion": {"one_sentence": "Xu hướng vẫn tích cực."}},
+            "raw_response": "must-not-leave-sqlite",
+            "model_used": "must-not-leave-sqlite",
+        },
+        "2026-07-16 15:10:00",
+    )])
+
+    projected = callback.extract_current_run_analysis(str(database), "VNM.VN", "2026-07-16T08:00:00Z")
+
+    assert projected["analysisDate"] == "2026-07-16T15:10:00+07:00"
+    assert projected["report"] == {
+        "code": "VNM.VN",
+        "name": "Vinamilk",
+        "reportType": "simple",
+        "sentimentScore": 72,
+        "operationAdvice": "Nắm giữ",
+        "trendPrediction": "Tích cực",
+        "dashboard": {"core_conclusion": {"one_sentence": "Xu hướng vẫn tích cực."}},
+    }
+    assert "raw_response" not in json.dumps(projected)
+    assert "model_used" not in json.dumps(projected)
 
 
 @pytest.mark.parametrize("raw", [
