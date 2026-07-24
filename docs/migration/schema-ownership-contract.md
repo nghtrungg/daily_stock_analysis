@@ -99,8 +99,15 @@ From `personal-stock-tracking`:
 cmd.exe /d /c "npm run check:schema-contract"
 ```
 
+<<<<<<< HEAD
 The local check validates the registered owners, required object categories,
 duplicate ownership, and the SQLite inventory declared in `src/storage.py`.
 Set `PERSONAL_STOCK_TRACKING_ROOT` to a sibling checkout to additionally
 require parsed JSON equality with the peer copy. Dashboard migration replay is
 owned and verified by the dashboard repository's deployment workflow.
+=======
+The checks validate the registered owners, required object categories,
+duplicate/unowned gates, the final object state discovered by replaying the
+full dashboard migration chain, and the peer copy when the sibling repository
+is available.
+>>>>>>> origin/remote_user
